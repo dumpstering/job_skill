@@ -1,0 +1,15 @@
+{
+  "name": "Jordan Avery",
+  "contact": ["Austin, TX", "(555) 555-0142", "jordan.avery@example.com"],
+  "letter": {
+    "date": "November 5, 2026",
+    "recipient": ["Hiring Team", "Fabrikam Inc."],
+    "greeting": "Dear Hiring Team,",
+    "paragraphs": [
+      "I am applying for the Service Desk Manager role at Fabrikam. For the past five years I have led a team of 6 technicians supporting about 900 employees across 4 sites.",
+      "With our service desk manager, I cut our open backlog from 410 to 120 tickets in 5 months by adding triage rules and a daily stand-up. I also automated new-hire laptop setup with Intune Autopilot, which brought setup time from about 3 hours to 40 minutes per device.",
+      "I would welcome the chance to talk about how this work fits your team."
+    ],
+    "closing": "Sincerely,"
+  }
+}
