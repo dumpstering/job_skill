@@ -40,8 +40,9 @@ You need:
    authorization, start date and so on). They are saved in `profile.md` in
    your folder. Skip anything you like; Claude asks when an application needs
    it.
-5. Claude shows how well you match the job and asks up to about 6 questions.
-   Short answers, rough numbers and "skip" are all fine.
+5. Claude shows how well you match the job and asks a few questions (up to
+   6, plus some one-line quick checks). Short answers, rough numbers and
+   "skip" are all fine.
 6. Claude writes the resume and saves it as Word and PDF in
    `JobSearch\applications\<date> <company> - <role>`. Read it, and read the
    "Verify before sending" list: you are the one signing this resume. Ask for
@@ -71,8 +72,9 @@ the resume), **cover letter**, **library** (see your achievement library),
 - `achievement_library.md` - everything you have done, role by role. It
   grows with each application, and every new resume draws on it.
 - `applications.md` - every job you started, its fit and its status.
-- `applications\` - one folder per job: the posting, your tailored resume and
-  cover letter, and a record of what was entered in the form.
+- `applications\` - one folder per job: the posting, your tailored resume (and
+  cover letter, if you asked for one), and a record of what was entered in
+  the form.
 - `backups\` - a dated copy of your profile and library from before each
   change. Claude adds and updates files here but never deletes them.
 

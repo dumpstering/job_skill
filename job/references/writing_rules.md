@@ -15,9 +15,6 @@ After I answer (or reply "go"):
    bullets.
 3. Write the resume, run the check under Output, then output the blocks.
 
-If `profile.md` sets the output format to LaTeX, also read
-[latex.md](latex.md): Block A is then LaTeX instead of built files.
-
 Revisions: if I ask for changes, rebuild the files and post the complete
 updated Block A again (never a partial snippet), plus any new Block C entries
 and any new Verify items the revision created. All rules apply to every
@@ -199,12 +196,14 @@ same in revisions.
 Write the resume to `resume.json` in the job folder, then run, from the skill's
 folder:
 
-`python scripts/build_resume.py "<job folder>/resume.json" --out "<job folder>" --base "<First Last> Resume"`
+`python scripts/build_resume.py "<job folder>/resume.json" --out "<job folder>" --base "<Name> Resume"`
 
-It writes the .docx, .pdf and .txt (plain text, for "paste your resume"
-boxes), prints the PDF's page count, and prints lint warnings. If it reports a
-missing package, run `pip install python-docx reportlab` and build again; if
-that fails, tell me which file could not be built.
+`<Name>` and the JSON `name` are my name exactly as the master resume shows
+it. The build writes the .docx, .pdf and .txt (plain text, for "paste your
+resume" boxes), prints the PDF's page count, and prints lint warnings. If it
+prints `ERROR`, fix `resume.json` and build again. If it reports a missing
+package, run `pip install python-docx reportlab` and build again; if that
+fails, tell me which file could not be built.
 
 Then post the .txt content in one code block, so I can read the resume
 without opening a file, followed by the paths of the three files. Nothing
@@ -313,8 +312,9 @@ When I ask for one: three or four short paragraphs, at most about 300 words,
 in my voice (first person is fine here), naming the role and company from the
 posting and leading with the two strongest matches from Block B. The
 Truthfulness rules and the banned-word list apply; a gap is never recast as
-met. Write it to `cover_letter.json` in the job folder and build it with the
-same command and `--base "<First Last> Cover Letter"`:
+met, and facts about the employer come only from the posting. Write it to
+`cover_letter.json` in the job folder, dated from the system clock, and build
+it with the same command and `--base "<Name> Cover Letter"`:
 
 ```json
 {

@@ -119,11 +119,25 @@ def lint(data):
             out.append(f'{where}: first-person "{m.group(0)}"')
         if is_bullet and len(text) > 200:
             out.append(f"{where}: {len(text)} characters (about 200 at most)")
-        try:
-            text.encode("cp1252")
-        except UnicodeEncodeError:
-            bad = sorted({c for c in text if not _cp1252(c)})
+        check_chars(where, text)
+
+    def check_chars(where, text):
+        bad = sorted({c for c in text if not _cp1252(c)})
+        if bad:
             out.append(f"{where}: characters the PDF font cannot show: {bad}")
+
+    check_chars("name", data["name"])
+    for c in data["contact"]:
+        check_chars("contact", c)
+    for s in data.get("sections", []):
+        check_chars("heading", s["heading"])
+        for ln in s.get("lines", []):
+            check_chars(f'{s["heading"]} line', f'{ln["label"]} {ln["text"]}')
+        for e in s.get("entries", []):
+            check_chars(f'{s["heading"]} entry', " ".join(e.get(k, "") for k in ("title", "dates", "org", "location")))
+    if "letter" in data:
+        L = data["letter"]
+        check_chars("letter", " ".join([L.get("date", ""), L.get("greeting", ""), L.get("closing", "")] + L.get("recipient", [])))
 
     def check_run(where, bullets):
         firsts = [b.split()[0].lower() if b.split() else "" for b in bullets]
@@ -466,23 +480,25 @@ def main():
         return 1
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    base = out / args.base
     code = 0
 
-    txt = base.with_suffix(".txt")
-    txt.write_text(build_txt(data), encoding="utf-8")
-    print(f"wrote: {txt}")
+    def target(ext):
+        # Not with_suffix: a base like "John Q. Public Resume" would lose everything after "Q".
+        return out / (args.base + ext)
+
+    target(".txt").write_text(build_txt(data), encoding="utf-8")
+    print(f"wrote: {target('.txt')}")
 
     try:
-        build_docx(data, base.with_suffix(".docx"), paper, size, margin)
-        print(f"wrote: {base.with_suffix('.docx')}")
+        build_docx(data, target(".docx"), paper, size, margin)
+        print(f"wrote: {target('.docx')}")
     except ImportError:
         print("MISSING python-docx: run  pip install python-docx  and build again")
         code = 2
 
     try:
-        pages = build_pdf(data, base.with_suffix(".pdf"), paper, size, margin)
-        print(f"wrote: {base.with_suffix('.pdf')} ({pages} page{'s' if pages != 1 else ''})")
+        pages = build_pdf(data, target(".pdf"), paper, size, margin)
+        print(f"wrote: {target('.pdf')} ({pages} page{'s' if pages != 1 else ''})")
     except ImportError:
         print("MISSING reportlab: run  pip install reportlab  and build again")
         code = 2

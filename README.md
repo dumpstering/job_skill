@@ -9,7 +9,12 @@ in the application in the browser and stops before the final Submit.
 It is adapted from `Prompt_Resume_Tailoring_v4.txt`. Phase 1 and the rules
 carry over nearly word for word, still in the user's voice. Changes from v4:
 - Inputs and outputs are files in a fixed folder, not pasted tags.
-- Word and PDF are the default output, built by a script. LaTeX is optional.
+- The output is Word, PDF and plain text, built by a script. LaTeX is gone.
+  v4 used it because chat AIs break formatting when they write Word or PDF
+  directly; the agent now writes plain JSON and the script does the layout,
+  which solves the same problem and gives the application step a file to
+  upload. The LaTeX rules and template are in commit 56cefbb
+  (`job/references/latex.md`) if they are ever wanted back.
 - Block C merges into the library file automatically.
 - Personal facts (work authorization and the like) come from `profile.md`.
 - There is a browser apply step.
@@ -22,7 +27,6 @@ carry over nearly word for word, still in the user's voice. Changes from v4:
 | `job/references/setup.md` | First run: extract the master resume, build the profile, seed the library |
 | `job/references/fit_and_questions.md` | Phase 1 from v4 (fit table, verdict, questions) |
 | `job/references/writing_rules.md` | Phase 2 from v4: truthfulness, ATS, style, Blocks A-C, audit, library merge, cover letter |
-| `job/references/latex.md` | v4's LaTeX rules and template, only when the profile asks for LaTeX |
 | `job/references/apply.md` | Browser fill protocol and what is left to the user |
 | `job/templates/` | Starting `profile.md` and `achievement_library.md` |
 | `job/scripts/build_resume.py` | JSON to .docx (python-docx, Arial) + .pdf (reportlab, Helvetica) + .txt, with lint |

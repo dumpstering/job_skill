@@ -41,7 +41,6 @@ Blank means "I decline to answer" / "Prefer not to say".
 - Pronouns:
 
 ## Resume preferences
-- Output format: Word and PDF   (other option: LaTeX for Overleaf)
 - Target length: 1 page if under ~10 years of relevant experience, otherwise 2 pages max
 - Paper / spelling: US Letter, US English
 - Emphasize or de-emphasize:

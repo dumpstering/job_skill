@@ -89,8 +89,9 @@ Questions, not here):
   month);
 - certifications or licenses: year earned and whether still current;
 - a preference in `profile.md` only where the posting clearly conflicts with
-  it (e.g. a UK job with US Letter and US English), or, for LaTeX output, a
-  name needing a non-Latin script (how to write it in Latin letters).
+  it (e.g. a UK job with US Letter and US English), or a name needing a
+  non-Latin script (how to write it in Latin letters; the PDF font cannot
+  show other scripts).
 
 If nothing material is missing, skip the questions and write: No questions.
 Reply "go" and I'll write it. If you asked anything, end with: "Short answers

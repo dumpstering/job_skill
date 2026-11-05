@@ -45,7 +45,8 @@ def main():
     headings = [p.text for p in doc.paragraphs if p.style.name == "Heading 1"]
     assert headings == ["Summary", "Experience", "Skills", "Education", "Certifications"], headings
 
-    log = build("sample_letter.json", out, "Jordan Avery Cover Letter")
+    # A period in the base name must not truncate the file name.
+    log = build("sample_letter.json", out, "Jordan Q. Avery Cover Letter")
     assert "WARN" not in log, "sample letter should lint clean"
 
     print(f"PASS  outputs in {out}")
