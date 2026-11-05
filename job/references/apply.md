@@ -10,9 +10,10 @@ sent, with every answer traced to a source.
    result, rebuild, and wait for the user to say "apply" again.
 2. Gather what you will enter: `profile.md`, the tailored resume (.txt),
    `notes.md`, and Block B's screening answers. If `posting.md` has an
-   "Application questions" section, draft an answer to every question now and
-   show them in one numbered list for an ok or an edit, before opening the
-   form.
+   "Application questions" section, draft an answer now to every question
+   except contact details, file uploads and the voluntary questions (those
+   come from the profile and the resume), and show the drafts in one
+   numbered list for an ok or an edit, before opening the form.
 3. Read the site's file in `ats/` when the URL matches one (`greenhouse.md`,
    `lever.md`, `workday.md`, `linkedin.md`). LinkedIn and Indeed Easy Apply
    are never automated (`ats/linkedin.md`).
@@ -52,7 +53,9 @@ Chrome, whichever is connected). Work one page at a time:
    - Voluntary self-identification (gender, race, veteran, disability): enter
      the choice in `profile.md`; where it is blank, pick the form's decline
      or prefer-not-to-say option.
-   - Knockout questions are answered only from a source.
+   - Knockout questions are answered only from a source. For work
+     authorization and sponsorship, `profile.md` answers only for the
+     countries it lists as authorized; for a job in any other country, ask.
    - A Standard answer from `profile.md` is used only when its scope covers
      this job's country. A sensitive one is confirmed with the user each time
      before you enter it.
@@ -60,8 +63,9 @@ Chrome, whichever is connected). Work one page at a time:
      an extension or country-code field, and the user's own name never goes
      in an emergency-contact or reference field. When a type-ahead offers
      several plausible matches ("London": UK, Ontario, Kentucky), ask.
-4. **Ask once per page.** Put every field no source settles into one numbered
-   list. Draft any free-text answer ("Why do you want to work here?") from
+4. **Ask once per page**, plus once more for required fields that appear
+   later on the same page. Put every field no source settles into one
+   numbered list. Draft any free-text answer ("Why do you want to work here?") from
    the posting and the sources under the writing_rules.md Truthfulness rules,
    and show the draft in the same list. A question about whether AI was used
    in the application is always the user's to answer.
@@ -98,11 +102,11 @@ Some fields are only ever filled by the user:
 
 When one of these stands between you and the next page (a sign-in, a required
 upload, a required signature), pause, say exactly what is needed, and
-continue when the user replies "go". Otherwise leave it and list it at
+continue when the user replies "done". Otherwise leave it and list it at
 handover.
 
 For an upload, name the file the way the user finds it in Windows, not by
-the path you see: `Documents\JobSearch\applications\<job folder>\<file>`
+the path you see: `Documents\JobSearch\applications\<job folder name>\<file>`
 (the PDF, or the .docx when the form asks for Word).
 
 If the application cannot be finished (a login the user cannot get past, a

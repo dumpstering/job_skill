@@ -40,7 +40,7 @@ carry over nearly word for word, still in the user's voice. Changes from v4:
 | `job/references/interview_prep.md` | Interview prep from what was submitted |
 | `job/templates/` | Starting `profile.md` and `achievement_library.md` |
 | `job/scripts/tracker.py` | Every read and write of `applications.xlsx`: duplicate check, add, update, due, accounts, email log, stats |
-| `job/scripts/posting.py` | Posting URL to `posting.md` via public ATS JSON, JSON-LD, or page text; flags hidden and AI-addressed text |
+| `job/scripts/posting.py` | Posting URL (or pasted text, `--text-file`) to `posting.md` via public ATS JSON, JSON-LD, or page text; flags hidden and AI-addressed text; refuses LinkedIn and Indeed (exit 4) |
 | `job/scripts/build_resume.py` | Resume or letter JSON to .docx + .pdf + .txt, with lint |
 | `job/scripts/checks.py` | Fact check against sources, PDF read-back, keyword coverage (called by build_resume.py) |
 | `job/scripts/jobkey.py` | Shared job-key, requisition-ID and name-normalization helpers |
@@ -135,4 +135,14 @@ UNVERIFIED:
   usually get a new ID, which is why the duplicate check also compares
   requisition IDs and posting text.
 - The tracker refuses backward status moves without `--force`, so a late
-  confirmation email cannot undo an interview.
+  confirmation email cannot undo an interview. A final status (Rejected,
+  Withdrawn, Closed, Not pursued) clears the next step.
+- Security:
+  - The tracker forces every text cell to string type, so an email subject
+    such as `=HYPERLINK(...)` can never become a formula. It hyperlinks
+    http(s) URLs only.
+  - `posting.py` fetches only public http(s) addresses. It checks every
+    resolved address and connects to that same address, so DNS rebinding
+    cannot redirect it. Every redirect is re-checked.
+  - With a proxy configured, `posting.py` never fetches directly; the agent
+    uses its own fetch tool instead.

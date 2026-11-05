@@ -27,8 +27,9 @@ You need:
    > Upload a skill, and choose `job.zip`. Check that "job" is switched on in
    the list.
 4. **Connect Gmail (optional).** In Claude's settings, open Connectors and
-   connect Gmail. Claude only searches and reads your mail for job replies.
-   It never sends, deletes or moves anything.
+   connect Gmail. Claude searches and reads your mail for job replies. It
+   never sends, deletes or moves anything; it saves a draft follow-up only
+   when you ask for one, for you to send yourself.
 5. **Pick a browser (optional).** Claude uses Cowork's built-in browser unless
    you change it. To use your own Chrome, where you are already signed in to
    job sites, install the Claude in Chrome extension and choose Chrome under
@@ -72,9 +73,13 @@ You need:
     Submit, then reply **submitted** so it is logged. Claude keeps a copy of
     exactly what you sent.
 
-LinkedIn does not allow automated tools, so Claude never fills in LinkedIn
-Easy Apply forms. For those, it writes out your answers for you to paste, or
-uses the company's own application page when the listing links to one.
+LinkedIn does not allow automated tools, so Claude never opens or fills in
+LinkedIn pages. For a LinkedIn job, paste the posting text (or the company's
+own application link, if the listing has one). For Easy Apply jobs, Claude
+writes out your answers for you to paste.
+
+When Claude pauses for you (to sign in, attach a file, or close the
+spreadsheet), reply **done** when you have finished.
 
 ## Other things you can ask
 
@@ -104,8 +109,9 @@ resume), **cover letter**, **library** (see your achievement library) or
 - `achievement_library.md` - everything you have done, role by role. It
   grows with each application, and every new resume draws on it.
 - `applications\` - one folder per job: the posting, your tailored resume (and
-  cover letter, if you asked for one), what was entered in the form, and a
-  `submitted` folder with exactly what you sent.
+  cover letter, if you asked for one), what was entered in the form, and,
+  for applications Claude filled in, a `submitted` folder with exactly what
+  you sent.
 - `backups\` - dated copies of your profile, library and spreadsheet from
   before changes. Claude adds and updates files here but never deletes them.
 
@@ -114,7 +120,7 @@ resume), **cover letter**, **library** (see your achievement library) or
 - **Claude says it cannot find your folder:** connect `Documents\JobSearch`
   to the Cowork task and send /job again.
 - **Claude says the spreadsheet is locked:** close `applications.xlsx` in
-  Excel and reply "go".
+  Excel and reply "done".
 - **The job page will not load:** copy the posting text from your browser and
   paste it in.
 - **/job does not appear in Cowork:** install `job-search-plugin.zip` from

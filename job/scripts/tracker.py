@@ -657,6 +657,11 @@ def cmd_update(a):
             new["Follow-up"] = applied + timedelta(days=7)
         if "Status" in explicit and new_status in CLEAR_FOLLOWUP and old_status != new_status:
             new["Follow-up"] = None
+    # A finished job has no next step: a rejected interview must not show as upcoming.
+    if ("Status" in explicit and "Next step" not in explicit and old_status != new_status
+            and rank_of(new_status) == 7 and text(old["Next step"])):
+        new["Next step"] = None
+        order.append("Next step")
     if "Last update" not in explicit:
         new["Last update"] = now
     if "Follow-up" not in order and text(old["Follow-up"]) != text(new["Follow-up"]):

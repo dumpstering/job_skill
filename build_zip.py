@@ -46,6 +46,11 @@ def check():
         problems.append(f"description must be 1-1024 characters (is {len(desc)})")
     if len(text.splitlines()) >= 500:
         problems.append("SKILL.md should stay under 500 lines")
+    allowed = re.compile(r"^(SKILL\.md|references/.+\.md|templates/[^/]+\.md|scripts/[^/]+\.py)$")
+    for p in skill_files():
+        rel = p.relative_to(SKILL).as_posix()
+        if not allowed.match(rel):
+            problems.append(f"unexpected file in the skill folder: job/{rel}")
     for p in skill_files() + [ROOT / "SETUP_GUIDE.md"]:
         try:
             p.read_bytes().decode("ascii")

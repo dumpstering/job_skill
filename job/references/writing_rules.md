@@ -204,9 +204,9 @@ Write the resume to `resume.json` in the job folder. Write the posting's key
 terms (the skills, tools, certifications and job titles from the Phase 1
 requirements) to `terms.json` there, as a list of strings or
 `{"term": "...", "aliases": ["..."]}` objects; aliases cover renamed products,
-such as Entra ID and Azure AD. Then run, from the skill's folder:
+such as Entra ID and Azure AD. Then run:
 
-`python scripts/build_resume.py "<job folder>/resume.json" --out "<job folder>" --base "<Name> Resume" --sources "<folder>/master_resume.md" "<folder>/achievement_library.md" "<folder>/profile.md" "<job folder>/notes.md" --terms "<job folder>/terms.json"`
+`python "<skill>/scripts/build_resume.py" "<job folder>/resume.json" --out "<job folder>" --base "<Name> Resume" --sources "<folder>/master_resume.md" "<folder>/achievement_library.md" "<folder>/profile.md" "<job folder>/notes.md" --terms "<job folder>/terms.json"`
 
 `<Name>` and the JSON `name` are my name exactly as the master resume shows
 it. The build writes the .docx, .pdf and .txt (plain text, for "paste your

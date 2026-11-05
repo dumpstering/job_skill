@@ -21,7 +21,7 @@ passwords, or answers about criminal history.
 
 ## Eligibility and logistics
 - Countries I am authorized to work in:
-- Need visa sponsorship now or in the future (yes/no):
+- Need visa sponsorship now or in the future (yes/no; applies to the countries above):
 - 18 or older (yes/no):
 - Willing to relocate (yes / no / depends):
 - Work arrangement I want (remote / hybrid / on-site / any):
@@ -50,5 +50,6 @@ Blank means "I decline to answer" / "Prefer not to say".
 Answers to application questions that come up again and again. The skill adds
 to this list when you answer one. One per line:
 question | answer | where it applies (any, or a country such as US) | sensitive (yes/no)
-A sensitive answer is confirmed with you each time before it is used.
+Sensitive means confirmed with you each time before it is used: mark yes for
+salary, visa or immigration status, and anything you want checked first.
 - How did you hear about us? |  | any | no

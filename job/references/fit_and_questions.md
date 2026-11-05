@@ -30,7 +30,9 @@ Then reply with exactly this, and nothing more:
   evidenced. A personal fact a resume doesn't normally state (work
   authorization, sponsorship, willingness to commute or relocate,
   availability) takes its status from `profile.md`, with "profile" as the
-  evidence; use Ask only when `profile.md` doesn't settle it.
+  evidence; use Ask only when `profile.md` doesn't settle it. Its work
+  authorization and sponsorship answers cover only the countries it lists as
+  authorized, so a job elsewhere is an Ask row.
 - Knockout risks: any hard requirement I appear to miss, plus any Ask rows.
   Say "None" if there are none.
 - Verdict, decided from the table (ignoring Ask rows): Strong Fit = every

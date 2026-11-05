@@ -70,5 +70,8 @@ application.
 Create `applications/` and `backups/` if missing, and the tracker with
 `tracker.py init`. Log each earlier application the user lists with
 `tracker.py add --source "By hand" --status Applied --applied <date>` plus
-the company, role and link they gave; a date given loosely ("early October")
-goes in as the first of that month with the original wording in `--notes`.
+the company, role and link they gave. A loose date ("early October", "last
+week") becomes your best single `YYYY-MM-DD`, with the user's words in
+`--notes`. When that date is more than 14 days ago, clear the follow-up
+(`tracker.py update <ID> follow_up=`) so old applications do not all show as
+overdue on day one.
