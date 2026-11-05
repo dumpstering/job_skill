@@ -270,14 +270,33 @@ def fake_urlopen(routes, seen):
     return opener
 
 
+class FakeOpener:
+    def __init__(self, routes, seen):
+        self.fn = fake_urlopen(routes, seen)
+
+    def open(self, req, timeout=None):
+        return self.fn(req, timeout=timeout)
+
+
+def patch_net(routes, seen):
+    """Swap in a fake opener; the made-up hosts would fail the public-address check."""
+    real = (posting.OPENER, posting.check_public)
+    posting.OPENER = FakeOpener(routes, seen)
+    posting.check_public = lambda url: None
+    return real
+
+
+def unpatch_net(real):
+    posting.OPENER, posting.check_public = real
+
+
 def mocked(routes, url):
     seen = []
-    real = posting.urlopen
-    posting.urlopen = fake_urlopen(routes, seen)
+    real = patch_net(routes, seen)
     try:
         return posting.resolve(url), seen
     finally:
-        posting.urlopen = real
+        unpatch_net(real)
 
 
 def test_network_paths():
@@ -311,20 +330,42 @@ def test_network_paths():
     # everything fails: exit 3 from main, with FETCH-FAILED and TRY
     for body in (URLError("unreachable"), 503):
         buf, seen = io.StringIO(), []
-        real = posting.urlopen
-        posting.urlopen = fake_urlopen({"https://": body}, seen)
+        real = patch_net({"https://": body}, seen)
         try:
             with tempfile.TemporaryDirectory(prefix="posting_test_") as tmp, redirect_stdout(buf):
                 code = posting.main([LEVER_URL, "--out", str(Path(tmp) / "posting.md")])
                 assert not (Path(tmp) / "posting.md").exists()
         finally:
-            posting.urlopen = real
+            unpatch_net(real)
         lines = buf.getvalue().splitlines()
         assert code == 3 and lines[0].startswith("FETCH-FAILED") and lines[1] == (
             "TRY https://api.lever.co/v0/postings/leverco/ad208490-4052-4f91-a57e-433f2d1e484b"), lines
-    # a real unreachable host through the real urlopen (connection refused, no DNS wait)
+    # a non-public address is refused before any connection, and still exits 3 with TRY
     code, lines, _ = run_cli("http://127.0.0.1:9/jobs/1", "--out", os.path.join(tempfile.gettempdir(), "posting_unused.md"))
-    assert code == 3 and lines[0].startswith("FETCH-FAILED") and lines[1] == "TRY http://127.0.0.1:9/jobs/1", lines
+    assert code == 3 and lines[0].startswith("FETCH-FAILED") and "refused" in lines[0], lines
+    assert lines[1] == "TRY http://127.0.0.1:9/jobs/1", lines
+
+
+def test_public_only():
+    for bad in ("http://127.0.0.1/x", "http://localhost/x", "http://169.254.169.254/latest/meta-data",
+                "http://10.0.0.1/", "http://192.168.1.1/admin", "http://[::1]/", "file:///etc/passwd",
+                "ftp://example.com/x", "http://printer.local/"):
+        try:
+            posting.check_public(bad)
+        except posting.FetchError:
+            continue
+        raise AssertionError(f"not refused: {bad}")
+    # a redirect to the cloud metadata address is refused mid-flight
+    handler = posting.PublicRedirects()
+    req = posting.Request("https://example.com/job")
+    try:
+        handler.redirect_request(req, None, 302, "Found", {}, "http://169.254.169.254/latest/meta-data")
+        raise AssertionError("redirect to metadata address not refused")
+    except posting.FetchError:
+        pass
+    assert posting.on_domain("acme.wd5.myworkdayjobs.com", "myworkdayjobs.com")
+    assert not posting.on_domain("myworkdayjobs.com.evil.example", "myworkdayjobs.com")
+    assert not posting.on_domain("evilmyworkdayjobs.com", "myworkdayjobs.com")
 
 
 def test_live():
@@ -347,7 +388,7 @@ def test_live():
 
 def main():
     for t in (test_endpoints, test_html_to_text, test_parsers, test_html_sources, test_layout,
-              test_cli_files, test_bad_arguments, test_network_paths):
+              test_cli_files, test_bad_arguments, test_network_paths, test_public_only):
         t()
         print("ok", t.__name__)
     if os.environ.get("JOB_SKILL_LIVE") == "1":

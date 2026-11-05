@@ -23,14 +23,17 @@ Stdlib only.
 """
 import argparse
 import html
+import ipaddress
 import json
 import re
+import socket
 import sys
 from datetime import date, datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.error import HTTPError
-from urllib.request import Request, urlopen
+from urllib.parse import urlparse
+from urllib.request import HTTPRedirectHandler, Request, build_opener, getproxies
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import jobkey  # noqa: E402  (needs the script folder on sys.path)
@@ -260,7 +263,7 @@ def classify(url):
     host, parts, query = jobkey.parse_url(url)
     if not host:
         return None
-    if host.endswith("greenhouse.io"):
+    if on_domain(host, "greenhouse.io"):
         board = jid = ""
         if "jobs" in parts and 0 < parts.index("jobs") < len(parts) - 1:
             board, jid = parts[parts.index("jobs") - 1], parts[parts.index("jobs") + 1]
@@ -271,16 +274,16 @@ def classify(url):
         return None
     if "gh_jid" in query and re.fullmatch(r"\d+", query["gh_jid"]):
         return _greenhouse(query.get("for", ""), query["gh_jid"])
-    if host.endswith("lever.co") and host.startswith("jobs.") and len(parts) >= 2:
+    if on_domain(host, "lever.co") and host.startswith("jobs.") and len(parts) >= 2:
         api_host = "api.eu.lever.co" if ".eu." in host else "api.lever.co"
         return {"source": "lever", "company": parts[0], "id": parts[1],
                 "api": f"https://{api_host}/v0/postings/{parts[0]}/{parts[1]}"}
     if host == "jobs.ashbyhq.com" and len(parts) >= 2:
         return {"source": "ashby", "company": parts[0], "id": parts[1],
                 "api": f"https://api.ashbyhq.com/posting-api/job-board/{parts[0]}?includeCompensation=true"}
-    if host.endswith("myworkdayjobs.com"):
+    if on_domain(host, "myworkdayjobs.com"):
         return _workday(host, parts)
-    if host.endswith("smartrecruiters.com") and len(parts) >= 2 and parts[0] != "oneclick-ui":
+    if on_domain(host, "smartrecruiters.com") and len(parts) >= 2 and parts[0] != "oneclick-ui":
         m = re.match(r"(\d+)(?:-|$)", parts[1])
         pid = m.group(1) if m else parts[1]
         return {"source": "smartrecruiters", "company": parts[0], "id": pid,
@@ -332,13 +335,50 @@ def greenhouse_board_from_page(page):
 
 # ---------- fetching ----------
 
+def on_domain(host, domain):
+    return host == domain or host.endswith("." + domain)
+
+
+def check_public(url):
+    """Refuse anything but public http(s): a pasted posting link (or a page it
+    redirects to) must never reach into the user's machine or network."""
+    u = urlparse(url)
+    host = (u.hostname or "").lower()
+    if u.scheme not in ("http", "https") or not host:
+        raise FetchError(f"refused {url[:80]}: only public http(s) links are fetched")
+    if host == "localhost" or host.endswith((".localhost", ".local", ".internal", ".lan", ".home.arpa")):
+        raise FetchError(f"refused {host}: not a public site")
+    try:
+        addrs = {info[4][0] for info in socket.getaddrinfo(host, None)}
+    except socket.gaierror:
+        if getproxies().get(u.scheme):
+            return  # the proxy resolves the name; it never sees a private literal here
+        raise FetchError(f"cannot resolve {host}")
+    for a in addrs:
+        ip = ipaddress.ip_address(a.split("%")[0])
+        if not ip.is_global:
+            raise FetchError(f"refused {host}: resolves to a non-public address ({ip})")
+
+
+class PublicRedirects(HTTPRedirectHandler):
+    max_redirections = 5
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        check_public(newurl)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+OPENER = build_opener(PublicRedirects)
+
+
 def fetch(url, accept=None):
+    check_public(url)
     req = Request(url, headers={
         "User-Agent": USER_AGENT,
         "Accept": accept or "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.9"})
     try:
-        with urlopen(req, timeout=TIMEOUT) as r:
+        with OPENER.open(req, timeout=TIMEOUT) as r:
             raw = r.read(MAX_BYTES)
             charset = r.headers.get_content_charset() or "utf-8"
     except HTTPError as e:
