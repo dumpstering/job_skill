@@ -1,10 +1,14 @@
 # First-run setup
 
 Do only the parts step 2 sent you here for, in two messages to the user:
-1. The resume summary, any questions about scrambled dates or titles, and the
-   numbered profile questions, together.
-2. After the user answers: the filled profile for confirmation, and a line
-   saying the library was seeded.
+1. The resume summary, any questions about scrambled dates or titles, the
+   numbered profile questions, and (when the tracker is new) one more: "Have
+   you applied anywhere in the last few months? List them (company, role,
+   date, link if you have it) so reposts get caught." All together.
+2. After the user answers: the filled profile for confirmation, a line saying
+   the library was seeded, a line saying how many earlier applications were
+   logged, and: "To have me check your email for replies, connect Gmail under
+   Connectors in Claude's settings and say /job inbox."
 
 If a Python package you need is missing, `pip install` it and carry on.
 
@@ -61,9 +65,10 @@ seed it from `master_resume.md`:
 In message 2, say it was seeded from their resume and grows with every
 application.
 
-## Folders
+## Tracker and folders
 
-Create `applications/`, `backups/` and `applications.md` if missing. The
-tracker's header row:
-
-`| Date | Company | Role | Fit | Status | Folder | URL |`
+Create `applications/` and `backups/` if missing, and the tracker with
+`tracker.py init`. Log each earlier application the user lists with
+`tracker.py add --source "By hand" --status Applied --applied <date>` plus
+the company, role and link they gave; a date given loosely ("early October")
+goes in as the first of that month with the original wording in `--notes`.

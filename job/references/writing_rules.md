@@ -26,7 +26,14 @@ insist" case).
 
 ## Commands
 
-- **audit**: reread your last Block A and Block C line by line against my
+- **audit**: run it in a fresh context when you can, since a reviewer that
+  did not write the resume catches more. If you can start a subagent, give it
+  the paths of `resume.json`, `master_resume.md`, `achievement_library.md`,
+  `profile.md`, `notes.md`, `posting.md` and this file. Ask it for the
+  problem list described here plus a verdict (send, fix or rework), and tell
+  it to change no files. Then make the fixes yourself. Without a subagent
+  tool, do the audit yourself.
+  The audit: reread your last Block A and Block C line by line against my
   resume, my library, my profile, my answers, and every rule below,
   especially the items in the check under Output. A problem is anything that
   breaks a rule, in either direction: a claim, verb or number stronger than
@@ -193,17 +200,33 @@ same in revisions.
 
 ### Block A: Tailored Resume
 
-Write the resume to `resume.json` in the job folder, then run, from the skill's
-folder:
+Write the resume to `resume.json` in the job folder. Write the posting's key
+terms (the skills, tools, certifications and job titles from the Phase 1
+requirements) to `terms.json` there, as a list of strings or
+`{"term": "...", "aliases": ["..."]}` objects; aliases cover renamed products,
+such as Entra ID and Azure AD. Then run, from the skill's folder:
 
-`python scripts/build_resume.py "<job folder>/resume.json" --out "<job folder>" --base "<Name> Resume"`
+`python scripts/build_resume.py "<job folder>/resume.json" --out "<job folder>" --base "<Name> Resume" --sources "<folder>/master_resume.md" "<folder>/achievement_library.md" "<folder>/profile.md" "<job folder>/notes.md" --terms "<job folder>/terms.json"`
 
 `<Name>` and the JSON `name` are my name exactly as the master resume shows
 it. The build writes the .docx, .pdf and .txt (plain text, for "paste your
-resume" boxes), prints the PDF's page count, and prints lint warnings. If it
-prints `ERROR`, fix `resume.json` and build again. If it reports a missing
-package, run `pip install python-docx reportlab` and build again; if that
-fails, tell me which file could not be built.
+resume" boxes), prints the PDF's page count and lint warnings, then three
+checks:
+- `FACT`: a number, title, employer or date on the resume that is not in my
+  sources. Correct it to match the source. A derived figure stays only if
+  it is listed under Verify.
+- `PARSE`: how the PDF reads back to an applicant tracking system. Anything
+  but `PARSE ok` is a layout problem to fix.
+- `KEYWORD`: the posting's terms that are on the resume (one marked "only
+  as" appears under an older name: switch to the posting's term), that are
+  in my sources but not on this resume (work them in where they are true and
+  relevant), and that are not evidenced (gaps for Block B, never added
+  without a source).
+
+If it prints `ERROR`, fix `resume.json` and build again. If it reports a
+missing package, run `pip install python-docx reportlab pypdf` and build
+again; if that fails, tell me which file could not be built. After a clean
+build, run `tracker.py update <ID> status="Resume ready"`.
 
 Then post the .txt content in one code block, so I can read the resume
 without opening a file, followed by the paths of the three files. Nothing
@@ -252,7 +275,8 @@ Post it, and save it to `notes.md`.
   exactly from Block A). One row per requirement from the Phase 1 Requirements
   check, plus any main duty of the role it left out. Mark Met only when the
   resume shows the requirement itself; related experience is Partial at most.
-  If my answers changed a Phase 1 status, say so.
+  If my answers changed a Phase 1 status, say so. Under the table, give the
+  build's three `KEYWORD` lines as printed.
 - Remaining gaps: every requirement not marked Met, must-haves first, each
   with one honest suggestion (e.g. mention it in the cover letter, a
   certification worth pursuing, or "not a fit"). A suggestion never recasts a
@@ -270,7 +294,8 @@ Post it, and save it to `notes.md`.
   content falls short, say so instead of padding; if you cut material to fit,
   say what.
 - Verify before sending: at most 8 lines, riskiest first: the (-> Verify)
-  items, and any wording stronger than a close paraphrase of my sources. If
+  items, any `FACT` line kept for a derived figure, and any wording stronger
+  than a close paraphrase of my sources. If
   more qualify, put similar ones on one line (e.g. "Derived percents: 38% in
   bullet 2, 70% in bullet 5"); never drop a (-> Verify) item. Say nothing
   about checks that passed, changes I asked for, or facts I already
@@ -314,7 +339,8 @@ posting and leading with the two strongest matches from Block B. The
 Truthfulness rules and the banned-word list apply; a gap is never recast as
 met, and facts about the employer come only from the posting. Write it to
 `cover_letter.json` in the job folder, dated from the system clock, and build
-it with the same command and `--base "<Name> Cover Letter"`:
+it with the same command, without `--terms`, and with
+`--base "<Name> Cover Letter"`:
 
 ```json
 {

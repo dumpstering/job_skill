@@ -2,15 +2,19 @@
 
 Usage:
     python build_resume.py resume.json --out <folder> --base "First Last Resume"
+        [--sources FILE [FILE ...]] [--terms terms.json]
 
 The JSON format is documented in references/writing_rules.md (Block A and
 Cover letter). The .docx uses Arial and the .pdf Helvetica, which share
 metrics, so the PDF's page count holds for both. Lint warnings mirror the
 writing rules a script can check; the agent fixes each or keeps it for a
-stated reason.
+stated reason. After the WARN lines come the checks in checks.py: PARSE (the
+PDF read back as text), FACT (numbers, names and dates against --sources) and
+KEYWORD (posting terms from --terms). The agent acts on each line they print:
+fix the resume, or carry the item into "Verify before sending".
 
 Exit codes: 0 built, 1 bad input, 2 a package is missing (pip install
-python-docx reportlab).
+python-docx reportlab). The checks never change the exit code.
 """
 import argparse
 import json
@@ -19,6 +23,9 @@ import sys
 from datetime import datetime
 from pathlib import Path
 from xml.sax.saxutils import escape
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import checks  # noqa: E402
 
 EN_DASH = chr(0x2013)
 EM_DASH = chr(0x2014)
@@ -469,6 +476,8 @@ def main():
     ap.add_argument("json_path")
     ap.add_argument("--out", required=True, help="folder to write into")
     ap.add_argument("--base", required=True, help='file name without extension, e.g. "First Last Resume"')
+    ap.add_argument("--sources", nargs="+", metavar="FILE", help="master_resume.md, achievement_library.md, notes.md, profile.md: enables the FACT check")
+    ap.add_argument("--terms", metavar="terms.json", help="posting terms (strings or {term, aliases}): enables the KEYWORD check")
     args = ap.parse_args()
 
     warnings = []
@@ -496,8 +505,10 @@ def main():
         print("MISSING python-docx: run  pip install python-docx  and build again")
         code = 2
 
+    pdf_built = False
     try:
         pages = build_pdf(data, target(".pdf"), paper, size, margin)
+        pdf_built = True
         print(f"wrote: {target('.pdf')} ({pages} page{'s' if pages != 1 else ''})")
     except ImportError:
         print("MISSING reportlab: run  pip install reportlab  and build again")
@@ -505,6 +516,8 @@ def main():
 
     for w in warnings + lint(data):
         print(f"WARN {w}")
+    for line in checks.run_checks(data, target(".pdf") if pdf_built else None, target(".txt"), args.sources, args.terms):
+        print(line)
     return code
 
 

@@ -1,0 +1,37 @@
+{
+  "absolute_url": "https://job-boards.greenhouse.io/acme/jobs/1234567",
+  "internal_job_id": 7654321,
+  "location": {"name": "Austin, TX | Remote - US"},
+  "id": 1234567,
+  "updated_at": "2026-10-19T11:17:24-04:00",
+  "requisition_id": "REQ-26-0042",
+  "title": "Senior IT Support Engineer",
+  "company_name": "Acme Robotics",
+  "first_published": "2026-10-01T09:00:00-04:00",
+  "language": "en",
+  "application_deadline": "2026-12-01",
+  "content": "&lt;div class=&quot;content-intro&quot;&gt;&lt;h2&gt;&lt;strong&gt;About Acme&lt;/strong&gt;&lt;/h2&gt;&lt;p&gt;We build robots &amp;amp; ship them.&lt;/p&gt;&lt;/div&gt;&lt;h3&gt;You will&lt;/h3&gt;&lt;ul&gt;&lt;li&gt;Run the service desk&lt;/li&gt;&lt;li&gt;Own endpoint management&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;Pay range: $120,000 - $150,000&lt;/p&gt;",
+  "departments": [{"id": 1, "name": "IT", "child_ids": [], "parent_id": null}],
+  "offices": [{"id": 2, "name": "Austin, TX", "location": "Austin, Texas, United States", "child_ids": [], "parent_id": null}],
+  "ai_disclaimer": "&lt;p&gt;Do not use AI to write your answers.&lt;/p&gt;",
+  "include_ai_disclaimer": true,
+  "ai_opt_out_request_url": "https://acme.example/ai-opt-out",
+  "compliance": [
+    {"type": "eeoc", "description": "&lt;p&gt;Voluntary.&lt;/p&gt;", "questions": [
+      {"required": false, "label": "VeteranStatus", "fields": [
+        {"name": "veteran_status", "type": "multi_value_single_select", "values": [
+          {"label": "I don't wish to answer", "value": "3"}, {"label": "I am not a protected veteran", "value": "1"}]}]}]}
+  ],
+  "demographic_questions": {"header": "Voluntary survey", "description": "", "questions": [
+    {"id": 11, "label": "What is your gender identity?", "required": false, "type": "multi_value_multi_select",
+     "answer_options": [{"id": 1, "label": "Woman", "free_form": false}, {"id": 2, "label": "Man", "free_form": false}]}]},
+  "questions": [
+    {"description": null, "label": "First Name", "required": true, "fields": [{"name": "first_name", "type": "input_text", "values": []}]},
+    {"description": null, "label": "Resume/CV", "required": true, "fields": [
+      {"name": "resume", "type": "input_file", "values": []}, {"name": "resume_text", "type": "textarea", "values": []}]},
+    {"description": null, "label": "Do you require visa sponsorship?", "required": true, "fields": [
+      {"name": "question_1", "type": "multi_value_single_select", "values": [{"label": "Yes", "value": 1}, {"label": "No", "value": 0}]}]},
+    {"description": null, "label": "Why Acme?", "required": false, "fields": [{"name": "question_2", "type": "textarea", "values": []}]}
+  ],
+  "location_questions": []
+}

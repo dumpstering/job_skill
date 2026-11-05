@@ -47,8 +47,10 @@ Then reply with exactly this, and nothing more:
   Positioning changes emphasis and order, never my job titles.
 
 **Questions**
-Before writing any question, check my library and profile: leave out anything
-they already answer, and anything listed there as "Not held".
+Before writing any question, check my library, my profile and this job's
+`notes.md` (which may hold answers carried over from an earlier application
+of the same job): leave out anything they already answer, and anything listed
+as "Not held".
 
 Up to 6 numbered questions (including the two below), most important first,
 each at most two short sentences plus, where it applies, the tag "Your part,

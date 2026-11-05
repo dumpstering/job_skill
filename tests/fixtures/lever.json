@@ -1,0 +1,22 @@
+{
+  "additional": "<div>We are an equal opportunity employer.</div>",
+  "additionalPlain": "We are an equal opportunity employer.",
+  "categories": {"commitment": "Full Time", "department": "Support", "location": "Atlanta, Georgia", "team": "Desk", "allLocations": ["Atlanta, Georgia"]},
+  "createdAt": 1788199939703,
+  "descriptionPlain": "Help our customers succeed.",
+  "description": "<div>Help our customers succeed.<br>Work with a great team.</div>",
+  "id": "ad208490-4052-4f91-a57e-433f2d1e484b",
+  "lists": [
+    {"text": "Skill Set:", "content": "<li>3+ years of customer support</li><li>Clear writing</li>"},
+    {"text": "Nice to have:", "content": "<li>Scripting</li>"}
+  ],
+  "salaryRange": {"min": 85000, "max": 175000, "currency": "USD", "interval": "per-year-salary"},
+  "text": "Customer Success Manager",
+  "country": "US",
+  "workplaceType": "hybrid",
+  "opening": "",
+  "openingPlain": "",
+  "descriptionBody": "<div>Help our customers succeed.</div>",
+  "hostedUrl": "https://jobs.lever.co/leverco/ad208490-4052-4f91-a57e-433f2d1e484b",
+  "applyUrl": "https://jobs.lever.co/leverco/ad208490-4052-4f91-a57e-433f2d1e484b/apply"
+}

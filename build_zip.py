@@ -2,7 +2,7 @@
 
 Usage: python build_zip.py
 
-Writes to dist/:
+Writes to dist/v<VERSION>/, so a rebuild never overwrites an earlier version:
   job.zip                 the skill (upload in Customize > Skills)
   job-search-plugin.zip   the same skill as a plugin (Customize > Plugins), the
                           fallback if /job does not show up in Cowork
@@ -19,10 +19,10 @@ import sys
 import zipfile
 from pathlib import Path
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 ROOT = Path(__file__).resolve().parent
 SKILL = ROOT / "job"
-DIST = ROOT / "dist"
+DIST = ROOT / "dist" / f"v{VERSION}"
 
 
 def skill_files():
@@ -60,7 +60,7 @@ def main():
         for p in problems:
             print(f"FAIL {p}")
         return 1
-    DIST.mkdir(exist_ok=True)
+    DIST.mkdir(parents=True, exist_ok=True)
 
     with zipfile.ZipFile(DIST / "job.zip", "w", zipfile.ZIP_DEFLATED) as z:
         for p in skill_files():

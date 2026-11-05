@@ -1,0 +1,16 @@
+{
+  "id": "744000158320111",
+  "name": "Senior / Lead Engineering Operations Manager",
+  "uuid": "a6f4c077-a7ac-4b8f-99d4-3756d1544f35",
+  "refNumber": "REF2042H",
+  "company": {"name": "Acme Recruiting Inc", "identifier": "acmerecruiting"},
+  "location": {"city": "Warsaw", "region": "Remote", "country": "pl", "remote": true, "hybrid": false, "fullLocation": "Warsaw, Remote, Poland"},
+  "releasedDate": "2026-10-28T15:14:43.941Z",
+  "postingUrl": "https://jobs.smartrecruiters.com/acmerecruiting/744000158320111-senior-lead-engineering-operations-manager",
+  "jobAd": {"sections": {
+    "companyDescription": {"title": "Company Description", "text": "<p>Acme makes hiring software.</p>"},
+    "jobDescription": {"title": "Job Description", "text": "<p>Run engineering operations.</p><ul><li>Plan</li><li>Report</li></ul>"},
+    "qualifications": {"title": "Qualifications", "text": "<ul><li>5 years in operations</li></ul>"},
+    "additionalInformation": {"title": "Additional Information", "text": "<p>Benefits include leave.</p>"}
+  }}
+}

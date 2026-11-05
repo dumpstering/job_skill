@@ -2,8 +2,8 @@
 
 The /job skill reads this file to fill in job applications and adds to it over
 time. Edit it whenever you like; the skill copies it to backups\ before every
-change it makes. It never holds an SSN, date of birth, bank details or
-passwords.
+change it makes. It never holds an SSN, date of birth, bank details,
+passwords, or answers about criminal history.
 
 ## Contact
 - Legal first name:
@@ -48,5 +48,7 @@ Blank means "I decline to answer" / "Prefer not to say".
 
 ## Standard answers
 Answers to application questions that come up again and again. The skill adds
-to this list when you answer one.
-- How did you hear about us:
+to this list when you answer one. One per line:
+question | answer | where it applies (any, or a country such as US) | sensitive (yes/no)
+A sensitive answer is confirmed with you each time before it is used.
+- How did you hear about us? |  | any | no

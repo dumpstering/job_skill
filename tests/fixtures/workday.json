@@ -1,0 +1,21 @@
+{
+  "jobPostingInfo": {
+    "id": "d6e62353664a101eaba00fa0a5890000",
+    "title": "Platform Engineer, Safety",
+    "jobDescription": "<p>Acme is a great employer.</p><p><b>What you'll do</b></p><ul><li>Build harnesses</li><li>Review code</li></ul>",
+    "location": "US, CA, Santa Clara",
+    "additionalLocations": ["US, NC, Remote", "US, NY, Remote"],
+    "postedOn": "Posted Today",
+    "startDate": "2026-11-05",
+    "timeType": "Full time",
+    "jobReqId": "JR2021886",
+    "jobPostingId": "Platform-Engineer--Safety_JR2021886",
+    "jobPostingSiteId": "AcmeExternalCareerSite",
+    "country": {"descriptor": "United States of America", "id": "bc33"},
+    "canApply": true,
+    "externalUrl": "https://acme.wd5.myworkdayjobs.com/AcmeExternalCareerSite/job/US-CA-Santa-Clara/Platform-Engineer--Safety_JR2021886"
+  },
+  "hiringOrganization": {"name": "Acme USA", "url": ""},
+  "similarJobs": [],
+  "userAuthenticated": false
+}

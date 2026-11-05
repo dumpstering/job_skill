@@ -1,14 +1,17 @@
 # Job application helper for Claude
 
-Paste a job link. Claude reads the posting, checks it against your resume,
-asks you a few questions, writes a tailored resume (Word and PDF), and fills in
-the application in your browser. You review it and click Submit yourself.
-Every application also adds to a file of your achievements, so the next one
-starts with more material.
+Paste a job link. Claude checks you haven't already applied for it, reads the
+posting, checks it against your resume, asks you a few questions, writes a
+tailored resume (Word and PDF), and fills in the application in your browser.
+You review it and click Submit yourself. Every job goes into a spreadsheet,
+and Claude can check your Gmail for replies and update the spreadsheet for
+you. Each application also adds to a file of your achievements, so the next
+one starts with more material.
 
 You need:
 - The Claude desktop app for Windows, signed in on a paid plan (Pro or higher).
 - Your most complete resume as a Word or PDF file.
+- Gmail, if you want Claude to check for replies (optional).
 - Google Chrome, if you want Claude to use your own browser (optional).
 
 ## One-time setup (about 10 minutes)
@@ -23,10 +26,13 @@ You need:
 3. **Install the skill.** Open Customize > Skills, click +, then Create skill
    > Upload a skill, and choose `job.zip`. Check that "job" is switched on in
    the list.
-4. **Pick a browser (optional).** Claude uses Cowork's built-in browser unless
+4. **Connect Gmail (optional).** In Claude's settings, open Connectors and
+   connect Gmail. Claude only searches and reads your mail for job replies.
+   It never sends, deletes or moves anything.
+5. **Pick a browser (optional).** Claude uses Cowork's built-in browser unless
    you change it. To use your own Chrome, where you are already signed in to
-   LinkedIn and job sites, install the Claude in Chrome extension and choose
-   Chrome under Settings > Cowork.
+   job sites, install the Claude in Chrome extension and choose Chrome under
+   Settings > Cowork.
 
 ## Applying for a job
 
@@ -37,51 +43,78 @@ You need:
    /job is not in the menu, type "Use the job skill:" followed by the link.
 4. **First time only:** Claude reads your resume, shows you what it found, and
    asks for the details every application wants (address, phone, work
-   authorization, start date and so on). They are saved in `profile.md` in
-   your folder. Skip anything you like; Claude asks when an application needs
-   it.
-5. Claude shows how well you match the job and asks a few questions (up to
+   authorization, start date and so on). It also asks where you have applied
+   recently, so reposts of those jobs get caught. Your details are saved in
+   `profile.md` in your folder. Skip anything you like; Claude asks when an
+   application needs it.
+5. **Duplicate check:** if you already applied for this job, or it looks like
+   a repost of one you did, Claude tells you when and asks whether to go on.
+6. Claude shows how well you match the job and asks a few questions (up to
    6, plus some one-line quick checks). Short answers, rough numbers and
    "skip" are all fine.
-6. Claude writes the resume and saves it as Word and PDF in
+7. Claude writes the resume and saves it as Word and PDF in
    `JobSearch\applications\<date> <company> - <role>`. Read it, and read the
    "Verify before sending" list: you are the one signing this resume. Ask for
    any changes in plain words.
-7. Reply **audit** for a line-by-line check against what you told it. Claude
+8. Reply **audit** for a line-by-line check against what you told it. Claude
    also runs this itself before it fills in an application.
-8. Reply **apply**. Claude opens the application and fills it in page by
+9. Reply **apply**. Claude opens the application and fills it in page by
    page. It stops and asks you to:
    - sign in or create an account (it never handles passwords or
-     verification codes),
+     verification codes; it reminds you which email you used on that site
+     before),
    - attach your resume file when it cannot attach it itself (it tells you
      which file),
    - answer anything your files do not cover,
    - fill in sensitive items yourself: SSN, date of birth, bank details,
      signatures and "I certify" boxes.
-9. Claude stops on the last page, before Submit. Check each page, click
-   Submit, then reply **submitted** so it is logged.
+10. Claude stops on the last page, before Submit. Check each page, click
+    Submit, then reply **submitted** so it is logged. Claude keeps a copy of
+    exactly what you sent.
 
-Other replies you can use at any time: **go** (skip the questions and write
-the resume), **cover letter**, **library** (see your achievement library),
+LinkedIn does not allow automated tools, so Claude never fills in LinkedIn
+Easy Apply forms. For those, it writes out your answers for you to paste, or
+uses the company's own application page when the listing links to one.
+
+## Other things you can ask
+
+Start a Cowork task with your JobSearch folder connected, then type:
+- **/job inbox** - Claude checks Gmail for replies (confirmations,
+  rejections, interview requests, offers), updates your spreadsheet, and
+  warns you about anything that looks like a job scam.
+- **/job status** - what is in progress, which follow-ups are due, and your
+  response rate so far.
+- **/job log** - tell Claude about a job you applied for on your own, so it
+  goes in the spreadsheet too.
+- **/job prep** - interview prep for a job, built from the resume you sent.
+
+In a job task you can also reply **go** (skip the questions and write the
+resume), **cover letter**, **library** (see your achievement library) or
 **profile** (see or change your saved details).
 
 ## What is in your JobSearch folder
 
+- `applications.xlsx` - the spreadsheet of every job you started or applied
+  for: status, dates, follow-ups, and links. It also lists the job-site
+  accounts you created (which email, never passwords) and every email Claude
+  read for you. Close it in Excel while Claude is working, so Claude can
+  update it.
 - `profile.md` - your contact details and standard answers. Open it in
   Notepad and edit it whenever you like.
 - `achievement_library.md` - everything you have done, role by role. It
   grows with each application, and every new resume draws on it.
-- `applications.md` - every job you started, its fit and its status.
 - `applications\` - one folder per job: the posting, your tailored resume (and
-  cover letter, if you asked for one), and a record of what was entered in
-  the form.
-- `backups\` - a dated copy of your profile and library from before each
-  change. Claude adds and updates files here but never deletes them.
+  cover letter, if you asked for one), what was entered in the form, and a
+  `submitted` folder with exactly what you sent.
+- `backups\` - dated copies of your profile, library and spreadsheet from
+  before changes. Claude adds and updates files here but never deletes them.
 
 ## If something goes wrong
 
 - **Claude says it cannot find your folder:** connect `Documents\JobSearch`
   to the Cowork task and send /job again.
+- **Claude says the spreadsheet is locked:** close `applications.xlsx` in
+  Excel and reply "go".
 - **The job page will not load:** copy the posting text from your browser and
   paste it in.
 - **/job does not appear in Cowork:** install `job-search-plugin.zip` from
@@ -91,6 +124,7 @@ the resume), **cover letter**, **library** (see your achievement library),
 - Cowork on Windows is in beta, so menu names may differ a little from the
   ones above.
 
-Privacy: your resume, profile and library are files in your JobSearch folder.
-Claude reads them during a task, the same as anything you paste into a chat.
-It never asks for or saves your SSN, date of birth, bank details or passwords.
+Privacy: your resume, profile, library and spreadsheet are files in your
+JobSearch folder. Claude reads them during a task, the same as anything you
+paste into a chat. It never asks for or saves your SSN, date of birth, bank
+details or passwords.
