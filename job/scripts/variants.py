@@ -12,10 +12,21 @@ Usage:
 
 A variant lives in variants/<family>/v<N>/: resume.json (every bullet with an
 ev list of library IDs), pool.json (summary options, extra bullets per role,
-extra skills, the alias table, extra publications), letter.json (a family
-letter with {company} {role} {focus} {date} slots), review.md, and after
-approval approved.json (the sha256 of each file). current.txt names the
-approved version. A rework goes to v<N+1>; earlier versions stay.
+keyed "<title> | <org>", or "<title> | <org> | <dates>" when two roles share
+a title and employer; extra skills, the alias table, extra publications),
+letter.json (a family letter with {company} {role} {focus} {date} slots;
+{focus} is the hands-on techniques.md technique the posting names most),
+review.md, and after approval approved.json (the sha256 of each file, and
+under "entries" the sha256 of every library entry they cite, heading and
+text). current.txt names the approved version. A rework goes to v<N+1>;
+earlier versions stay.
+
+Approval holds while those bytes and entries are unchanged (shared decision
+2). A changed cited entry prints `UNAPPROVED <family> v<N>: L-0006 changed
+since approval`; check then prints `CHANGED` lines (the entry's new text and
+each bullet citing it) and a NEXT line, and approve re-approves the same
+files on the user's word (`APPROVED <family> v<N> again`). A changed file is
+never re-approved: it needs a new version.
 
 tune makes resume_B.json and tune_log.json in the job folder using only:
 the summary option with the most posting-term overlap; bullets stable-sorted
@@ -106,15 +117,16 @@ def current_version(root, family):
     return vs[-1] if vs else None
 
 
-def approval(root, family, version):
-    """(ok, reason, approved dict or None) for one version."""
-    vdir = jobfs.Folder(root).variant(family, version)
+def files_approval(vdir):
+    """(ok, reason, approved dict or None): the approved files' exact bytes."""
     try:
         approved = json.loads((vdir / "approved.json").read_text(encoding="utf-8-sig"))
     except FileNotFoundError:
         return False, "not approved yet", None
     except (OSError, ValueError) as e:
         return False, f"approved.json unreadable ({e})", None
+    if not isinstance(approved, dict):
+        return False, "approved.json unreadable (not an object)", None
     hashes = approved.get("sha256") or {}
     for name in ("resume.json", "pool.json"):
         if name not in hashes:
@@ -128,6 +140,65 @@ def approval(root, family, version):
                 return False, f"{name} changed since approval", None
         elif path.exists():
             return False, f"{name} added since approval", None
+    return True, "", approved
+
+
+def entry_hash(entry):
+    """sha256 of one library entry as a variant relies on it: its role heading and text."""
+    return hashlib.sha256(f"{entry.heading}\n{entry.text}".encode("utf-8")).hexdigest()
+
+
+def cited_ids(vdir):
+    """Every library ID the variant's resume.json and pool.json bullets cite, sorted."""
+    ids = set()
+    for name in ("resume.json", "pool.json"):
+        try:
+            data = json.loads((vdir / name).read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError):
+            continue
+        stack = [data]
+        while stack:
+            x = stack.pop()
+            if isinstance(x, dict):
+                if isinstance(x.get("ev"), list):
+                    ids |= {i for i in x["ev"] if isinstance(i, str)}
+                stack += list(x.values())
+            elif isinstance(x, list):
+                stack += x
+    return sorted(ids)
+
+
+def changed_entries(root, approved):
+    """[(id, why)] for the cited library entries whose text or role heading
+    changed since approval (shared decision 2). An approval written before
+    per-entry hashes falls back to the whole library's sha256."""
+    f = jobfs.Folder(root)
+    entries = approved.get("entries")
+    if not isinstance(entries, dict):
+        current = sha256_file(f.library) if f.library.exists() else ""
+        if approved.get("library_rev") and approved["library_rev"] == current:
+            return []
+        return [("library", "achievement_library.md changed since approval (approved before per-entry checks)")]
+    lib = library.load(f.library).by_id
+    out = []
+    for eid, h in sorted(entries.items()):
+        if eid not in lib:
+            out.append((eid, f"{eid} is no longer in the library"))
+        elif entry_hash(lib[eid]) != h:
+            out.append((eid, f"{eid} changed since approval"))
+    return out
+
+
+def approval(root, family, version):
+    """(ok, reason, approved dict or None) for one version: the approved files'
+    exact bytes and the text of every library entry they cite."""
+    vdir = jobfs.Folder(root).variant(family, version)
+    ok, why, approved = files_approval(vdir)
+    if not ok:
+        return ok, why, approved
+    changed = changed_entries(root, approved)
+    if changed:
+        return False, "; ".join(why for _, why in changed[:3]) + (" ..." if len(changed) > 3 else ""), None
     return True, "", approved
 
 
@@ -152,8 +223,25 @@ def entry_key(e):
     return f'{e["title"]} | {e.get("org", "")}'
 
 
+def full_key(e):
+    """"<title> | <org> | <dates>": one stint, even when two share title and employer."""
+    return f'{e["title"]} | {e.get("org", "")} | {e.get("dates", "")}'
+
+
 def resume_entries(data):
     return [e for s in data.get("sections", []) for e in s.get("entries", [])]
+
+
+def pool_bullets(pool, e, entries):
+    """The pool bullets for one role: keyed by full_key, or by entry_key when
+    no other role in entries shares that title and employer (a shared key
+    belongs to neither, so a bullet never moves to another stint)."""
+    bullets = pool.get("bullets", {}) if isinstance(pool.get("bullets"), dict) else {}
+    if full_key(e) in bullets:
+        return list(bullets[full_key(e)])
+    if entry_key(e) in bullets and sum(1 for x in entries if entry_key(x) == entry_key(e)) == 1:
+        return list(bullets[entry_key(e)])
+    return []
 
 
 def check_pool(pool, resume):
@@ -163,13 +251,22 @@ def check_pool(pool, resume):
     errors = [f"pool.json has unknown key {k!r}" for k in sorted(set(pool) - POOL_KEYS)]
     if not all(isinstance(s, str) and s.strip() for s in pool.get("summaries", [])):
         errors.append("pool summaries must be non-empty strings")
-    keys = {entry_key(e) for e in resume_entries(resume)}
+    entries = resume_entries(resume)
+    shared = Counter(full_key(e) for e in entries)
+    for key, k in sorted(shared.items()):
+        if k > 1:
+            errors.append(f'resume.json has {k} roles keyed "{key}": give each its own dates')
+    short = Counter(entry_key(e) for e in entries)
+    keys = set(shared)
     bullets = pool.get("bullets", {})
     if not isinstance(bullets, dict):
         errors.append('pool "bullets" must map "<title> | <org>" to a list of bullets')
         bullets = {}
     for key, items in bullets.items():
-        if key not in keys:
+        if key in short and short[key] > 1:
+            errors.append(f'pool bullets for "{key}" match {short[key]} roles in resume.json: '
+                          'key them "<title> | <org> | <dates>"')
+        elif key not in keys and key not in short:
             errors.append(f'pool bullets for "{key}", which is not a role in resume.json')
         for b in items if isinstance(items, list) else [None]:
             if not isinstance(b, dict) or not isinstance(b.get("text"), str) or not b.get("ev"):
@@ -194,9 +291,9 @@ def check_pool(pool, resume):
 def merged_for_checks(resume, pool):
     """resume.json plus every pool unit, so FACT and EVIDENCE cover anything tune may pick."""
     data = copy.deepcopy(resume)
-    extra = pool.get("bullets", {})
-    for e in resume_entries(data):
-        e["bullets"] = list(e.get("bullets", [])) + list(extra.get(entry_key(e), []))
+    entries = resume_entries(data)
+    for e in entries:
+        e["bullets"] = list(e.get("bullets", [])) + pool_bullets(pool, e, entries)
     for i, text in enumerate(pool.get("summaries", []), 2):
         data["sections"].append({"heading": f"Summary option {i}", "paragraph": text})
     lines = [{"label": s["label"], "text": ", ".join(s["items"])} for s in pool.get("skills", [])]
@@ -241,16 +338,43 @@ def approval_problems(root, vdir):
     if problems:
         return problems
     data = merged_for_checks(resume, pool)
-    entries = checks.library_entries([f.library])
-    problems += [ln for ln in checks.evidence_check(data, entries) if not ln.startswith("EVIDENCE ok")]
+    entries = checks.library_entries([f.library], headings=True)
+    problems += [ln for ln in checks.evidence_check(data, entries, v12=True) if not ln.startswith("EVIDENCE ok")]
     sources = [p for p in (f.master_resume, f.library, f.profile) if p.exists()]
     text, _ = checks.read_sources(sources)
+    techniques = library.load_techniques(f.techniques)
     if text is None:
         problems.append("FACT not run: no master_resume.md or achievement_library.md in the root")
     else:
-        problems += [ln for ln in checks.fact_check(data, checks.strip_ids(text)) if not ln.startswith("FACT ok")]
+        text = checks.strip_ids(text)
+        problems += [ln for ln in checks.fact_check(data, text, v12=True) if not ln.startswith("FACT ok")]
+        problems += [ln for ln in checks.technique_check(data, techniques, text) if not ln.startswith("TECHNIQUE ok")]
     problems += [f"lint {w}" for w in build_resume.lint(data) if "is on the banned-word list" in w]
+    if (vdir / "letter.json").exists():
+        problems += letter_problems(read_json(vdir / "letter.json"), techniques, text, jobfs.today(root))
     return problems
+
+
+def letter_problems(letter, techniques, source_text, day):
+    """The family letter filled with a sample posting: no new numbers, no
+    banned word, and a {focus} the posting can fill from techniques.md."""
+    L = letter.get("letter", {})
+    parts = [L.get("greeting", ""), L.get("closing", "")] + list(L.get("paragraphs", []))
+    out = []
+    if any("{focus}" in p for p in parts) and not hands_on(techniques):
+        out.append("letter.json uses {focus}, and techniques.md has no hands-on technique to fill it")
+    focus = (hands_on(techniques) or [None])[0]
+    sample = fill_letter(letter, "Company: Example Co\nRole: Example Role\n",
+                         focus.name if focus else "", day)
+    if source_text is not None:
+        out += [f"letter.json {ln}" for ln in checks.fact_check(sample, source_text, v12=True)
+                if not ln.startswith("FACT ok")]
+    out += [f"lint {w}" for w in build_resume.lint(sample) if "is on the banned-word list" in w]
+    return out
+
+
+def hands_on(techniques):
+    return [t for t in techniques or [] if t.level == "hands-on"]
 
 
 # ---------- commands: new, approve, check ----------
@@ -353,14 +477,24 @@ def cmd_approve(root, family, version, mode, max_pages, pub_max):
     for name in ("resume.json", "pool.json"):
         if not (vdir / name).exists():
             raise Refused(f"ERROR {vdir / name} not found")
-    old = None
+    again = None
     if (vdir / "approved.json").exists():
-        ok, why, old = approval(root, family, version)
-        if ok:
+        ok, why, old = files_approval(vdir)
+        if not ok:
+            raise Refused(f"REFUSED {family} v{version} was approved before and {why}; "
+                          f"put the change in a new version (variants.py new --family {family} --copy)")
+        changed = changed_entries(root, old)
+        if not changed:
             print(f"APPROVED {family} v{version} (unchanged since {old.get('approved_on', '?')})")
             return 0
-        raise Refused(f"REFUSED {family} v{version} was approved before and {why}; "
-                      f"put the change in a new version (variants.py new --family {family} --copy)")
+        # Only cited library entries changed: the user re-approves the same files
+        # after reading the bullets that cite them (variants.md).
+        again = changed
+        for line in changed_lines(root, vdir, changed):
+            print(line)
+        mode = mode or old.get("mode")
+        max_pages = max_pages or old.get("max_pages")
+        pub_max = pub_max if pub_max is not None else old.get("publications_max")
     problems = approval_problems(root, vdir)
     if problems:
         for p in problems:
@@ -372,15 +506,52 @@ def cmd_approve(root, family, version, mode, max_pages, pub_max):
         raise Refused(f"ERROR mode {mode!r} is not industry, cv or usajobs")
     cap = build_resume.page_cap(mode, max_pages)
     hashes = {name: sha256_file(vdir / name) for name in VARIANT_FILES if (vdir / name).exists()}
+    lib = library.load(f.library).by_id
     approved = {"family": family, "version": version, "approved_on": jobfs.today(root).isoformat(),
                 "library_rev": sha256_file(f.library) if f.library.exists() else "",
-                "sha256": hashes, "mode": mode, "max_pages": cap,
+                "sha256": hashes, "entries": {i: entry_hash(lib[i]) for i in cited_ids(vdir) if i in lib},
+                "mode": mode, "max_pages": cap,
                 "publications_max": pub_max if pub_max is not None else 3}
     jobfs.atomic_write_text(vdir / "approved.json", json.dumps(approved, indent=1) + "\n")
     jobfs.atomic_write_text(f.variant_current(family), f"v{version}\n")
     shown = ", ".join(f"{k} {v[:8]}" for k, v in hashes.items())
-    print(f"APPROVED {family} v{version} ({shown})")
+    if again:
+        print(f"APPROVED {family} v{version} again ({len(approved['entries'])} cited entries; "
+              f"changed: {', '.join(i for i, _ in again)})")
+    else:
+        print(f"APPROVED {family} v{version} ({shown})")
     return 0
+
+
+def changed_lines(root, vdir, changed):
+    """CHANGED lines: each changed entry's new text and the variant units citing it."""
+    lib = library.load(jobfs.Folder(root).library).by_id
+    units = []
+    for name in ("resume.json", "pool.json"):
+        try:
+            data = json.loads((vdir / name).read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError):
+            continue
+        stack = [data]
+        while stack:
+            x = stack.pop()
+            if isinstance(x, dict):
+                if isinstance(x.get("ev"), list) and isinstance(x.get("text"), str):
+                    units.append((name, x["text"], x["ev"]))
+                stack += list(x.values())
+            elif isinstance(x, list):
+                stack += x
+    out = []
+    for eid, why in changed:
+        if eid == "library":
+            out.append(f"CHANGED {why}")
+            continue
+        now = lib[eid].text if eid in lib else "(gone)"
+        out.append(f'CHANGED {why}; now: "{checks.norm(now)[:120]}"')
+        for name, text, ev in units:
+            if eid in ev:
+                out.append(f'  cited in {name}: "{checks.norm(text)[:120]}"')
+    return out
 
 
 def family_profile(root, family):
@@ -392,6 +563,11 @@ def family_profile(root, family):
 
 def cmd_check(root, family):
     base = jobfs.Folder(root).variants
+    for fam in jobfs.search_profile(root).get("family") or []:
+        if fam.get("variant") and fam.get("variant") != fam.get("id") and (not family or fam.get("id") == family):
+            # Variants are found by family id; a family never borrows another's variant.
+            print(f'WARN family {fam.get("id")}: variant = "{fam.get("variant")}" is not read; '
+                  f'its variant is variants/{fam.get("id")} (remove the variant line)')
     fams = [family] if family else sorted(p.name for p in base.glob("*") if p.is_dir())
     if not fams:
         print("VARIANTS none")
@@ -401,6 +577,16 @@ def cmd_check(root, family):
         v, approved, notes = usable(root, fam)
         for line in notes:
             print(line)
+        if cur is not None and v != cur:
+            vdir = jobfs.Folder(root).variant(fam, cur)
+            ok, _, old = files_approval(vdir)
+            changed = changed_entries(root, old) if ok else []
+            if changed:
+                for line in changed_lines(root, vdir, changed):
+                    print(line)
+                print(f"NEXT if every cited line above still holds against the new text, ask the user to "
+                      f"re-approve {fam} (variants.py approve --family {fam}); if one says more, "
+                      f"variants.py new --family {fam} --copy, fix it, and ask for approval")
         if v is not None and v == cur:
             print(f"APPROVED {fam} v{v} (on {approved.get('approved_on', '?')})")
         elif v is not None:
@@ -482,24 +668,7 @@ def swapped(bullet, swaps):
 
 # ---------- tune ----------
 
-def split_items(text):
-    """Comma-separated items at parenthesis depth 0; a trailing period is dropped."""
-    text = text.strip()
-    if text.endswith("."):
-        text = text[:-1]
-    items, depth, cur = [], 0, []
-    for ch in text:
-        if ch in "([":
-            depth += 1
-        elif ch in ")]" and depth:
-            depth -= 1
-        if ch == "," and depth == 0:
-            items.append("".join(cur).strip())
-            cur = []
-        else:
-            cur.append(ch)
-    items.append("".join(cur).strip())
-    return [i for i in items if i]
+split_items = checks.split_items  # comma-separated items at parenthesis depth 0
 
 
 class Scorer:
@@ -525,10 +694,10 @@ def tune_summary(s, pool, score, log):
     log["summary"] = {"chosen": best + 1, "scores": scores}
 
 
-def tune_entry(e, pool, score):
+def tune_entry(e, pool, score, entries=()):
     """Stable-sort by overlap; pool bullets replace lower-scoring ones; keep bullets stay."""
     base = list(e.get("bullets", []))
-    extra = list(pool.get("bullets", {}).get(entry_key(e), []))
+    extra = pool_bullets(pool, e, entries or [e])
     cands = [(score(checks.bullet_text(b)), i, "variant", i, b) for i, b in enumerate(base)]
     cands += [(score(checks.bullet_text(b)), len(base) + i, "pool", i, b) for i, b in enumerate(extra)]
     keep = [c for c in cands if c[2] == "variant" and isinstance(c[4], dict) and c[4].get("keep")]
@@ -614,6 +783,7 @@ def tune_data(resume, pool, terms, posting_text, approved, pubs=None, pages=True
     swaps = alias_swaps(pool, posting_text)
     score = Scorer(terms, swaps)
     data = copy.deepcopy(resume)
+    entries = resume_entries(data)
     mode = approved.get("mode") or "industry"
     log = {"aliases": swaps, "entries": [], "skills": [], "publications": None}
     first_lines = True
@@ -630,8 +800,8 @@ def tune_data(resume, pool, terms, posting_text, approved, pubs=None, pages=True
                 log["skills"] += tune_lines(s, pool, score, add_new=first_lines)
                 first_lines = False
             for e in s.get("entries", []):
-                if e.get("bullets") or pool.get("bullets", {}).get(entry_key(e)):
-                    log["entries"].append(tune_entry(e, pool, score))
+                if e.get("bullets") or pool_bullets(pool, e, entries):
+                    log["entries"].append(tune_entry(e, pool, score, entries))
             if "bullets" in s:
                 s["bullets"] = [swapped(b, swaps) for b in s["bullets"]]
     if pages:
@@ -665,12 +835,13 @@ def tune_note(log):
 # ---------- diff ----------
 
 def numbers_of(text):
-    return Counter(k for _, k in checks.numbers(text))
+    return Counter(k for _, k in checks.numbers(text, words=True))
 
 
 class Diff:
-    def __init__(self, swaps):
+    def __init__(self, swaps, entries=()):
         self.swaps, self.fails, self.units = swaps, [], 0
+        self.entries = list(entries)  # the approved resume's roles, for pool_bullets
 
     def fail(self, line):
         self.fails.append(f"VARIANT-FAIL {line}")
@@ -695,7 +866,8 @@ class Diff:
 def variant_diff(resume, pool, tuned, swaps, approved):
     """VARIANT-FAIL lines (empty when every unit is approved) and the unit count."""
     table = {(a["variant"].lower(), x.lower()) for a in pool.get("aliases", []) for x in a["posting"]}
-    d = Diff([s for s in swaps if (s.get("variant", "").lower(), s.get("to", "").lower()) in table])
+    d = Diff([s for s in swaps if (s.get("variant", "").lower(), s.get("to", "").lower()) in table],
+             resume_entries(resume))
     for s in swaps:
         if (s.get("variant", "").lower(), s.get("to", "").lower()) not in table:
             d.fail(f'alias swap "{s.get("variant")}" -> "{s.get("to")}" is not in the approved alias table')
@@ -773,7 +945,7 @@ def diff_entries(d, t, a, pool):
                 d.fail(f'{h} / {y["title"]} {k} "{x.get(k)}" (approved "{y.get(k)}")')
         if set(x) - set(y) - {"bullets"}:
             d.fail(f'{h} / {y["title"]}: keys {sorted(set(x) - set(y))} are not approved')
-        allowed = list(y.get("bullets", [])) + list(pool.get("bullets", {}).get(entry_key(y), []))
+        allowed = list(y.get("bullets", [])) + pool_bullets(pool, y, d.entries or ae)
         diff_bullets(d, f'{h} / {y["title"]}', x.get("bullets", []), allowed, keep_all=True)
 
 
@@ -964,6 +1136,10 @@ def strict_build(root, json_path, base, approved, item, letter=False):
     sources = [p for p in (f.master_resume, f.library, f.profile) if p.exists()]
     if sources:
         argv += ["--sources", *map(str, sources)]
+    if f.library.exists():
+        argv += ["--library", str(f.library)]
+    if f.techniques.exists():
+        argv += ["--techniques", str(f.techniques)]
     if letter:
         argv += ["--posting", str(item / "posting.md")]
     else:
@@ -1023,11 +1199,16 @@ def fill_letter(letter, posting_text, focus, day):
     return data
 
 
-def pick_focus(posting_text, terms):
-    """The posting term it uses most, copied as the posting writes it."""
+def pick_focus(posting_text, techniques):
+    """{focus}: the hands-on techniques.md technique (name or alias) the posting
+    uses most, copied as the posting writes it; None when it names none.
+    Never a knockout name or a bare family term: those are requirements and
+    search words, not work the user has done."""
     best = None
-    for k, (term, aliases) in enumerate(terms):
-        for form in [term, *aliases]:
+    for k, t in enumerate(hands_on(techniques)):
+        for form in t.forms:
+            if not form.strip():
+                continue
             hits = checks.term_regex(form).findall(posting_text)
             if hits and (best is None or len(hits) > best[0]):
                 best = (len(hits), k, checks.term_regex(form).search(posting_text).group(0))
@@ -1080,7 +1261,7 @@ def tier_b(root, item, family=None, emit=print):
         status, failure = fallback_base(root, item, vdir, resume, approved, label, emit)
     if status != "prep_failed" and answers.letter_required(posting):
         status, failure = letter_step(root, item, vdir, approved, posting, terms_list(terms_raw), emit, status)
-    finish_log(root, item, log, family, v, status, failure, emit)
+    finish_log(root, item, log, family, v, status, failure, emit, approved=approved)
     if status == "prep_failed":
         emit(f"PREP_FAILED {label} {item.name}: {failure}")
     else:
@@ -1113,7 +1294,11 @@ def letter_step(root, item, vdir, approved, posting, terms, emit, status):
     path = vdir / "letter.json"
     if not path.exists():
         return "prep_failed", "the form requires a cover letter and the variant has none"
-    data = fill_letter(read_json(path), posting, pick_focus(posting, terms), jobfs.today(root))
+    letter = read_json(path)
+    focus = pick_focus(posting, library.load_techniques(jobfs.Folder(root).techniques))
+    if focus is None and "{focus}" in json.dumps(letter.get("letter", {})):
+        return "prep_failed", "letter: the posting names none of your hands-on techniques to fill {focus}"
+    data = fill_letter(letter, posting, focus, jobfs.today(root))
     try:
         runner_write(item, "cover_B.json", data)
         ok, lines, out = strict_build(root, item / "cover_B.json", "cover_B", approved, item, letter=True)
@@ -1129,8 +1314,15 @@ def letter_step(root, item, vdir, approved, posting, terms, emit, status):
     return (status, None) if ok else ("prep_failed", "letter " + problem_lines(lines)[0])
 
 
-def finish_log(root, item, log, family, v, status, failure, emit):
+def finish_log(root, item, log, family, v, status, failure, emit, approved=None):
+    """tune_log.json for the item. A log tune() never wrote (it raised first)
+    still names family, version and approved_sha256, so the runner keeps a
+    carried folder's fallback file only while that approval is in force."""
     log = dict(log or {"family": family, "version": v, "variant": f"{family}@v{v}", "at": jobfs.now_iso(root)})
+    log.setdefault("family", family)
+    log.setdefault("version", v)
+    if approved and approved.get("sha256"):
+        log.setdefault("approved_sha256", approved["sha256"])
     log["status"] = status
     if failure:
         log["failure"] = failure
@@ -1142,8 +1334,16 @@ def finish_log(root, item, log, family, v, status, failure, emit):
 
 # ---------- main ----------
 
+class Parser(argparse.ArgumentParser):
+    """A bad argument is bad input: ERROR and exit 1 (exit 2 is reserved)."""
+
+    def error(self, message):
+        print(f"ERROR {message}")
+        sys.exit(1)
+
+
 def main(argv=None):
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap = Parser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name in ("new", "approve", "check", "tune", "diff", "tier-b"):
         p = sub.add_parser(name)

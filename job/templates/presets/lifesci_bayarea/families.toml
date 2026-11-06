@@ -27,6 +27,21 @@
 # - Formulation and physical scientist are out of the scientist family;
 #   clinical research titles stay out of the research associate family.
 # - Bare upstream, downstream, purification and scale-up need a bio word.
+#
+# Fixes from the live day (v1.2 hardening, judged against real postings):
+# - The general scientist family leaves out chemistry, cheminformatics,
+#   statistics, toxicology, drug safety, bioinformatics, imaging and
+#   engineering titles, and needs a wet-lab word (cell culture, assay, PCR,
+#   lab, ...) in the requirements, which leaves out ML and computational
+#   roles; academic staff research needs a biology word. require_any is read
+#   in the requirements sections, not the company blurb.
+# - "EM specialist" means environmental monitoring, never cryo-EM.
+# - Field application titles need scientist, specialist or support.
+# - QC analyst / specialist / associate titles join quality and validation;
+#   "Fellow" in a biology title is a postdoc; research safety is biosafety.
+# - "Pre-clinical" and "clinical laboratory associate" titles stay in the
+#   research associate family; clinical research and licensed clinical lab
+#   titles stay out of it.
 
 version = 1
 
@@ -34,6 +49,7 @@ version = 1
 label = ""                  # setup fills "City, ST" from profile.md
 zip = ""
 radius_miles = 40
+states = ["CA"]             # a place name beside another state ("Newark, NJ") does not count
 places = ["San Francisco", "South San Francisco", "Brisbane", "Daly City", "San Bruno", "Millbrae",
           "Burlingame", "San Mateo", "Foster City", "Belmont", "San Carlos", "Redwood City",
           "Redwood Shores", "Menlo Park", "Palo Alto", "Stanford", "East Palo Alto", "Los Altos",
@@ -111,7 +127,6 @@ id = "license_path_trainee"
 label = "License path (paid trainee)"
 status = "proposed"
 mode = "industry"
-variant = "license_path_trainee"
 core_titles = ["CLS Trainee", "Clinical Laboratory Scientist Trainee", "Public Health Microbiologist Trainee"]
 adjacent_titles = []
 title_any = ["trainee+cls|clinical lab*|clinical laboratory scientist|medical lab*|mlt|public health microbiologist|clinical microbiolog*"]
@@ -128,11 +143,13 @@ id = "postdoc"
 label = "Postdoctoral"
 status = "active"
 mode = "cv"
-variant = "postdoc"
 core_titles = ["Postdoctoral Fellow", "Postdoctoral Scholar", "Postdoctoral Researcher", "Industry Postdoc"]
 adjacent_titles = []
-title_any = ["postdoctoral", "postdoc*", "post doc*"]
-title_none = ["coordinator", "administrator", "program manager", "affairs", "office", "director"]
+title_any = ["postdoctoral", "postdoc*", "post doc*",
+             "fellow+biolog*|microbio*|cell|cellular|molecular|genetic*|genomic*|immunolog*|biochem*|neuro*|bio|life science*|research|science|sciences|scientist|lab"]
+title_none = ["coordinator", "administrator", "program manager", "affairs", "office", "director", "physician", "nurse",
+              "nursing", "pharmacy", "clinical fellow", "clinical research fellow", "medical fellow", "materials",
+              "microfabrication"]
 require_any = []
 terms = ["microbiology", "molecular biology", "bacterial genetics", "microbiome", "CRISPR", "sequencing",
          "publications", "grant writing"]
@@ -146,14 +163,14 @@ id = "qc_micro_sterility"
 label = "QC microbiology / sterility assurance"
 status = "active"
 mode = "industry"
-variant = "qc_micro_sterility"
 core_titles = ["QC Microbiology Analyst", "QC Microbiologist", "QC Scientist", "Sterility Assurance Specialist",
                "Sterility Assurance Scientist", "Aseptic Processing Specialist", "Environmental Monitoring Specialist",
                "Environmental Monitoring Technician", "Contamination Control Specialist"]
 adjacent_titles = ["QC Micro Supervisor"]
 title_any = ["sterility", "aseptic", "environmental monitoring", "bioburden", "endotoxin", "contamination control",
              "em specialist|em technician|em associate|em analyst", "qc|quality control+micro*"]
-title_none = ["director", "vp", "head of", "software", "sales", "data center", "food service"]
+title_none = ["director", "vp", "head of", "software", "sales", "data center", "food service", "cryo*",
+              "electron microscop*", "microscopy"]
 require_any = []
 terms = ["cGMP", "aseptic technique", "environmental monitoring", "bioburden", "endotoxin", "sterility testing",
          "USP <61>", "USP <62>", "USP <71>", "USP <85>", "LIMS", "gowning", "microbial identification"]
@@ -167,7 +184,6 @@ id = "process_dev_fermentation"
 label = "Process development / fermentation"
 status = "active"
 mode = "industry"
-variant = "process_dev_fermentation"
 core_titles = ["Scientist, Fermentation", "Process Development Scientist", "Upstream Process Scientist",
                "Bioprocess Scientist", "Bioprocess Engineer", "Strain Engineering Scientist", "MSAT Scientist",
                "Cell Culture Scientist"]
@@ -191,13 +207,13 @@ id = "assay_development"
 label = "Assay development / diagnostics R&D"
 status = "active"
 mode = "industry"
-variant = "assay_development"
 core_titles = ["Assay Development Scientist", "Scientist, Assay Development", "Diagnostics R&D Scientist",
                "Immunoassay Scientist", "Molecular Assay Scientist"]
 adjacent_titles = []
 title_any = ["assay", "assays", "immunoassay", "elisa", "pcr", "qpcr",
              "diagnostic|diagnostics+scientist|development|r d"]
-title_none = ["director", "vp", "head of", "sales", "software", "account"]
+title_none = ["director", "vp", "head of", "sales", "software", "account", "chemist", "cheminformatic*",
+              "bioinformatic*", "materials", "microfabrication"]
 require_any = []
 terms = ["assay development", "assay validation", "qPCR", "ELISA", "NGS", "flow cytometry", "ISO 13485",
          "21 CFR 820", "CLIA", "design controls", "infectious disease"]
@@ -211,16 +227,18 @@ id = "field_application_tech_support"
 label = "Field application / technical support scientist"
 status = "active"
 mode = "industry"
-variant = "field_application_tech_support"
 core_titles = ["Field Application Scientist", "Application Scientist", "Applications Scientist",
                "Technical Support Scientist", "Technical Applications Scientist", "Scientific Support Specialist"]
 adjacent_titles = []
-title_any = ["field application*", "application scientist|applications scientist", "technical support scientist",
+title_any = ["field application*+scientist|specialist|support|associate",
+             "application scientist|applications scientist", "technical support scientist",
+             "application support|applications support+scientist|specialist|associate",
              "technical service scientist", "technical applications scientist|technical application scientist",
              "scientific support", "customer support scientist|customer application scientist", "product scientist",
              "applications specialist|application specialist|technical support specialist|technical service specialist|product specialist+bio*|life science*|molecular|genomic*|cell*|microbio*|sequencing|ngs|pcr|assay*|laboratory|lab|scientific|instrument*|cytometry|proteomic*|diagnostic*"]
 title_none = ["sales representative", "sales executive", "sales manager", "account manager", "account executive",
-              "director", "vp", "head of", "software", "saas", "it support", "help desk", "helpdesk"]
+              "director", "vp", "head of", "software", "saas", "it support", "help desk", "helpdesk", "engineer",
+              "bioinformatic*", "computational"]
 require_any = []
 terms = ["customer training", "instrument troubleshooting", "NGS", "qPCR", "flow cytometry", "cell culture",
          "technical support", "application notes"]
@@ -234,7 +252,6 @@ id = "medical_science_liaison"
 label = "Medical science liaison / medical affairs"
 status = "active"
 mode = "industry"
-variant = "medical_science_liaison"
 core_titles = ["Medical Science Liaison", "Regional MSL", "Medical Affairs Scientist", "Medical Information Specialist",
                "Scientific Liaison"]
 adjacent_titles = []
@@ -253,7 +270,6 @@ id = "regulatory_affairs"
 label = "Regulatory affairs"
 status = "active"
 mode = "industry"
-variant = "regulatory_affairs"
 core_titles = ["Regulatory Affairs Associate", "Regulatory Affairs Specialist", "Regulatory Scientist",
                "Regulatory CMC Specialist", "Regulatory Operations Specialist", "Regulatory Writer"]
 adjacent_titles = []
@@ -274,7 +290,6 @@ id = "clinical_research"
 label = "Clinical research"
 status = "active"
 mode = "industry"
-variant = "clinical_research"
 core_titles = ["Clinical Scientist", "Clinical Development Scientist", "Clinical Research Associate",
                "Clinical Research Coordinator", "Clinical Trial Associate", "Clinical Trial Assistant", "Study Manager"]
 adjacent_titles = []
@@ -294,7 +309,6 @@ id = "medical_scientific_writing"
 label = "Medical / scientific writing"
 status = "active"
 mode = "industry"
-variant = "medical_scientific_writing"
 core_titles = ["Medical Writer", "Scientific Writer", "Regulatory Medical Writer", "Science Writer",
                "Scientific Communications Specialist", "Publications Specialist"]
 adjacent_titles = ["Grant Writer"]
@@ -316,7 +330,6 @@ id = "bioinformatics_comp_bio"
 label = "Bioinformatics / computational biology"
 status = "proposed"
 mode = "industry"
-variant = "bioinformatics_comp_bio"
 core_titles = ["Bioinformatics Scientist", "Computational Biologist", "Bioinformatician", "Microbiome Data Scientist",
                "Genomics Scientist", "Metagenomics Analyst"]
 adjacent_titles = []
@@ -336,17 +349,19 @@ id = "quality_validation"
 label = "Quality / validation"
 status = "active"
 mode = "industry"
-variant = "quality_validation"
 core_titles = ["Validation Scientist", "Validation Specialist", "QA Specialist", "Quality Specialist",
                "Quality Systems Specialist", "CAPA Specialist", "Deviation Specialist"]
 adjacent_titles = []
 title_any = ["capa", "deviation specialist|deviation investigator|deviation analyst",
              "validation+scientist|specialist|engineer|associate|analyst",
              "quality assurance+specialist|associate|scientist|analyst", "qa+specialist|associate|analyst",
-             "quality specialist", "quality systems specialist"]
+             "quality specialist", "quality systems specialist",
+             "qc|quality control+analyst|specialist|associate|technician|scientist|reviewer|inspector"]
 title_none = ["software", "sdet", "qa engineer", "test engineer", "automation engineer", "director", "vp", "head of",
               "call center"]
-require_any = []
+require_any = ["gmp", "cgmp", "glp", "gxp", "laborator*", "biolog*", "biologics", "pharma*", "biopharma*", "assay*",
+               "microb*", "clinical", "diagnostic*", "medical device*", "cfr", "iso 13485", "life science*",
+               "biotech*", "fda"]
 terms = ["GMP", "21 CFR 210", "21 CFR 211", "21 CFR 820", "Veeva", "TrackWise", "CAPA", "deviations",
          "method validation", "sterilization validation"]
 seniority_ok = ["i", "ii", "1", "2", "associate", "senior"]
@@ -359,10 +374,9 @@ id = "biosafety"
 label = "Biosafety"
 status = "active"
 mode = "industry"
-variant = "biosafety"
 core_titles = ["Biosafety Officer", "Biosafety Specialist", "Biosafety Manager", "Biological Safety Officer"]
 adjacent_titles = []
-title_any = ["biosafety", "biological safety"]
+title_any = ["biosafety", "biological safety", "research safety", "laboratory safety|lab safety"]
 title_none = ["director", "vp", "head of"]
 require_any = []
 terms = ["BSL-2", "BSL-3", "IBC", "biosafety", "risk assessment", "select agents", "NIH Guidelines"]
@@ -376,7 +390,6 @@ id = "government_microbiologist"
 label = "Government microbiologist (USAJOBS)"
 status = "active"
 mode = "usajobs"
-variant = "government_microbiologist"
 core_titles = ["Microbiologist", "Biologist", "Research Microbiologist", "Biological Science Technician"]
 adjacent_titles = []
 title_any = ["microbiologist", "biologist", "0403", "0401", "public health laborator*",
@@ -394,7 +407,6 @@ id = "microbiologist"
 label = "Microbiologist"
 status = "active"
 mode = "industry"
-variant = "microbiologist"
 core_titles = ["Microbiologist", "Microbiologist II", "Senior Microbiologist", "Research Microbiologist",
                "Food Microbiologist", "Microbiology Scientist"]
 adjacent_titles = []
@@ -415,7 +427,6 @@ id = "research_associate_lab_tech"
 label = "Research associate / lab technician"
 status = "active"
 mode = "industry"
-variant = "research_associate_lab_tech"
 core_titles = ["Research Associate", "Research Associate II", "Research Associate III", "Senior Research Associate",
                "Staff Research Associate", "Research Assistant", "Laboratory Technician", "Lab Associate",
                "Applications Lab Associate", "Lab Manager"]
@@ -423,7 +434,8 @@ adjacent_titles = []
 title_any = ["research associate", "research assistant", "staff research associate", "sra",
              "lab|laboratory+technician|associate|specialist|assistant|manager", "lab tech",
              "biology technician|biological technician|research technician|life science technician"]
-title_none = ["clinical", "clinical laboratory scientist", "cls", "mlt", "medical lab*", "phlebotom*", "animal",
+title_none = ["clinical+research|trial*|study|studies|operations|coordinator|nurse|technician|technologist|scientist|specialist|data",
+              "clinical laboratory scientist", "cls", "mlt", "medical lab*", "phlebotom*", "animal",
               "vivarium", "husbandry", "director", "vp", "undergraduate", "student", "intern"]
 require_any = []
 terms = ["cell culture", "PCR", "qPCR", "ELISA", "Western blot", "aseptic technique", "molecular cloning",
@@ -438,7 +450,6 @@ id = "lecturer_teaching"
 label = "Lecturer / teaching (biology)"
 status = "proposed"
 mode = "cv"
-variant = "lecturer_teaching"
 core_titles = ["Lecturer in Microbiology", "Lecturer in Biology", "Adjunct Instructor, Biology",
                "Biology Instructor", "Visiting Assistant Professor of Biology"]
 adjacent_titles = []
@@ -457,7 +468,6 @@ id = "study_director_assoc_director"
 label = "Study director / associate director"
 status = "proposed"
 mode = "industry"
-variant = "study_director_assoc_director"
 core_titles = ["Study Director", "Associate Director, Microbiology", "Associate Director, Process Development",
                "Associate Director, Assay Development"]
 adjacent_titles = []
@@ -478,7 +488,6 @@ id = "academic_staff_research"
 label = "Academic staff research (UC, Stanford, institutes)"
 status = "active"
 mode = "cv"
-variant = "academic_staff_research"
 core_titles = ["Staff Scientist", "Project Scientist", "Assistant Researcher", "Associate Researcher",
                "Associate Specialist", "Research Scientist", "Life Science Research Professional 1",
                "Life Science Research Professional 2"]
@@ -490,7 +499,9 @@ title_any = ["staff scientist", "project scientist", "research scientist", "life
 title_none = ["director", "vp", "head of", "data", "ai", "ml", "software", "computer", "sales", "social science",
               "admissions", "communications", "nurse", "informatics", "clinical lab*", "clinical laboratory",
               "student services", "administrative", "clinical research coordinator"]
-require_any = []
+require_any = ["biolog*", "microbiolog*", "microb*", "bacteri*", "cell", "cells", "cellular", "molecular", "protein*",
+               "biochem*", "immunolog*", "genetic*", "genom*", "neuro*", "life science*", "biomedical", "tissue*",
+               "dna", "rna", "pcr", "assay*", "antibod*", "vir*", "pathogen*"]
 terms = ["microbiology", "molecular biology", "grant-funded", "publications", "lab management", "mentoring"]
 seniority_ok = []
 needs_license = []
@@ -502,7 +513,6 @@ id = "industry_rd_scientist"
 label = "Industry R&D scientist"
 status = "active"
 mode = "industry"
-variant = "industry_rd_scientist"
 core_titles = ["Associate Scientist", "Scientist I", "Scientist II", "Scientist III", "Research Scientist",
                "Senior Scientist", "Staff Scientist", "Principal Scientist"]
 adjacent_titles = []
@@ -510,9 +520,14 @@ title_any = ["scientist"]
 title_none = ["data", "computer", "software", "machine learning", "ml", "ai", "computational", "clinical laboratory",
               "clinical lab*", "cls", "clinical microbiology scientist", "clinical microbiologist", "director", "vp",
               "vice president", "head of", "materials", "polymer", "formulation", "process engineer",
-              "physical scientist", "social science"]
-require_any = ["biolog*", "microbiolog*", "microb*", "bacteri*", "cell*", "molecular", "protein*", "assay*",
-               "biochem*", "immunolog*", "pcr", "sequencing", "fermentation", "antibod*", "life science*"]
+              "physical scientist", "social science", "chemist", "chemistry", "chemical", "cheminformatic*",
+              "statistic*", "biostatistic*", "toxicolog*", "safety", "pharmacovigilance", "bioinformatic*", "imaging",
+              "engineer", "engineering"]
+require_any = ["cell culture", "assay*", "pcr", "qpcr", "elisa", "western", "flow cytometry", "microscop*",
+               "cloning", "crispr", "bench", "laborator*", "lab", "wet lab", "in vitro", "in vivo", "aseptic",
+               "ferment*", "purification", "chromatograph*", "hplc", "sequencing", "ngs", "culture*", "mammalian",
+               "bacteri*", "microb*", "tissue", "antibod*", "protein expression", "transfection", "biochemical",
+               "cellular"]
 terms = ["PCR", "qPCR", "cell culture", "assay development", "ELISA", "flow cytometry", "CRISPR", "microbiology",
          "aseptic technique", "Western blot", "NGS"]
 seniority_ok = ["associate", "i", "ii", "iii", "1", "2", "3", "senior"]

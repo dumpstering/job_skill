@@ -33,12 +33,21 @@ keep the last good copy and say so in `runner/out/status.json`.
 | "my time zone is Eastern" | `[time] timezone` | America/Los_Angeles | an IANA name, e.g. America/New_York |
 | "weekly summary on Fridays" | `[schedule] weekly_day` | monday | |
 | "no Workday today" | none | | a one-day skip of the account block, kept in the session (apply_batch.md) |
+| "more to one company" / "fewer to one company" | `[caps] per_company_30d` | 5 | in any 30 days; no source gives a number, so this is the user's call |
+| "more of one kind of role at a company" | `[caps] per_family_per_company_30d` | 2 | in any 30 days |
+| "more to one lab" / "fewer to one university" | `[caps] per_unit_30d` / `per_institution_30d` | 2 / 15 | universities, institutes, hospitals and government labs (below) |
 
-Also in the file, changed only when the user asks by name: `[caps]` (per
-company 3 in 30 days, per family 1, 90 days after a rejection, one open
-Ashby application per employer, 2 a day per company, `[[caps.employer]]`
-rules such as Google's 3 in 30 days), and `[runner] mode` (setup sets it;
-see [runner.md](runner.md)).
+The other `[caps]` keys change only when the user asks by name: 90 days
+after a rejection before the same job again, one open Ashby application per
+employer, 2 a day per company, and `[[caps.employer]]` rules such as
+Google's 3 in 30 days (its published rule). An employer whose watch-list
+`segment` is one of `unit_segments` (academic, institute, hospital,
+government) counts per hiring unit: the lab or department a posting names
+(a lab in the title, else the lab, division, department or center its text
+starts with), at most `per_unit_30d` per unit and `per_institution_30d` for
+the whole place; a posting that names no unit counts against the
+institution at the company caps. `[runner] mode` is set by setup (see
+[runner.md](runner.md)).
 
 **The Indeed notice** (quote it before turning `read_indeed_family` on):
 "Indeed's terms cover its emails as part of its site and ban AI or agentic
@@ -65,7 +74,8 @@ glassdoor.*, simplyhired.* or ziprecruiter.com link is refused.
    known ATS host or the company's own domain.
 2. **Detect the board.** Mode L or S: `jobrunner.py request probe_url --json
    '{"url": "<careers URL>", "company": "<Company>"}'`, then read
-   `runner/out/results/<id>.json` after the next tick (at most 15 minutes):
+   `runner/out/results/<id>.json` in about 20 minutes (the next tick hands
+   `probe_url` to the daily):
    - `DETECT <ats>:<board>[/<site>][@<host>]`: write that row.
    - `BROWSER_READ <url>` or a lead-only ATS (SmartRecruiters, iCIMS, UKG,
      Paycom, Paycor, ClearCompany): write the row with `status` = `lead_only`;

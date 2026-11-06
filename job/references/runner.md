@@ -12,7 +12,7 @@ files, and never write the runner's files.
 | Mode | What runs | When |
 |---|---|---|
 | L | the runner on the user's PC (installed by `install_runner.cmd`) | default once installed and `selftest` passed |
-| S | the same `jobrunner.py` in your sandbox, `--mode S` | only if `jobrunner.py selftest --net --root R` passed in the sandbox and the user's PC runner is absent or stale over 36 hours |
+| S | the same `jobrunner.py` in your sandbox, `--mode S` | only if the sandbox check passed (`status.json` `selftest_s` `net` PASS, setup.md) and the PC runner has not run for over 36 hours (daily.md step 3) |
 | W | you fetch board URLs with web fetch (`posting.py --json-file`) | experiment, off (`experiment_mode_w = false`) |
 | M | no runner: the v1.1 flow, tracker writes go straight to the xlsx | before the runner is installed, or when nothing else works |
 
@@ -20,6 +20,8 @@ files, and never write the runner's files.
 - Every pasted link (`/job <link>`) works in every mode.
 - In mode S run, in the sandbox: `python scripts/jobrunner.py daily --root <JobSearch> --mode S`
   (a root-local lock, `state/run.lock`), then `tick --mode S` after writing events or requests.
+  A tick that prints `TICK the daily is due (...)` asks you to run that daily now (mode S has no
+  Daily task).
 
 ## What the runner writes (read these; never edit them)
 
@@ -31,11 +33,11 @@ files, and never write the runner's files.
 | `applications/<job>/posting.md`, `posting.json`, `fill_plan.json`, `resume_B.*`, `terms.json`, `tune_log.json`, `.runner_files` | per job; the runner never writes a file missing from `.runner_files`, and never in a folder holding `.claimed` |
 | `upload/NN_<Last>_Resume_<Employer12>.pdf`, `upload/E<n>_...pdf` | the files the user attaches; only the runner moves them |
 | `applications/_diy/<date>/<Company>.md` | answer sheet for a do-yourself item (no link) |
-| `runner/out/status.json` | health: `version`, `mode`, `last_daily {at, date, ok, counts}`, `last_tick`, `tracker_locked_since`, `sources`, `boards_paused`, `selftest {at, net, checks, recruitee}`, `min_skill`, `errors`, `daily_pending` |
+| `runner/out/status.json` | health: `version`, `mode`, `last_daily {at, date, ok, counts}`, `last_tick`, `tracker_locked_since`, `sources`, `boards_paused`, `selftest {at, net, checks, recruitee}` (the PC's), `selftest_s` (the sandbox check), `min_skill`, `errors`, `daily_pending`, `daily_starts {date, count, at, why, how}` (dailies a tick started), `daily_running {at, pid}` (a daily is building the list now; null when none, and one over 2 hours old has stopped), `discovery_offline` (the date of a morning when no job board answered, until a run reaches them) |
 | `runner/out/tracker.json` | the tracker snapshot (tracker.py reads it in mode L) |
 | `runner/out/results/<id>.json` | one per request: `{id, op, ok, at, lines, result}` |
 | `runner/out/staged.json` | Tier A files staged by `stage_tier_a`, with their sha256 |
-| `runner/out/liveness.json` | the next items' postings re-read by the tick: `{items: {job_key: {checked, closed, why}}}` |
+| `runner/out/liveness.json` | the next items' postings re-read by the tick: `{items: {job_key: {checked, closed, why}}}`; only a job-site host or the host the board listed the posting on is read (`why` "skip host ..." otherwise) |
 | `reports/funnel.csv`, `logs/runner_<date>.log` | metrics and the log (keys redacted) |
 
 Every runner JSON carries `_rev` and `_sha256`. Read it with the verified
@@ -45,9 +47,11 @@ reader (`jobfs.read_json_verified`): it retries once after 5 s, then uses
 ## Session rules: claude/session.json (the heartbeat)
 
 - Write `claude/session.json` `{task, started, beat, current_n}` when `/job` starts and rewrite it after every item.
-- While `beat` is under 20 minutes old the runner only appends addenda with new numbers. It does not rebuild or renumber the queue, does not touch `upload/` (except moving the files of applied items), and a `rebuild_queue` request waits.
-- Late finds during a session land in `addendum_<HHMM>.json` (numbers after the last one) with their job folders and Tier B files; their upload copies are staged when the session ends. Until then `today_view.py next` names the file in the job folder.
-- The 05:30 daily waits while a session is active (`DAILY WAIT`); the first tick after the beat goes stale runs it.
+- While `beat` is under 20 minutes old the runner only appends addenda with new numbers. It does not rebuild or renumber the queue, does not change or move the files already in `upload/` (except moving the files of applied items), and a `rebuild_queue` request waits.
+- Late finds during a session land in `addendum_<HHMM>.json` (numbers after the last one) with their job folders and Tier B files; their upload copies are staged on the next tick (a `more` request's at once), under their new numbers. Until then `today_view.py next` names the file in the job folder.
+- A daily that has not built today's queue never waits for a session (no numbers exist yet), so a
+  session opened before the list still gets it. Only a rebuild of a queue that exists waits
+  (`DAILY WAIT`); the first tick after the beat goes stale starts it.
 
 ## Events (what you hand the runner)
 
@@ -81,7 +85,9 @@ and creates `runner/in/requests/<id>_<op>.json`, printing `REQUEST <id> <op>`).
 Arguments are company names, URLs (netfetch policy: job boards are refused) and
 folders inside the root; anything else is refused before the file is written,
 and the runner checks again. The next tick (at most 15 minutes) writes
-`runner/out/results/<id>.json`.
+`runner/out/results/<id>.json`. The long ops (`resolve_leads`, `probe_url`,
+`rebuild_queue`) never run inside a tick: the tick starts the daily, which
+answers them, so their result can take longer while that run polls the boards.
 
 | op | args | what the runner does |
 |---|---|---|
@@ -89,20 +95,20 @@ and the runner checks again. The next tick (at most 15 minutes) writes
 | `probe_url` | `url`, `company`, `title`, `location` | reads one careers page or posting URL from your web search, detects the ATS, gates what it finds, appends an addendum |
 | `fetch_posting` | `url`, or `n` / `job_key` of a queue item | re-reads one posting (liveness); `result.closed` |
 | `build` | `folder` (a job folder), `json` (default `resume.json`) | builds a Tier A JSON you wrote when pip failed in the sandbox (`--strict`) |
-| `stage_tier_a` | `folder`, or `n` / `job_key` | replaces `upload/NN_*` with the job's Tier A `resume.pdf`; `result.sha256` |
-| `more` | `limit` (default `more_size`) | the next items from the pool as an addendum |
+| `stage_tier_a` | `folder`, or `n` / `job_key` | replaces `upload/NN_*` (and `NNc_*`) with the Tier A files the job's `final.json` names (a build that passed `--strict`; none without it); `result.sha256` |
+| `more` | `limit` (default `more_size`) | the next items from the pool as an addendum; before today's `queue.json` exists none (`ADDENDUM none: no list for <date> yet`), and late finds wait in the pool for the build |
 | `import_network` | none | `network.py import` now |
 | `rebuild_queue` | none | rebuilds today's queue (waits while a session is active; FROZEN once events exist) |
 
 ## The card and the next item
 
 - `python scripts/today_view.py card --root R` prints the card (1.2) word for word. Show it as printed.
-- `python scripts/today_view.py next --root R` prints the next item's handover data (`NEXT`, `OPEN`, `UPLOAD`, `ANSWERS`, `HANDOVER` lines). For a Tier A item it compares the staged copy's sha256 with the job's `resume.pdf` and names the job-folder file when they differ. Its `Check:` line comes from `claude/<date>/sensitive_ok.json` (apply_batch.md). `next --short` is the easy day: no-account items, easiest ATS first, none with an open question, a sensitive field not settled today, or no resume yet (daily.md).
+- `python scripts/today_view.py next --root R` prints the next item's handover data (`NEXT`, `OPEN`, `UPLOAD`, `LETTER`, `ANSWERS`, `SENSITIVE`, `DRAFT`, `ATTACH`, `HANDOVER` lines), the same item the card's `Starting #N` names. The resume is the file the job folder's `final.json` names (a strict Tier A build that passed), else `resume_B.pdf`; it compares the staged copy's sha256 with it and names the job-folder file when they differ. Items with no resume (prep_failed) are held in one `WAIT` line. Its `SENSITIVE` and `Check:` lines come from `claude/<date>/sensitive_ok.json` (apply_batch.md). `card --short` and `next --short` are the easy day: no-account items, easiest ATS first, none with an open question, a sensitive field beyond the profile's salary and sponsorship not settled today, or no resume yet (daily.md).
 - `progress` gives the counts and the closing line; `diy` gives the do-yourself list (no links); `drafts` prints the free-text drafts of `morning.json` in full (the card shows one line each).
 - The day's items are `queue.json`, its addenda and the `added` jobs not yet in `addendum_user.json`, so a job added from a link counts in `card`, `next` and `progress` at once.
 - `claude/<date>/morning.json` (written by job-morning, create-only) feeds the card:
-  `{"v":1, "date", "urgent":[{"text"}], "away":[{"text"}], "questions":[{"id","text","jobs":[n...],"all_jobs","saved"}], "waiting":<jobs>, "sensitive":"<line>", "drafts":[{"n","label","text"}], "referral_drafts":[{"n","contact_ref"}], "weekly":["<line>"]}`.
-  Without it the card says the morning prep did not run, takes the questions and the sensitive line from the fill plans, and starts with the first ready Tier B item.
+  `{"v":1, "date", "prepared":false (only when written before today's list), "urgent":[{"text"}], "away":[{"text"}], "questions":[{"id","text","jobs":[n...],"all_jobs","saved"}], "waiting":<jobs>, "drafts":[{"n","label","question_id","text"}], "referral_drafts":[{"n","contact_ref"}], "weekly":["<line>"]}`. The sensitive line always comes from the fill plans.
+  Without it (or with one older than `queue.json`, or `prepared` false) the card says the morning prep did not run and takes the questions from the fill plans; until the `tier_a.done` marker exists, Tier A items whose Tier A build is not ready come after the other items, in both `card` and `next`.
 
 ## Selftest
 
@@ -111,21 +117,50 @@ check, then `SELFTEST PASS` or `SELFTEST FAIL <names>` (exit 1 on a FAIL):
 python, packages (openpyxl, python-docx, reportlab, pypdf), tzdata, folder
 (write in `runner/out/`), robots (a live robots.txt fetch with `--net`, else
 the parser), build (a sample resume to PDF). `--net` adds reach checks for
-Greenhouse, Lever, Ashby, one Workday tenant, USAJOBS and Recruitee; a
-Recruitee PASS turns on the Recruitee boards (status.json `selftest.recruitee`).
-On the user's PC the installer runs it; at setup you also run it in the sandbox:
-a PASS there allows mode S as the fallback, a FAIL leaves mode M.
+Greenhouse, Lever, Ashby, one Workday tenant, USAJOBS and Recruitee. With
+`--net` a site that does not answer is a `WARN` line, not a FAIL (its boards
+wait; the rest run); only `FAIL net` (no site answered: a proxy or firewall
+blocks Python) fails the net check. Recruitee is optional: a PASS turns on the
+Recruitee boards (status.json `selftest.recruitee`), a WARN leaves them off.
+On the user's PC the installer runs it; at setup you also run it in the sandbox
+with `--mode S` (recorded as `selftest_s`): a PASS there lets mode S stand in
+when the PC runner has not run for 36 hours (daily.md); a FAIL changes nothing.
 
 ## Reading status.json for the card
 
 - No `runner/out/status.json` (nothing installed), or mode M: the card's one line says the job finder is not installed yet (or not switched on) and to type `/job setup` (setup.md sitting 2), never the desktop shortcut.
-- Mode S, or `last_daily.at` over 26 hours old: the card's one line about the job finder.
+- Mode S, or `last_daily.at` over 26 hours old: the card's one line about the job finder. In mode L with no list for today while `daily_running.at` is under 2 hours old, the card's last line says the list is being built instead.
+- `last_daily` for today with `ok` false: one line says this morning's run stopped early and starts again within 30 minutes (while a tick still may start it).
+- `errors` holding today's `offline <date>` entry (mode L): one line says the job sites could not be reached this morning and the job finder tries again later today.
 - `tracker_locked_since` over 2 hours: the card asks the user to close the spreadsheet.
 - `version` older than the skill: ask the user to double-click the new `install_runner.cmd`; `min_skill` newer than the skill: ask for the new skill zip.
-- `errors`: a config file that stopped parsing (the runner uses `state/last_good/`), or an optional step that failed.
+- `errors`: a config file that stopped parsing (the runner uses `state/last_good/`), or an optional step that failed. The card checks `settings.toml` and `search_profile.toml` itself, live, and gives one line per file that does not parse ("Your search_profile.toml has a typo ..., so I'm using the last copy that worked. Type /job settings to fix it.").
 
 ## Exit codes
 
 0 ok (also WAIT and TICK idle), 1 bad input or a selftest FAIL, 2 a package is
 missing (run the installer again), 8 the runner is LOCKED (another run holds
-`run.lock`; one older than 2 hours is taken over with a `STALE LOCK` line).
+`run.lock`, an OS lock the OS frees when that run ends however it ends; a
+daily waits up to 12 minutes for a tick, and a run that was stopped leaves
+only a `STALE LOCK` line for the next one).
+
+## When the PC slept, ran on battery, or a file was open
+
+- Both tasks start and keep running on battery. A daily keeps the PC awake
+  while it runs and stops itself after 2 hours; a tick stops after 10 minutes.
+- A missed daily (the PC asleep or off at 05:30, a daily stopped, or one that
+  waited for a session) is started by the first tick after 05:30 (`TICK started
+  the daily (missed|failed|waited|requests; ...)`), at most 3 times a day 30
+  minutes apart; "Run job finder now" on the desktop does the same at once.
+- A morning when no job board answered (the network was not up yet) still ends
+  `DAILY ok` with the carried-over list, and status.json `discovery_offline` is
+  that date. Every 30 minutes a tick reads one board's robots.txt; once it
+  answers, it starts the daily (`TICK started the daily (offline; ...)`), which
+  searches again and adds the new postings as an addendum (`REDISCOVER`).
+- A file another program holds open (an upload PDF in a viewer, `funnel.csv` in
+  Excel) is a `WARN` line, and it is retried on a later run; requests are still
+  answered and today's files are still staged.
+- A job folder carried from an earlier day keeps its `resume_B` files only while
+  the variant it came from is approved as it was; otherwise they are rebuilt, or
+  moved to `<job>/_unapproved/` when the family has no approved variant
+  (`NO_VARIANT <family>` in the log).

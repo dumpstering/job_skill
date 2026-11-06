@@ -13,13 +13,15 @@ You need:
   higher; see "Checking your usage" for which plan).
 - Your most complete resume as a Word or PDF file.
 - Gmail (for replies and job alerts).
-- About 25 minutes on the first day and 20 on the second.
+- About 30-45 minutes on the first day. On the second, about 20 minutes
+  for the job finder, then 15-20 minutes for each base resume you approve
+  (2-4 of them; one a day is fine).
 
 **You are responsible for what is sent in your name.** Claude never clicks
 Submit, never creates accounts, never handles passwords or verification
 codes, and never solves CAPTCHAs. Submit is always yours.
 
-## Day 1: install and set up (about 25 minutes)
+## Day 1: install and set up (about 30-45 minutes)
 
 1. **Make the folder.** In File Explorer, open Documents and create a folder
    named `JobSearch`. Copy your most complete resume into it, with "resume"
@@ -61,15 +63,18 @@ codes, and never solves CAPTCHAs. Submit is always yours.
    Free plans have no scheduled tasks; then `/job` does the morning work
    itself.
 
-## Day 2: the job finder (about 20 minutes)
+## Day 2: the job finder (about 20 minutes, plus 15-20 per base resume)
 
 1. **Install the job finder.** Download `install_runner.cmd` from the
-   release page and double-click it. If Windows SmartScreen warns you,
+   release page, https://github.com/dumpstering/job_skill/releases/latest,
+   and double-click it. If Windows SmartScreen warns you,
    click More info > Run anyway. It needs no administrator rights. It
    installs Python for your user, checks that the download is the published
    one (it stops if not), and sets up two Windows tasks: one at 5:30 every
    morning and a short check every 15 minutes from 6 am to 10 pm, both
-   without a window. It adds a desktop shortcut, "Run job finder now".
+   without a window and also on battery. If the PC sleeps through 5:30,
+   the morning run starts when it wakes. It adds a desktop shortcut, "Run
+   job finder now".
 2. **Optional free keys.** The installer asks for keys for Adzuna and
    USAJOBS (federal jobs). Type them only into that installer window,
    never into a chat. You can skip them and add them later by running
@@ -81,9 +86,13 @@ codes, and never solves CAPTCHAs. Submit is always yours.
 4. **Approve your base resumes.** For each of 2-4 job families, Claude
    builds one base resume and has a second reviewer check it. You read one
    PDF and one page of extra lines per family, then reply `approve
-   <family>`. These bases are what most applications start from, so they
-   are worth 15-20 minutes. Claude only ever reorders and selects approved
-   lines for a job; it never writes new claims into them.
+   <family>`. These bases are what most applications start from, so each is
+   worth 15-20 minutes; you can stop after any family and do the rest
+   another day. Jobs of a family wait until you approve its base. After
+   your last approval, double-click "Run job finder now" once more so
+   today's jobs get their resumes, then type `/job`. Claude only ever
+   reorders and selects approved lines for a job; it never writes new
+   claims into them.
 5. **Drop in the export.** When LinkedIn's email arrives, put the zip into
    `JobSearch\network\raw`. Nothing else to do; it is read on the next run.
 
@@ -95,11 +104,13 @@ touches your JobSearch folder.
 **A normal day.** Start a new task with the JobSearch folder, type `/job`.
 You see one short card: what is ready, any urgent mail (an interview
 request, an assessment with a deadline), up to 6 questions, and the salary
-and sponsorship answers it will use, for one "ok". Claude starts on #1 right
-away; answer the questions whenever you like, in one reply. For each job:
+and sponsorship answers it will use: reply `yes` to use them (or "yes,
+leave salary blank"). Claude starts on #1 right away; answer the questions
+whenever you like, in one reply. For each job:
 1. Attach the file starting with the job's number from `JobSearch\upload`
    when Claude asks (pin that folder in Quick access the first time), and
-   type `ok`.
+   type `ok`. `ok` only ever means "attached" or "done"; it never says yes
+   to the salary and sponsorship answers.
 2. Look over the page Claude filled, click Submit, and type `s`.
 Type `k` to skip a job, `later` to move it to tomorrow, `stop` to end.
 After 10 jobs Claude suggests a break and a new task: type `/job` there and
@@ -109,8 +120,9 @@ account and sign in yourself, and Claude tells you which email you used
 there before.
 
 **A short day.** Type `/job short`, or say "short" at any point. Claude does
-only the quick jobs that need no account, asks nothing, and stops when you
-say `stop`. Even shorter: `/job inbox` just checks your mail.
+only the quick jobs that need no account, asks at most the one salary and
+sponsorship line (until you say `yes`, those fields stay blank), and stops
+when you say `stop`. Even shorter: `/job inbox` just checks your mail.
 
 **After a break.** Nothing piles up. The list is rebuilt every morning from
 what is still open, never more than about 30, and the card shows only what

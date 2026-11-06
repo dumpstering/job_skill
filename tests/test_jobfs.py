@@ -75,7 +75,7 @@ def test_settings():
                                    "per_30d = 2\nsame_job_reapply_days = 60\n", encoding="utf-8")
         s = jobfs.settings(tmp, keep_last_good=True)
         assert s.source == "file" and s["daily"]["target"] == 25 and s["daily"]["batch_size"] == 10, s
-        assert [e["name"] for e in s["caps"]["employer"]] == ["Acme"] and s["caps"]["per_company_30d"] == 3
+        assert [e["name"] for e in s["caps"]["employer"]] == ["Acme"] and s["caps"]["per_company_30d"] == 5
         assert f.last_good("settings.toml").exists()
         f.settings_toml.write_text("[daily\ntarget = ", encoding="utf-8")  # a broken hand edit
         s = jobfs.settings(tmp)
@@ -203,31 +203,81 @@ def test_create_only_and_jsonl():
         assert len(jobfs.read_jsonl(j)) == 4 and jobfs.read_jsonl(Path(tmp) / "missing.jsonl") == []
 
 
+HOLDER = """
+import sys, time
+sys.path.insert(0, sys.argv[1])
+import jobfs
+lock = jobfs.RunLock(sys.argv[2], cmd=sys.argv[3]).acquire()
+print("HELD", jobfs.os.getpid(), flush=True)
+time.sleep(float(sys.argv[4]))
+lock.release()
+"""
+
+
+def hold_in_child(lock, cmd, seconds, now=None):
+    """Another process that takes the lock and keeps it for `seconds`."""
+    import subprocess
+    env = {k: v for k, v in os.environ.items() if k != "JOB_SKILL_NOW"}
+    if now:
+        env["JOB_SKILL_NOW"] = now
+    # the base interpreter, not a venv's python.exe (a redirector with its own pid)
+    exe = getattr(sys, "_base_executable", None) or sys.executable
+    p = subprocess.Popen([exe, "-I", "-c", HOLDER, str(ROOT / "job" / "scripts"), str(lock), cmd,
+                          str(seconds)], stdout=subprocess.PIPE, text=True, env=env)
+    line = p.stdout.readline().split()
+    assert line[:1] == ["HELD"], "the child did not take the lock"
+    p.holder_pid = int(line[1])
+    return p
+
+
 def test_run_lock():
+    import time
     with tempfile.TemporaryDirectory(prefix="jobfs_") as tmp:
         lock = Path(tmp) / "run.lock"
-        with jobfs.RunLock(lock, cmd="daily"):
+        with jobfs.RunLock(lock, cmd="daily") as held:
             info = json.loads(lock.read_text(encoding="ascii"))
             assert info["pid"] == os.getpid() and info["cmd"] == "daily" and info["started"]
+            assert held.left_by is None
             try:
-                jobfs.RunLock(lock, stale_after=7200, cmd="tick").acquire()
-                raise AssertionError("second lock acquired while fresh")
+                jobfs.RunLock(lock, cmd="tick").acquire()
+                raise AssertionError("second lock acquired while held")
             except jobfs.LockBusy as e:
                 assert e.info["cmd"] == "daily"
-        assert not lock.exists()
-        # a lock left behind 3 hours ago by a dead runner is stale
-        old = (jobfs.utcnow() - timedelta(hours=3)).replace(microsecond=0).isoformat()
-        lock.write_text(json.dumps({"pid": 999999, "started": old, "cmd": "daily"}), encoding="ascii")
-        with jobfs.RunLock(lock, stale_after=7200, cmd="tick") as held:
-            assert held.held and json.loads(lock.read_text(encoding="ascii"))["cmd"] == "tick"
-        # one 1 hour old is not
-        recent = (jobfs.utcnow() - timedelta(hours=1)).isoformat()
-        lock.write_text(json.dumps({"pid": 999999, "started": recent, "cmd": "daily"}), encoding="ascii")
+            t0 = time.monotonic()
+            try:
+                jobfs.RunLock(lock, cmd="tick").acquire(wait=0.4, poll=0.1)
+                raise AssertionError("second lock acquired while held")
+            except jobfs.LockBusy:
+                assert time.monotonic() - t0 >= 0.35
+        assert not lock.exists(), "a clean release leaves no file"
+        # A live holder keeps the lock however old it is (3 hours by its clock).
+        old = (jobfs.utcnow() - timedelta(hours=3)).replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+        child = hold_in_child(lock, "daily", 30, now=old)
         try:
-            jobfs.RunLock(lock, stale_after=7200).acquire()
-            raise AssertionError("1 h old lock treated as stale")
-        except jobfs.LockBusy:
-            pass
+            jobfs.RunLock(lock, cmd="tick").acquire(wait=0.3, poll=0.1)
+            raise AssertionError("the lock was taken from a live holder")
+        except jobfs.LockBusy as e:
+            assert e.info["pid"] == child.holder_pid and e.info["cmd"] == "daily", e.info
+        # Killed (a time limit, a shutdown): the OS frees the lock at once.
+        child.kill()
+        child.wait()
+        assert lock.exists(), "the killed holder's file stays"
+        # (Windows frees a dead process's locks within moments, not always at once)
+        with jobfs.RunLock(lock, cmd="tick").acquire(wait=10, poll=0.05) as held:
+            assert held.left_by and held.left_by["pid"] == child.holder_pid and held.left_by["cmd"] == "daily", held.left_by
+            assert json.loads(lock.read_text(encoding="ascii"))["cmd"] == "tick"
+        assert not lock.exists()
+        # A holder that finishes within the wait hands the lock over.
+        child = hold_in_child(lock, "tick", 0.8)
+        t0 = time.monotonic()
+        with jobfs.RunLock(lock, cmd="daily").acquire(wait=20, poll=0.1) as held:
+            assert 0.3 < time.monotonic() - t0 < 15 and held.left_by is None
+        child.wait()
+        # A lock file from v1.2.0 (O_EXCL, no process behind it) is no lock.
+        lock.write_text(json.dumps({"pid": 999999, "started": "2026-11-06T13:30:00+00:00", "cmd": "daily"}),
+                        encoding="ascii")
+        with jobfs.RunLock(lock, cmd="tick") as held:
+            assert held.left_by["pid"] == 999999
         os.environ["JOBRUNNER_HOME"] = tmp
         try:
             assert jobfs.RunLock().path == Path(tmp) / "run.lock"

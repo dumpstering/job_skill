@@ -273,6 +273,127 @@ def test_unpark():
     print("ok unpark: an answered job gets one unparked event")
 
 
+EVENTS = SCRIPTS / "events.py"
+
+
+def emit(root, typ, n, key, payload=None):
+    body = {"payload": payload or {"confirmation": "page"} if typ == "applied" else payload or {},
+            "job_key": key, "n": n, "date": DAY}
+    r = subprocess.run([sys.executable, str(EVENTS), "emit", "--root", str(root), "--type", typ, "--json", json.dumps(body)],
+                       capture_output=True, text=True, env={**os.environ, "JOB_SKILL_NOW": NOW})
+    assert r.returncode == 0 and r.stdout.startswith("EVENT "), r.stdout + r.stderr
+
+
+def test_unpark_final_states():
+    """contracts-02: an applied, later, skipped, blocked or handed-over job is never unparked."""
+    root = fresh_root()
+    items = []
+    for n, state in enumerate(("applied", "later", "skipped", "handed_over", "parked", None), 1):
+        name = f"{GH} {n}"
+        folder = job(root, name)
+        answers.plan(root, folder, family="qc_micro")
+        key = f"greenhouse:48000{n}"
+        items.append({"n": n, "job_key": key, "folder": f"applications/{name}", "family": "qc_micro", "tier": "B"})
+        if state == "parked":
+            emit(root, "parked", n, key, {"reason": "unknown_required", "confirmation": "none"})
+        elif state:
+            emit(root, "parked", n, key, {"reason": "unknown_required", "confirmation": "none"})
+            emit(root, state, n, key, {"confirmation": "page"} if state == "applied" else {"confirmation": "none"})
+    jobfs.atomic_write_json(jobfs.Folder(root).queue_json(DAY), {"v": 1, "date": DAY, "items": items})
+    code, out = cli("add", "--root", root, "--question", "Describe your experience with endotoxin testing in a GMP lab.",
+                    "--answer", "LAL kinetic chromogenic testing on about 300 samples a month at Northwind Biologics.")
+    assert code == 0, out
+    code, out = cli("unpark", "--root", root, "--date", DAY)
+    got = sorted(ln.split()[1] for ln in out.splitlines() if ln.startswith("UNPARKED"))
+    assert got == ["#5", "#6"], out
+    print("ok unpark: only parked jobs, or jobs with no state yet, come back")
+
+
+def test_profile_rules_and_years():
+    """TR-01 / TR-02: an experience question never takes an eligibility value, and
+    computed years answer only a question about that technique alone."""
+    root = fresh_root()
+    posting = ("Company: Acme Bio\nRole: QC Microbiologist II\nLocation: Springfield, IL\nSource: greenhouse-api\n\n"
+               "## Application questions\n\n"
+               "1. Do you have at least 18 months of experience in a GMP QC laboratory? (required) - multi_value_single_select: Yes; No\n"
+               "2. Do you have hands-on experience with drug testing by LC-MS/MS? (required) - multi_value_single_select: Yes; No\n"
+               "3. Have you worked directly with clinical trial sponsors? (required) - multi_value_single_select: Yes; No\n"
+               "4. Do you have at least 10 years of qPCR experience in a GMP-regulated laboratory? (required) - multi_value_single_select: Yes; No\n"
+               "5. Do you have at least 5 years of experience with qPCR and flow cytometry? (required) - multi_value_single_select: Yes; No\n"
+               "6. Do you have at least 10 years of qPCR experience? (required) - multi_value_single_select: Yes; No\n"
+               "7. Are you 18 years of age or older? (required) - multi_value_single_select: Yes; No\n"
+               "8. Will you now or in the future require visa sponsorship? (required) - multi_value_single_select: Yes; No\n"
+               "9. Are you willing to undergo a drug screen? (required) - multi_value_single_select: Yes; No\n")
+    folder = job(root, "2026-11-06 Acme Bio - QC Microbiologist II", posting)
+    p = answers.plan(root, folder, "qc_micro", write=False)
+    st = [(f["status"], f["answer"], f["answer_source"]) for f in p["fields"]]
+    for i in range(5):
+        assert st[i][0] == "needs_you" and not st[i][1], (p["fields"][i]["label"], st[i])
+    assert st[5] == ("check", "Yes", "computed:years(real-time PCR)"), st[5]
+    assert p["fields"][5]["note"].startswith("YEARS real-time PCR 16 (192 months"), p["fields"][5]
+    assert st[6] == ("ok", "Yes", "profile:adult"), st[6]
+    assert st[7][0] == "sensitive_confirm" and st[7][2] == "profile:sponsorship", st[7]
+    assert st[8][2] == "profile:background", st[8]
+    assert any("not \"flow cytometry\"" in ln for ln in p["log"]), p["log"]
+    code, out = cli("plan", "--root", root, "--job", folder, "--family", "qc_micro", "--dry-run")
+    assert 'CHECK "Do you have at least 10 years of qPCR experience?" = "Yes" (computed:years(real-time PCR)) YEARS' in out, out
+    print("ok experience questions park; computed years only for the technique alone, with the arithmetic")
+
+
+def test_bank_strict_and_sensitive():
+    """TR-03 / TR-08: a yes/no answer settles only the same question, an add never
+    overwrites a different one, and every pay or visa answer needs the day's yes."""
+    root = fresh_root()
+    prof = root / "profile.md"
+    prof.write_text(prof.read_text(encoding="utf-8").replace(
+        "## Standard answers\n", "## Standard answers\n- What is your expected hourly rate? | $55 per hour | any | yes\n", 1),
+        encoding="utf-8")
+    posting = ("Company: Acme Bio\nRole: QC Microbiology Supervisor\nLocation: Springfield, IL\nSource: greenhouse-api\n\n"
+               "## Application questions\n\n"
+               "1. Have you worked in a BSL-2 lab as the lab supervisor? (required) - multi_value_single_select: Yes; No\n"
+               "2. Have you worked in BSL-2 labs? (required) - multi_value_single_select: Yes; No\n"
+               "3. What is your expected hourly rate? (required) - input_text\n"
+               "4. What is your expected annual remuneration? (required) - input_text\n")
+    folder = job(root, "2026-11-06 Acme Bio - QC Microbiology Supervisor", posting)
+    (folder / "notes.md").write_text("## Answers\n\n- JOB-1 | Expected hourly rate for this contract | $60 | text | any | yes | "
+                                     "user:2026-11-05 | 2026-11-05\n", encoding="utf-8")
+    p = answers.plan(root, folder, "qc_micro", write=False)
+    assert field(p, "Have you worked in a BSL-2 lab as")["status"] == "needs_you", p
+    assert field(p, "Have you worked in BSL-2 labs?")["answer"] == "Yes", "a plural is the same question"
+    hourly = field(p, "What is your expected hourly rate?")
+    assert hourly["status"] == "sensitive_confirm" and hourly["answer"] == "$55 per hour", hourly
+    assert field(p, "What is your expected annual")["sensitive"], "remuneration is pay"
+    code, out = cli("add", "--root", root, "--question", "Have you worked in a BSL-2 lab as the lab supervisor?",
+                    "--answer", "No", "--kind", "yesno")
+    assert code == 0 and out.strip() == "ADDED ANS-004", out
+    bank = (root / "answers.md").read_text(encoding="utf-8")
+    assert "- ANS-002 | Do you have BSL-2 experience? | Yes |" in bank, "ANS-002 kept its answer"
+    code, out = cli("add", "--root", root, "--question", "What is your expected annual remuneration?", "--answer", "$105,000")
+    assert code == 0 and "| $105,000 | text | any | yes |" in (root / "answers.md").read_text(encoding="utf-8")
+    p = answers.plan(root, folder, "qc_micro", write=False)
+    assert field(p, "What is your expected annual")["status"] == "sensitive_confirm", p
+    assert field(p, "Have you worked in a BSL-2 lab as")["answer"] == "No", p
+    # A job's own JOB-n line keeps its sensitive flag.
+    q = answers.Planner(root, folder, "qc_micro")
+    got = q.field("Expected hourly rate for this contract", "input_text", True)
+    assert got["status"] == "sensitive_confirm" and got["answer"] == "$60", got
+    print("ok yes/no answers match exactly; pay answers always ask the day's yes")
+
+
+def test_letter_missing():
+    """SJ-06: a required cover letter with none built is named by plan."""
+    root = fresh_root()
+    folder = job(root, "2026-11-06 Acme Bio - QC Microbiologist II", "posting_qpcr.md")
+    code, out = cli("plan", "--root", root, "--job", folder, "--dry-run")
+    assert 'LETTER "Cover Letter" is required and no cover letter is built in this job folder' in out, out
+    (folder / "cover_B.pdf").write_bytes(b"%PDF-1.4\n")
+    code, out = cli("plan", "--root", root, "--job", folder, "--dry-run")
+    assert "LETTER" not in out, out
+    code, out = cli("plan", "--root", root)
+    assert code == 1 and out.startswith("ERROR "), out
+    print("ok plan names a required cover letter that is not built; bad arguments exit 1")
+
+
 def test_parse_questions():
     qs = answers.parse_questions((FIXTURE / "gh_questions_posting.md").read_text(encoding="utf-8"))
     assert len(qs) == 19 and sum(q.voluntary for q in qs) == 2
@@ -337,6 +458,10 @@ def main():
     test_bank_add_and_migrate()
     test_scope()
     test_unpark()
+    test_unpark_final_states()
+    test_profile_rules_and_years()
+    test_bank_strict_and_sensitive()
+    test_letter_missing()
     test_parse_questions()
     print("PASS")
 

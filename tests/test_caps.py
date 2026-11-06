@@ -1,5 +1,7 @@
-"""Check job/scripts/caps.py: the pure caps_verdict (spec 3.9) and `caps.py check`
-on a fixture folder built with tracker.py.
+"""Check job/scripts/caps.py: the pure caps_verdict (spec 3.9), hiring units for
+academic and the like (shared decision 3), one-day reservations, handover
+rows the user skipped, the shipped defaults, and `caps.py check` on a fixture
+folder built with tracker.py.
 
 Usage: python tests/test_caps.py
 Needs openpyxl (to build the fixture). Prints ok <name> per test and PASS last.
@@ -26,6 +28,11 @@ D = date(2026, 11, 20)
 RULES = {"per_company_30d": 3, "per_family_per_company_30d": 1, "reject_reapply_days": 90,
          "ashby_one_open": True, "per_company_per_day": 2, "parents": {},
          "employer": [{"name": "Google", "match": ["google"], "per_30d": 3, "same_job_reapply_days": 90}]}
+# The CLI fixture pins the v1.2.0 numbers it was written for; the shipped defaults are 5 and 2.
+PINNED_CAPS = "[caps]\nper_company_30d = 3\nper_family_per_company_30d = 1\n"
+UNI = "springfield university"
+UNIT_RULES = dict(RULES, per_company_30d=5, per_family_per_company_30d=2, per_unit_30d=2, per_institution_30d=15,
+                  unit_segments=["academic", "institute", "hospital", "government"], segments={UNI: "academic"})
 GLOBEX = ("Globex is looking for a data analyst to join the reporting group. You will build weekly dashboards "
           "for the finance team, clean source extracts, document every metric definition, and answer ad hoc "
           "questions from product managers. The ideal candidate writes clear SQL, explains tradeoffs plainly, "
@@ -33,15 +40,17 @@ GLOBEX = ("Globex is looking for a data analyst to join the reporting group. You
           "or BigQuery is helpful but not required for this role. ") * 2
 
 
-def E(company, day, status="Applied", family="", job_key="", host="", req_ids=(), simhash="", rejected_on=None):
+def E(company, day, status="Applied", family="", job_key="", host="", req_ids=(), simhash="", rejected_on=None,
+      unit=None):
     return {"company_norm": jobkey.norm_company(company), "family": family, "job_key": job_key, "host": host,
             "ats": "", "status": status, "date": day, "rejected_on": rejected_on, "req_ids": set(req_ids),
-            "simhash": simhash}
+            "simhash": simhash, "unit": unit}
 
 
-def verdict(index, company, family="", job_key="", req_ids=(), host="", today=D, rules=RULES, simhash=None):
+def verdict(index, company, family="", job_key="", req_ids=(), host="", today=D, rules=RULES, simhash=None,
+            unit=None):
     return caps.caps_verdict(index, jobkey.norm_company(company), family, job_key, set(req_ids), host, today,
-                             rules, simhash=simhash)
+                             rules, simhash=simhash, unit=unit)
 
 
 def line(*a, **k):
@@ -154,7 +163,7 @@ def build_fixture():
     (root / "config" / "watchlist.csv").write_text(
         "employer,employer_norm,parent,ats\nGenentech,genentech,Roche,greenhouse\n"
         "Roche Diagnostics,roche diagnostics,Roche,workday\n", encoding="utf-8")
-    (root / "config" / "settings.toml").write_text('[runner]\nmode = "M"\n', encoding="utf-8")
+    (root / "config" / "settings.toml").write_text('[runner]\nmode = "M"\n' + PINNED_CAPS, encoding="utf-8")
     jobfs.atomic_write_json(root / "queue" / "2026-11-20" / "queue.json", {"v": 1, "date": "2026-11-20", "items": [
         {"n": 12, "job_key": "greenhouse:777", "company": "Umbrella", "family": "x"}]})
     agency = root / "applications" / "2026-10-29 Staffing - Analyst"
@@ -197,7 +206,7 @@ def test_cli_fixture():
         assert got == expect, (args, got, expect)
     # the same verdicts from the runner's snapshot (mode L reads; no xlsx access)
     tr(root, "snapshot")
-    (root / "config" / "settings.toml").write_text('[runner]\nmode = "L"\n', encoding="utf-8")
+    (root / "config" / "settings.toml").write_text('[runner]\nmode = "L"\n' + PINNED_CAPS, encoding="utf-8")
     os.rename(root / "applications.xlsx", root / "hidden.xlsx")
     for args, expect in want[:6]:
         assert cli(root, *args) == expect, args
@@ -212,9 +221,82 @@ def test_cli_fixture():
     assert r.returncode == 1 and r.stdout.startswith("ERROR --date"), r.stdout
 
 
+def test_hiring_unit():
+    """LIVE-06: the lab or department a posting names."""
+    hu = caps.hiring_unit
+    assert hu("Research Associate - Tracy Lab", "", UNI) == "tracy"
+    assert hu("Data Scientist/Postdoctoral Researcher - Zhou & Gao Labs", "", UNI) == "gao zhou"
+    assert hu("Postdoctoral Researcher", "LAB OVERVIEW\nDr. Jordan Avery's laboratory studies aging.", UNI) == "avery"
+    assert hu("Clinical Research Coordinator", "The Sobhani Research Group (PI: J. Sobhani) studies...", UNI) == "sobhani"
+    assert hu("Clinical Laboratory Scientist", "The QC Microbiology Lab runs release testing.", UNI) == ""
+    assert hu("Clinical Research Coordinator", "The Division of Pulmonary Medicine at Springfield University "
+              "is hiring.", UNI) == "pulmonary"
+    assert hu("Research Assistant", "Join the Department of Pediatrics, Division of Neonatology.", UNI) == "neonatology"
+    assert hu("Coordinator", "The Springfield Cancer Institute is one of ...", UNI) == "cancer institute"
+    assert hu("Scientist", "Springfield University is hiring a scientist.\nPosition Summary\nThe Lab", UNI) == ""
+    assert caps.posting_unit("URL: x\nRole: Postdoc - Ellerby lab\n\n## Description\n\nText.\n", UNI) == "ellerby"
+
+
+def test_units():
+    """LIVE-06 / shared decision 3: academic, institute, hospital and government
+    employers count per hiring unit (2), the institution at 15; a posting with
+    no unit counts against the institution at the company caps."""
+    r = UNIT_RULES
+    d0 = date(2026, 11, 2)
+    two = [E(UNI, d0, unit="tracy", job_key="o:1"), E(UNI, d0 + timedelta(1), unit="tracy", job_key="o:2")]
+    assert line(two, UNI, unit="tracy", rules=r) == "CAP DEFER unit tracy 2/2 until 2026-12-02"
+    assert verdict(two, UNI, unit="zhou", rules=r) == ("ALLOW", None)
+    # the same employer without the segment: one company, 5 in 30 days
+    assert verdict(two, UNI, rules=dict(r, segments={})) == ("ALLOW", None)
+    many = [E(UNI, d0 + timedelta(i % 9), unit=f"lab{i}", job_key=f"o:{i}") for i in range(15)]
+    assert line(many, UNI, unit="zhou", rules=r) == "CAP DEFER institution 15/15 until 2026-12-02"
+    five = many[:5]
+    assert line(five, UNI, rules=r).startswith("CAP DEFER company 5/5"), "no unit: the institution at the company cap"
+    assert verdict(five, UNI, unit="zhou", rules=r) == ("ALLOW", None)
+    fam = [E(UNI, d0, unit="tracy", family="postdoc", job_key="o:1")]
+    assert verdict(fam, UNI, family="postdoc", unit="tracy", rules=dict(r, per_unit_30d=3)) == ("ALLOW", None)
+    assert line(fam * 2, UNI, family="postdoc", unit="tracy", rules=dict(r, per_unit_30d=3)) == \
+        "CAP DEFER family postdoc 2/2 until 2026-12-02"
+    # the shipped defaults and the watch list's segments
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "config").mkdir()
+        (root / "config" / "watchlist.csv").write_text(
+            "employer,employer_norm,parent,ats,segment\nSpringfield University,springfield university,,oracle,"
+            "academic\nAcme Bio,acme bio,,greenhouse,biotech\n", encoding="utf-8")
+        rules = caps.load_rules(root)
+        assert (rules["per_company_30d"], rules["per_family_per_company_30d"], rules["per_unit_30d"],
+                rules["per_institution_30d"]) == (5, 2, 2, 15), rules
+        assert caps.unit_mode(rules, UNI) and not caps.unit_mode(rules, "acme bio")
+
+
+def test_reservation_until_tomorrow():
+    """PIPE-12: a DEFER caused only by today's queue reservations lasts a day."""
+    queued = [E("Acme Bio", D, status="Queued", family="qc_micro", job_key="q:1")]
+    assert line(queued, "Acme Bio", "qc_micro", job_key="q:2") == "CAP DEFER family qc_micro 1/1 until 2026-11-21"
+    sent = [dict(queued[0], status="Applied")]
+    assert line(sent, "Acme Bio", "qc_micro", job_key="q:2") == "CAP DEFER family qc_micro 1/1 until 2026-12-20"
+
+
+def test_handover_not_sent():
+    """contracts-03: a Filled - awaiting submit row the user then skipped or put
+    off (its last queue event) is not an application; one still handed over is."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        for i in (1, 2):
+            tr(root, "add", "--company", "Ivy Bio", "--role", f"QC {i}", "--status", "Filled - awaiting submit",
+               "--job-key", f"workable:ivybio:B{i}", "--family", "qc_micro")
+        jobfs.atomic_write_json(jobfs.Folder(root).queue_state_json, {"v": 1, "folded": [], "items": {
+            "workable:ivybio:B1": {"state": "later", "reason": "user", "date": "2026-11-20"},
+            "workable:ivybio:B2": {"state": "handed_over", "reason": "", "date": "2026-11-20"}}})
+        keys = [e["job_key"] for e in caps.load_index(root, D, transport="direct")]
+        assert keys == ["workable:ivybio:B2"], keys
+
+
 def main():
     for fn in (test_company_and_family, test_google, test_rejected_repost, test_ashby_and_day, test_parent,
-               test_cli_fixture):
+               test_cli_fixture, test_hiring_unit, test_units, test_reservation_until_tomorrow,
+               test_handover_not_sent):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

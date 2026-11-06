@@ -306,6 +306,9 @@ def guarded(lane_fn, name):
     except (FetchError, ValueError, KeyError, TypeError, AttributeError) as e:
         lane = Lane(name)
         lane.status, lane.why = "ERROR", str(e)[:160]
+    except Exception as e:  # noqa: BLE001  an odd answer (JSON nested thousands deep) stops this lane only
+        lane = Lane(name)
+        lane.status, lane.why = "ERROR", f"unreadable answer ({type(e).__name__})"
     return lane
 
 

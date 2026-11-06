@@ -16,16 +16,32 @@ board (tenant) nvidia, site NVIDIAExternalCareerSite, host nvidia.wd5.
 myworkdayjobs.com. Watch-list rows give the same parts in the board, site,
 host and extra columns (sources.md lists them per ATS).
 
+Workday and Oracle are read whole, not searched by title: one unfiltered
+Workday call gives the tenant's size and location facets, then the walk runs
+inside the home-area facet values (a [home] place with no other state or
+country beside it, else a [home] states value; remote values within the US when
+remote counts) and the gates filter titles. A tenant whose facets name no home
+place is not walked (stop=no-local); one with no location facet is walked
+whole when it fits the 10-page cap, else searched one title term at a time
+(Workday ANDs the words of one searchText), at most 2 pages a term. Oracle is walked newest first and stops at a page older than
+45 days (stop=stale). A faceted Workday walk may take 30 pages; every other
+read keeps the 10-page cap. Caller searches (the resolver's title lookups)
+are used as given.
+
 Output lines, one per board:
     BOARD <ats>:<board> OK <n> postings pages=<p> stop=<why>
     BOARD <ats>:<board> EMPTY pages=<p>        (an empty list is "unknown", never gone)
     BOARD <ats>:<board> GONE <why>             (tenant gone: redirect off the ATS host, 404)
     BOARD <ats>:<board> ERROR <why> | DENY <reason> | SKIP <why>
-stop is one of one-call, empty, short, total, seen-ids, page-cap, next-none.
+    WARN offline: no board answered (<n> tried); board errors not counted today
+stop is one of one-call, empty, short, total, seen-ids, page-cap, next-none,
+no-local, stale, search-cap.
 
 poll reads config/watchlist.csv and state/watchlist_auto.csv, polls the
 active rows, never makes a list call for R3 or lead-only rows, and updates
-state/board_health.csv. Exit codes: 0 ok (fetch: OK or EMPTY), 1 bad input,
+state/board_health.csv: errors count once a day, a run where no board
+answered counts none, and a Workday tenant that lists 0 jobs on 3 polls
+becomes check_site (polled on the weekly day, like paused). Exit codes: 0 ok (fetch: OK or EMPTY), 1 bad input,
 3 nothing usable (GONE or ERROR), 7 DENY.
 Stdlib only.
 """
@@ -36,6 +52,7 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from pathlib import Path
 from urllib.parse import quote, urljoin, urlparse
 
@@ -47,6 +64,10 @@ import posting  # noqa: E402
 from netfetch import Denied, FetchError  # noqa: E402
 
 MAX_PAGES = 10            # per board per run (ats A1 correction, 3.14)
+WALK_PAGES = 30           # a Workday walk inside the home-area facet (600 rows): the big tenants' local jobs
+SEARCH_PAGES = 2          # per title term when a Workday tenant has no usable location facet
+ORACLE_STALE_DAYS = 45    # an Oracle walk (newest first) stops at a page older than this
+EMPTY_RUNS = 3            # polls of a Workday tenant listing 0 jobs before it is flagged check_site
 WORKDAY_PAGE = 20         # CXS rejects a larger limit with HTTP 400 (ats A1)
 WORKDAY_CAP = 2000        # a capped tenant reports exactly 2000 and wraps to page 0
 ADP_PAGE = 20
@@ -60,7 +81,8 @@ SITEMAP_CHILDREN = 5
 # R3: these ATSs are lead-only. No list call ever, whatever the row says (3.3).
 LEAD_ONLY_ATS = {"smartrecruiters", "icims", "ukg", "paycom", "clearcompany", "paycor", "neogov", "other"}
 POLL_STATUSES = {"active", "dormant"}
-HEALTH_COLUMNS = ["key", "status", "last_ok", "last_count", "last_error", "consecutive_errors"]
+HEALTH_COLUMNS = ["key", "status", "last_ok", "last_count", "last_error", "consecutive_errors", "error_day",
+                  "empty_runs"]
 # A redirect to the vendor's own site means the tenant is gone (ats A28).
 VENDOR_DOMAINS = {"bamboohr": "bamboohr.com", "jazzhr": "jazzhr.com", "jobvite": "jobvite.com",
                   "breezy": "breezy.hr", "workable": "workable.com", "pinpoint": "pinpointhq.com",
@@ -158,6 +180,7 @@ class BoardResult:
     stop: str = ""
     readings: list = field(default_factory=list)
     detail_errors: list = field(default_factory=list)
+    total: object = None           # the tenant's own job count when the reader learned it
 
     def line(self):
         lab = f"BOARD {self.spec.label}"
@@ -169,17 +192,29 @@ class BoardResult:
 
 
 class Ctx:
-    """What a reader needs: the fetcher, the spec, search terms and limits."""
+    """What a reader needs: the fetcher, the spec, search terms and limits.
 
-    def __init__(self, fetcher, spec, searches=(), places=(), max_pages=MAX_PAGES):
+    searches: the caller's own search texts (the resolver's title lookups);
+    none means walk the board. fallback: title terms for a Workday tenant
+    that cannot be walked by location. home_states and remote_us pick the
+    location facet values; today dates the Oracle stale stop."""
+
+    def __init__(self, fetcher, spec, searches=(), places=(), max_pages=MAX_PAGES, fallback=(), home_states=(),
+                 remote_us=False, today=None):
         self.f, self.spec = fetcher, spec
+        self.walk = not [x for x in searches if x]
         self.searches = list(searches) or [""]
         if spec.extra.get("search"):
             self.searches = [spec.extra["search"]]
         self.places = [p for p in places if p]
+        self.fallback = [x for x in fallback if x]
+        self.home_states = frozenset(home_states or ())
+        self.remote_us = remote_us
+        self.today = today
         self.max_pages = max_pages
         self.pages = 0
         self.stop = ""
+        self.total = None
         self.seen = set()
 
     def get(self, url, accept=None, headers=None):
@@ -211,7 +246,7 @@ def body_json(r, what):
     r.check()
     try:
         return r.json()
-    except ValueError:
+    except (ValueError, RecursionError):  # RecursionError: JSON nested thousands deep
         raise FetchError(f"{what}: response is not JSON")
 
 
@@ -300,10 +335,14 @@ def sitemap_entries(text):
     return kind, rows
 
 
+# Bounded parts, so a page of unclosed tags is read in linear time.
+PAGE_LINK = re.compile(r'<a\b[^<>]{0,300}?href="([^"<>]{1,1000})"[^<>]{0,300}>(.{0,500}?)</a>', re.S | re.I)
+
+
 def page_links(page, pattern, base):
     """(absolute url, anchor text) per unique link whose href matches pattern."""
     out, seen = [], set()
-    for m in re.finditer(r'<a\b[^>]*href="([^"]+)"[^>]*>(.*?)</a>', page or "", re.S | re.I):
+    for m in PAGE_LINK.finditer(page or ""):
         href = m.group(1).split("?")[0]
         if not re.search(pattern, href):
             continue
@@ -428,27 +467,115 @@ def workday_url(s, host, path):
     return f"https://{host}/en-US/{s.site}{path}"
 
 
-def location_facets(d, places):
-    """{facetParameter: [ids]} for location facet values naming a place. Only
-    the parameter with the most matches is used: Workday ANDs parameters."""
-    found = {}
+def location_facets(d, places, home_states=(), remote_us=False):
+    """({facetParameter: [ids]}, why) for the location facet values in the
+    home area: a value naming a place with no other state or country beside
+    it ('Dublin - IE', 'Newark, New Jersey, USA' and 'Richmond - VA - US' are
+    out), else a [home] states value itself ('California'); remote values within the
+    US join when remote counts. Only the parameter with the most matches is
+    used: Workday ANDs parameters. why is 'no-local' when the facets name US
+    states or other countries but nothing in the home area, else ''."""
+    city, state, named = {}, {}, []
+    home_states = frozenset(home_states or ())
 
     def walk(facets):
         for f in facets or []:
-            param = f.get("facetParameter", "")
+            if not isinstance(f, dict):
+                continue
+            param = str(f.get("facetParameter", ""))
             for v in f.get("values") or []:
-                if "values" in v and "id" not in v:
-                    walk([v])
+                if not isinstance(v, dict):
                     continue
-                name = str(v.get("descriptor", "")).lower()
-                if "location" in param.lower() and v.get("id") and any(
-                        re.search(r"\b" + re.escape(pl.lower()) + r"\b", name) for pl in places):
-                    found.setdefault(param, []).append(v["id"])
+                if "values" in v and "id" not in v:
+                    walk([dict(v, facetParameter=v.get("facetParameter") or param)])
+                    continue
+                if "location" not in param.lower() or not v.get("id"):
+                    continue
+                name = str(v.get("descriptor", ""))
+                states, foreign, us = posting.region_of(name)
+                named.append(bool(states or foreign or us))
+                if (foreign and not us and not states) or (states and home_states and not states & home_states):
+                    continue
+                low = name.lower()
+                if re.search(r"\bremote\b", low):
+                    if remote_us and (us or states):
+                        city.setdefault(param, []).append(v["id"])
+                    continue
+                if any(re.search(r"\b" + re.escape(str(pl).lower()) + r"\b", low) for pl in places):
+                    city.setdefault(param, []).append(v["id"])
+                elif home_states and states and states <= home_states and all(
+                        t.lower() in posting.US_NAMES or t.lower() in posting.US_STATE_NAMES or t in posting.US_STATES
+                        for t in posting.place_tokens(name)):
+                    state.setdefault(param, []).append(v["id"])
     walk(d.get("facets"))
+    found = city or state
     if not found:
-        return {}
+        return {}, ("no-local" if any(named) else "")
     best = max(found, key=lambda k: len(found[k]))
-    return {best: found[best]}
+    return {best: found[best]}, ""
+
+
+def workday_post(ctx, base, text, facets, offset):
+    r = ctx.post(base + "/jobs", {"appliedFacets": facets, "limit": WORKDAY_PAGE, "offset": offset,
+                                  "searchText": text or ""})
+    if r.status in (404, 422):
+        raise Gone(f"HTTP {r.status}") if r.status == 404 else FetchError("HTTP 422 (wrong site name?)")
+    d = body_json(r, "workday")
+    if not isinstance(d, dict):
+        raise FetchError("workday: not a job list")
+    return d
+
+
+def workday_rows(ctx, host, d, items):
+    """Items for a page's new rows; returns (rows, new rows)."""
+    s = ctx.spec
+    rows = [j for j in d.get("jobPostings") or [] if isinstance(j, dict)]
+    new = [j for j in rows if isinstance(j.get("externalPath"), str) and ctx.fresh(j["externalPath"])]
+    for j in new:
+        path = j["externalPath"]
+        bullets = [b for b in j.get("bulletFields") or [] if isinstance(b, str)]
+        it = new_item(s, workday_url(s, host, path), "workday-api", j.get("title"),
+                      j.get("locationsText", ""), bullets[0] if bullets else "")
+        it.p["company"] = s.employer or s.board
+        it.data = {"path": path}  # postedOn is relative text: never a date (3.10)
+        it.detail = detail_workday
+        items.append(it)
+    return len(rows), len(new)
+
+
+def workday_walk(ctx, base, host, text, facets, items, first=None, limit=None, restart=False):
+    """Pages of one search until total, an empty or all-seen page, the page
+    cap, or limit pages. first: page 0, already fetched with these facets.
+    restart: a caller search over 20 rows starts again inside the home facet."""
+    offset, total, start = 0, None, ctx.pages - (1 if first is not None else 0)
+    d = first
+    while True:
+        if d is None:
+            if ctx.capped():
+                return
+            if limit and ctx.pages - start >= limit:
+                ctx.stop = "search-cap"
+                return
+            d = workday_post(ctx, base, text, facets, offset)
+        if offset == 0 and total is None:
+            total = int(d.get("total") or 0)
+            if restart and ctx.places and not facets and total > WORKDAY_PAGE:
+                want, _ = location_facets(d, ctx.places, ctx.home_states, ctx.remote_us)
+                if want:
+                    facets, total, d = want, None, None
+                    continue  # restart the walk inside the matching locations
+        rows, new = workday_rows(ctx, host, d, items)
+        d = None
+        if not rows:
+            ctx.stop = "empty"
+            return
+        if not new:
+            ctx.stop = "seen-ids"  # a capped tenant wraps to page 0 (ats A1 correction)
+            return
+        offset += WORKDAY_PAGE
+        if total and offset >= total:
+            ctx.stop = "total"
+            return
 
 
 def read_workday(ctx):
@@ -459,44 +586,46 @@ def read_workday(ctx):
         raise ValueError("workday needs the site from the real careers URL (board/site)")
     host, base = workday_base(s)
     items = []
-    for search in ctx.searches:
-        facets, offset, total = {}, 0, None
-        while not ctx.capped():
-            body = {"appliedFacets": facets, "limit": WORKDAY_PAGE, "offset": offset, "searchText": search or ""}
-            r = ctx.post(base + "/jobs", body)
-            if r.status in (404, 422):
-                raise Gone(f"HTTP {r.status}") if r.status == 404 else FetchError("HTTP 422 (wrong site name?)")
-            d = body_json(r, "workday")
-            if offset == 0 and total is None:
-                total = int(d.get("total") or 0)
-                want = location_facets(d, ctx.places) if ctx.places and not facets and total > WORKDAY_PAGE else {}
-                if want:
-                    facets, total = want, None
-                    continue  # restart the walk inside the matching locations
-            rows = d.get("jobPostings") or []
-            new = [j for j in rows if j.get("externalPath") and ctx.fresh(j["externalPath"])]
-            for j in new:
-                path = j["externalPath"]
-                bullets = [b for b in j.get("bulletFields") or [] if isinstance(b, str)]
-                it = new_item(s, workday_url(s, host, path), "workday-api", j.get("title"),
-                              j.get("locationsText", ""), bullets[0] if bullets else "")
-                it.p["company"] = s.employer or s.board
-                it.data = {"path": path}  # postedOn is relative text: never a date (3.10)
-                it.detail = detail_workday
-                items.append(it)
-            if not rows:
-                ctx.stop = "empty"
+    if not ctx.walk:  # the caller's own searches (the resolver's title lookups)
+        for search in ctx.searches:
+            workday_walk(ctx, base, host, search, {}, items, restart=True)
+            if ctx.stop == "page-cap":
                 break
-            if not new:
-                ctx.stop = "seen-ids"  # a capped tenant wraps to page 0 (ats A1 correction)
-                break
-            offset += WORKDAY_PAGE
-            if total and offset >= total:
-                ctx.stop = "total"
-                break
-        if ctx.stop == "page-cap":
+        return items
+    text = s.extra.get("search", "")
+    first = workday_post(ctx, base, text, {}, 0)
+    ctx.total = int(first.get("total") or 0)
+    if ctx.total <= WORKDAY_PAGE or not ctx.places:
+        workday_walk(ctx, base, host, text, {}, items, first=first)  # small tenant, or no home places set
+        return items
+    want, why = location_facets(first, ctx.places, ctx.home_states, ctx.remote_us)
+    if want:
+        if ctx.max_pages >= MAX_PAGES:
+            ctx.max_pages = max(ctx.max_pages, WALK_PAGES)
+        workday_walk(ctx, base, host, text, want, items)
+        return items
+    if why == "no-local":
+        ctx.stop = "no-local"  # the facets name states or countries, none of them home
+        return items
+    if ctx.total <= ctx.max_pages * WORKDAY_PAGE:  # no location facet, but the whole tenant fits the cap
+        workday_walk(ctx, base, host, text, {}, items, first=first)
+        return items
+    workday_rows(ctx, host, first, items)  # page 0 is read already; the gates filter it
+    for search in rotate(ctx.fallback, ctx.today) or [text]:
+        if ctx.capped():
             break
+        workday_walk(ctx, base, host, search, {}, items, limit=SEARCH_PAGES)
     return items
+
+
+def rotate(terms, today):
+    """The fallback terms starting at a different one each day, so the page
+    cap reaches every term over a few days."""
+    terms = list(terms or [])
+    if not terms or not today:
+        return terms
+    k = today.toordinal() % len(terms)
+    return terms[k:] + terms[:k]
 
 
 def detail_workday(ctx, it):
@@ -847,6 +976,7 @@ def read_oracle(ctx):
         raise ValueError("oracle needs the siteNumber (board/site)")
     api = f"https://{host}/hcmRestApi/resources/latest/recruitingCEJobRequisitions"
     items = []
+    cutoff = (ctx.today - timedelta(days=ORACLE_STALE_DAYS)).isoformat() if ctx.today else ""
     for search in ctx.searches:
         offset, total = 0, None
         while not ctx.capped():
@@ -861,6 +991,7 @@ def read_oracle(ctx):
             rows = block.get("requisitionList") or []
             if total is None:
                 total = int(block.get("TotalJobsCount") or 0)
+                ctx.total = total if ctx.total is None else ctx.total + total
             new = [j for j in rows if j.get("Id") and ctx.fresh(j["Id"])]
             for j in new:
                 url = f"https://{host}/hcmUI/CandidateExperience/en/sites/{s.site}/job/{j['Id']}"
@@ -880,6 +1011,10 @@ def read_oracle(ctx):
             offset += len(rows)
             if total and offset >= total:
                 ctx.stop = "total"
+                break
+            last = iso_day(rows[-1].get("PostedDate")) if isinstance(rows[-1], dict) else ""
+            if ctx.walk and cutoff and last and last < cutoff:
+                ctx.stop = "stale"  # newest first: the rest are older still
                 break
         if ctx.stop == "page-cap":
             break
@@ -1042,15 +1177,32 @@ def read_phenom(ctx):
 
 
 def detail_page(ctx, it):
-    """A job page read for its JSON-LD JobPosting (else its visible text)."""
+    """A job page read for its JSON-LD JobPosting (else its visible text). A
+    page with no JSON-LD gives its <title> as the role ('JazzHR - Job
+    Listings'), so the list's own title stands then; JazzHR's location comes
+    from its 'Dept - City, ST - Full Time' line."""
     r = ctx.f.get(it.url, accept="text/html")
     r.check()
     q = posting.parse_html(r.text(), it.url, it.report)
     keep = ("company",)
     if it.data.get("list_date") or not q.get("posted_field"):  # Breezy, Paylocity: the list date (3.2)
         keep += ("posted", "posted_field")
+    if q.get("source") != "json-ld" and (it.p.get("role") or "").strip():
+        keep += ("role",)
     merge(it, q, keep=keep)
     it.p["role"] = it.p["role"] or q.get("role", "")
+    if not it.p.get("location") and ctx.spec.ats == "jazzhr":
+        it.p["location"] = jazzhr_location(q.get("description", ""))
+
+
+JAZZHR_PLACE = re.compile(r"^#+[ \t]*(?:[^\n]{0,200}?[ \t]-[ \t])?([A-Za-z][A-Za-z .'-]{1,40},[ \t]*[A-Za-z]{2})"
+                          r"[ \t]*-[ \t]*(?:full|part)[ -]?time\b", re.I | re.M)
+
+
+def jazzhr_location(text):
+    """'Novato, CA' from a JazzHR page's '### Postdocs - Novato, CA - Full Time' line."""
+    m = JAZZHR_PLACE.search(text or "")
+    return m.group(1).strip() if m else ""
 
 
 # ---------- Comeet, Manatal, Hireology ----------
@@ -1159,17 +1311,7 @@ def close(it, why):
     it.data["closed"] = why
 
 
-US_STATE_NAMES = {"alabama": "AL", "alaska": "AK", "arizona": "AZ", "arkansas": "AR", "california": "CA",
-                  "colorado": "CO", "connecticut": "CT", "delaware": "DE", "florida": "FL", "georgia": "GA",
-                  "hawaii": "HI", "idaho": "ID", "illinois": "IL", "indiana": "IN", "iowa": "IA", "kansas": "KS",
-                  "kentucky": "KY", "louisiana": "LA", "maine": "ME", "maryland": "MD", "massachusetts": "MA",
-                  "michigan": "MI", "minnesota": "MN", "mississippi": "MS", "missouri": "MO", "montana": "MT",
-                  "nebraska": "NE", "nevada": "NV", "new hampshire": "NH", "new jersey": "NJ",
-                  "new mexico": "NM", "new york": "NY", "north carolina": "NC", "north dakota": "ND",
-                  "ohio": "OH", "oklahoma": "OK", "oregon": "OR", "pennsylvania": "PA", "rhode island": "RI",
-                  "south carolina": "SC", "south dakota": "SD", "tennessee": "TN", "texas": "TX", "utah": "UT",
-                  "vermont": "VT", "virginia": "VA", "washington": "WA", "west virginia": "WV",
-                  "wisconsin": "WI", "wyoming": "WY", "district of columbia": "DC"}
+US_STATE_NAMES = posting.US_STATE_NAMES
 US_DASHED = re.compile(r"^\s*(?:united states(?: of america)?|usa|us)\s*-\s*([a-z .]+?)\s*-\s*(.+?)\s*$", re.I)
 US_CODED = re.compile(r"^\s*US\s*-\s*([A-Z]{2})\s*-\s*(.+?)\s*$")
 
@@ -1177,7 +1319,7 @@ US_CODED = re.compile(r"^\s*US\s*-\s*([A-Z]{2})\s*-\s*(.+?)\s*$")
 def fix_place(rec):
     """Workday and Oracle write 'United States - California - Foster City' or
     'US-CA-Menlo Park'; split_place does not read those, so fix city/state."""
-    first = (rec.location or "").split("|")[0]
+    first = (posting.place_parts(rec.location) or [""])[0]
     m = US_DASHED.match(first)
     if m and m.group(1).lower() in US_STATE_NAMES:
         rec.city, rec.state, rec.country = m.group(2), US_STATE_NAMES[m.group(1).lower()], "US"
@@ -1214,7 +1356,7 @@ def to_reading(it, spec, first_seen):
 # ---------- one board ----------
 
 def read_board(spec, fetcher, *, searches=(), places=(), keep=None, details=True, max_pages=MAX_PAGES,
-               first_seen=None):
+               first_seen=None, fallback=(), home_states=(), remote_us=False):
     """List one board, then read details for the records keep() accepts.
 
     keep(posting) -> bool sees list-level jobfs.Posting records (the runner
@@ -1227,7 +1369,8 @@ def read_board(spec, fetcher, *, searches=(), places=(), keep=None, details=True
     if spec.ats in LEAD_ONLY_ATS or reader is None:
         res.status, res.why = "SKIP", "lead-only" if spec.ats in LEAD_ONLY_ATS else f"no reader for {spec.ats}"
         return res
-    ctx = Ctx(fetcher, spec, searches, places, max_pages)
+    ctx = Ctx(fetcher, spec, searches, places, max_pages, fallback=fallback, home_states=home_states,
+              remote_us=remote_us, today=to_day(first_seen))
     try:
         items = reader(ctx)
     except Gone as e:
@@ -1236,22 +1379,34 @@ def read_board(spec, fetcher, *, searches=(), places=(), keep=None, details=True
         res.status, res.why = ("GONE", f"redirect {e.reason.split()[-1]}") if denied_gone(e, spec.ats) else ("DENY", e.reason)
     except (FetchError, ValueError) as e:
         res.status, res.why = "ERROR", str(e)[:200]
-    res.pages, res.stop = ctx.pages, ctx.stop
+    except Exception as e:  # noqa: BLE001  a board's odd answer ({"jobs": [null]}) is that board's error only
+        res.status, res.why = "ERROR", f"unreadable answer ({type(e).__name__}: {str(e)[:120]})"
+    res.pages, res.stop, res.total = ctx.pages, ctx.stop, ctx.total
     if res.status != "OK":
         return res
     if not items:
         res.status = "EMPTY"
         return res
     for it in items:
-        if details and it.detail and (keep is None or keep(to_reading(clone(it), spec, first_seen).posting)):
-            try:
-                it.detail(ctx, it)
-            except Denied as e:
-                res.detail_errors.append(f"{it.url}: denied {e.reason}")
-            except (FetchError, ValueError, KeyError, TypeError, AttributeError) as e:
-                res.detail_errors.append(f"{it.url}: {str(e)[:120]}")
-        res.readings.append(to_reading(it, spec, first_seen))
+        try:
+            if details and it.detail and (keep is None or keep(to_reading(clone(it), spec, first_seen).posting)):
+                try:
+                    it.detail(ctx, it)
+                except Denied as e:
+                    res.detail_errors.append(f"{it.url}: denied {e.reason}")
+                except (FetchError, ValueError, KeyError, TypeError, AttributeError, RecursionError) as e:
+                    res.detail_errors.append(f"{it.url}: {str(e)[:120]}")
+            res.readings.append(to_reading(it, spec, first_seen))
+        except Exception as e:  # noqa: BLE001  one odd posting is skipped and named, never the whole run
+            res.detail_errors.append(f"{str(it.url)[:200]}: skipped ({type(e).__name__}: {str(e)[:100]})")
     return res
+
+
+def to_day(iso):
+    try:
+        return datetime.strptime(str(iso or "")[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
 
 
 def clone(it):
@@ -1299,23 +1454,53 @@ def csv_cell(v):
     return '"' + v.replace('"', '""') + '"' if any(c in v for c in ',"') else v
 
 
-def update_health(health, res, today):
+def no_answer(res):
+    """A board that did not answer at all: a network error, or robots.txt
+    unreachable (how a PC with no network shows up)."""
+    return res.status == "ERROR" or (res.status == "DENY" and res.why.startswith("robots-unreachable"))
+
+
+def no_network(results):
+    """True when no board answered in a run that tried at least two: the PC
+    had no network, so nothing is wrong with the boards."""
+    tried = [r for r in results if r.status != "SKIP"]
+    return len(tried) >= 2 and all(no_answer(r) for r in tried)
+
+
+def update_health(health, res, today, counted=True):
     """3.7: 3 consecutive errors pause a board; a gone marker twice makes it
-    gone; an empty list is unknown and never counts toward gone."""
+    gone; an empty list is unknown and never counts toward gone. Errors and
+    gone markers count once a day (a rerun the same morning is not another
+    strike); counted=False (a run where no board answered) records the error
+    and counts nothing. A Workday tenant that lists 0 jobs (total 0, not just
+    none nearby) on EMPTY_RUNS polls becomes check_site: its site name in the
+    watch list is probably wrong."""
     key = res.spec.key
     row = health.get(key) or {"key": key, "status": "active", "last_ok": "", "last_count": "",
-                              "last_error": "", "consecutive_errors": "0"}
+                              "last_error": "", "consecutive_errors": "0", "error_day": "", "empty_runs": "0"}
     errors = int(row.get("consecutive_errors") or 0)
+    again = row.get("error_day") == today  # this board already took a strike today
     if res.status in ("OK", "EMPTY"):
-        # dormant (no family match for 60 days) is set by the gates' owner; a good read keeps it
-        row.update(status="dormant" if row.get("status") == "dormant" else "active", last_ok=today, last_count=str(len(res.readings)), last_error="",
-                   consecutive_errors="0")
+        site_empty = res.status == "EMPTY" and res.total == 0
+        runs = int(row.get("empty_runs") or 0)
+        runs = (runs if row.get("last_ok") == today and runs else runs + 1) if site_empty else 0
+        status = row.get("status") or "active"
+        if site_empty and runs >= EMPTY_RUNS:
+            status = "check_site"
+        elif status != "dormant":  # dormant (no family match for 60 days) is set by the gates' owner
+            status = "active"
+        row.update(status=status, last_ok=today, last_count=str(len(res.readings)), last_error="",
+                   consecutive_errors="0", error_day="", empty_runs=str(runs))
     elif res.status == "GONE":
-        row["status"] = "gone" if row.get("last_error", "").startswith("gone") else row.get("status") or "active"
-        row.update(last_error=f"gone: {res.why}", consecutive_errors=str(errors + 1))
+        if counted and not again:
+            row["status"] = "gone" if row.get("last_error", "").startswith("gone") else row.get("status") or "active"
+            row.update(consecutive_errors=str(errors + 1), error_day=today)
+        row["last_error"] = f"gone: {res.why}"
     elif res.status in ("ERROR", "DENY"):
-        errors += 1
-        row.update(last_error=f"{res.status.lower()}: {res.why}", consecutive_errors=str(errors))
+        if counted and not again:
+            errors += 1
+            row.update(consecutive_errors=str(errors), error_day=today)
+        row["last_error"] = f"{res.status.lower()}: {res.why}"
         if res.why.startswith("robots "):
             row["status"] = "robots_blocked"
         elif errors >= 3:
@@ -1349,21 +1534,45 @@ def search_terms(terms):
 
 
 def family_searches(profile):
-    """One search text per active family for servers that filter (Workday
-    searchText, Oracle keyword): its title_any words, else its core titles,
-    at most 5 words. An empty list means one unfiltered walk."""
+    """Search texts for a Workday tenant with no usable location facet: one
+    per title term, never joined (Workday ANDs the words of one searchText,
+    so 'postdoctoral postdoc post doc' finds almost nothing). A term 'a|b+c'
+    searches its first part's alternatives, a and b. Active families by
+    priority, then file order; usajobs-mode families are left out (they take
+    USAJOBS postings only)."""
+    fams = [f for f in profile.get("family") or [] if str(f.get("status", "active")).lower() == "active"
+            and str(f.get("mode", "industry")).lower() != "usajobs"]
+
+    def prio(f):
+        try:
+            return int(f.get("priority", 2) or 2)
+        except (TypeError, ValueError):
+            return 2
     out = []
-    for fam in profile.get("family") or []:
-        if fam.get("status", "active") != "active":
-            continue
-        words = search_terms(fam.get("title_any"))
-        if not words:
-            words = [w for t in fam.get("core_titles") or [] for w in str(t).split()]
-        text = " ".join(dict.fromkeys(str(w).strip() for w in words if str(w).strip()))
-        text = " ".join(list(dict.fromkeys(text.split()))[:5])
-        if text and text not in out:
-            out.append(text)
+    for fam in sorted(fams, key=prio):  # sorted() is stable: file order within a priority
+        terms = [str(t).split("+")[0] for t in fam.get("title_any") or []]
+        words = search_terms(terms) or [str(t) for t in fam.get("core_titles") or []]
+        for w in words:
+            w = " ".join(str(w).split())
+            if w and w not in out:
+                out.append(w)
     return out
+
+
+def home_area(root, profile):
+    """(places, home states, remote within the US counts) from [home] and the
+    widen steps, as the gates read them."""
+    import gates  # same folder; gates imports boards only inside a function
+    home = profile.get("home") or {}
+    places = [str(p) for p in home.get("places") or [] if str(p).strip()]
+    label = str(home.get("label") or "").split(",")[0].strip()
+    if label:
+        places.append(label)
+    widen = gates.widen_steps(root) if root else []
+    if "second_ring" in widen:
+        places += [str(p) for p in home.get("second_ring") or [] if str(p).strip()]
+    remote = str(home.get("remote", "us")).lower() == "us" or "remote_us" in widen
+    return places, gates.home_states(home), remote
 
 
 def poll_skip(spec, health, settings, today, root):
@@ -1380,7 +1589,7 @@ def poll_skip(spec, health, settings, today, root):
     if state in ("gone",):
         return state
     weekly = str(settings["schedule"].get("weekly_day", "monday")).lower()
-    if (state in ("paused", "dormant", "robots_blocked") or spec.status == "dormant") \
+    if (state in ("paused", "dormant", "robots_blocked", "check_site") or spec.status == "dormant") \
             and today.strftime("%A").lower() != weekly:
         return f"{state if state != 'active' else spec.status} (polled on {weekly})"
     return ""
@@ -1394,8 +1603,8 @@ def poll(root, fetcher=None, offline=None, keep=None, details=True, max_pages=MA
     profile = jobfs.search_profile(root)
     today = jobfs.today(root)
     fetcher = fetcher or netfetch.Fetcher(root=root, offline=offline, cookies=True)
-    searches = family_searches(profile)
-    places = list((profile.get("home") or {}).get("places") or [])
+    fallback = family_searches(profile)
+    places, state, remote = home_area(root, profile)
     health = load_health(root)
     results = []
     for spec in watchlist_rows(root):
@@ -1403,13 +1612,23 @@ def poll(root, fetcher=None, offline=None, keep=None, details=True, max_pages=MA
         if why:
             res = BoardResult(spec, "SKIP", why)
         else:
-            res = read_board(spec, fetcher, searches=searches, places=places, keep=keep, details=details,
-                             max_pages=max_pages, first_seen=today.isoformat())
-            update_health(health, res, today.isoformat())
+            try:
+                res = read_board(spec, fetcher, places=places, keep=keep, details=details, max_pages=max_pages,
+                                 first_seen=today.isoformat(), fallback=fallback, home_states=state,
+                                 remote_us=remote)
+            except Exception as e:  # noqa: BLE001  never let one board stop the daily
+                res = BoardResult(spec, "ERROR", f"reader failed ({type(e).__name__}: {str(e)[:120]})")
         emit(res.line())
         for err in res.detail_errors[:3]:
             emit(f"WARN detail {err}")
         results.append(res)
+    counted = not no_network(results)
+    if not counted:
+        emit(f"WARN offline: no board answered ({sum(1 for r in results if r.status != 'SKIP')} tried); "
+             "board errors not counted today")
+    for res in results:
+        if res.status != "SKIP":
+            update_health(health, res, today.isoformat(), counted=counted)
     save_health(root, health)
     return results
 
@@ -1445,11 +1664,11 @@ def cmd_fetch(args):
     extra = tuple(h for h in (spec.host,) if h)
     f = netfetch.Fetcher(root=root, offline=args.offline, cookies=True, extra_hosts=extra)
     profile = jobfs.search_profile(root) if root else {}
+    places, state, remote = home_area(root, profile) if root else ([], (), False)
     try:
-        res = read_board(spec, f, searches=family_searches(profile) if root else (),
-                         places=((profile.get("home") or {}).get("places") or []) if root else (),
-                         details=not args.list_only, max_pages=args.max_pages,
-                         first_seen=jobfs.today(root).isoformat())
+        res = read_board(spec, f, places=places, fallback=family_searches(profile) if root else (),
+                         home_states=state, remote_us=remote, details=not args.list_only,
+                         max_pages=args.max_pages, first_seen=jobfs.today(root).isoformat())
     except ValueError as e:
         print(f"ERROR {e}")
         return 1

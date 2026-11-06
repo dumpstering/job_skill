@@ -4,7 +4,8 @@ Usage:
     python build_resume.py resume.json --out <folder> --base "First Last Resume"
         [--sources FILE [FILE ...]] [--terms terms.json]
         [--mode industry|cv|usajobs] [--max-pages N] [--publications publications.md]
-        [--posting posting.md] [--strict]
+        [--posting posting.md] [--library achievement_library.md]
+        [--techniques techniques.md] [--strict]
 
 The JSON format is documented in references/writing_rules.md (Block A and
 Cover letter) and references/cv_publications.md (citations, modes). The .docx
@@ -26,20 +27,38 @@ v1.2 flags (without them the v1.1 behavior is unchanged):
   publications.md text, *italics* rendered, the user's name in bold with
   "bold_name": true. Citations skip the bullet lint and FACT.
 - --posting runs the letter check: company and role equal posting.md's.
+- --library names the library EVIDENCE reads (default: the --sources file
+  named achievement_library.md; with v1.2 flags no other file counts), and
+  --techniques the list the TECHNIQUE check reads (default: techniques.md
+  beside the library).
+- Any v1.2 flag also makes notes.md a source only for its `## Answers`
+  section, reads numbers written as words, binds each role's title, employer
+  and dates, checks certification names and Skills/Techniques items, and
+  warns when the last page holds fewer than 10 lines.
 - --strict (mode industry unless given) fails the build on any FACT line,
-  PARSE other than ok, an EVIDENCE, CITE or LETTER problem, pages over the
-  cap, or a banned word, printing one STRICT-FAIL line each.
+  PARSE other than ok, an EVIDENCE, TECHNIQUE, CITE or LETTER problem, pages
+  over the cap, or a banned word, printing one STRICT-FAIL line each. It
+  builds into a temporary folder ("built:" lines) and moves the files to
+  their final names ("wrote:" lines) only when every check passes, then
+  writes final.json in --out: {"v": 1, "resume": "<file>.pdf", "letter":
+  "<file>.pdf" or null, "built_at", "verdict": "ok"} (a letter is added only
+  beside a passing resume). On a failure ("FINAL none: ...") nothing stays
+  under the final names, a stale final.json is removed, and a failed letter
+  is set to null in it.
 - Any v1.2 flag ends the output with VERDICT ok|fail.
 
-Exit codes: 0 built, 1 bad input, 2 a package is missing (pip install
-python-docx reportlab), 6 STRICT-FAIL (only with --strict). Without --strict
-the checks never change the exit code.
+Exit codes: 0 built, 1 bad input (a bad argument too, or a final file held
+open by another program), 2 a package is missing (pip install python-docx
+reportlab), 6 STRICT-FAIL (only with --strict). Without --strict the checks
+never change the exit code.
 """
 import argparse
 import io
 import json
 import re
+import shutil
 import sys
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -171,6 +190,13 @@ def prepare(data, pubs=None, mode=None, warnings=None):
         elif (pubs is not None and s.get("bullets") and not s.get("entries")
               and checks.CITE_HEADING.search(s["heading"])):
             # Citations typed out as bullets: printed as written, checked by CITE.
+            # Nothing else may share the section: CITE checks only the
+            # citations, so a paragraph or line there would reach the PDF
+            # unchecked.
+            other = sorted(set(s) & {"paragraph", "lines"})
+            if other:
+                raise InputError(f'section "{s["heading"]}" holds typed citations and {", ".join(other)}: '
+                                 "move the other content to its own section")
             s["_cite"] = True
             s["_cites"] = [text_of(b) for b in s["bullets"]]
     if mode == "cv":
@@ -653,17 +679,27 @@ def count_pages(data):
 
 # ---------- main ----------
 
+class Parser(argparse.ArgumentParser):
+    """A bad argument is bad input (exit 1); exit 2 means a missing package."""
+
+    def error(self, message):
+        print(f"ERROR {message}")
+        sys.exit(1)
+
+
 def parse_args(argv):
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap = Parser(description=__doc__.splitlines()[0])
     ap.add_argument("json_path")
     ap.add_argument("--out", required=True, help="folder to write into")
     ap.add_argument("--base", required=True, help='file name without extension, e.g. "First Last Resume"')
-    ap.add_argument("--sources", nargs="+", metavar="FILE", help="master_resume.md, achievement_library.md, notes.md, profile.md: enables the FACT check")
+    ap.add_argument("--sources", nargs="+", metavar="FILE", help="master_resume.md, achievement_library.md, profile.md (and notes.md: with v1.2 flags only its ## Answers section): enables the FACT check")
     ap.add_argument("--terms", metavar="terms.json", help="posting terms (strings or {term, aliases}): enables the KEYWORD check")
     ap.add_argument("--mode", choices=sorted(MODE_CAPS), help="v1.2 document mode: page cap and section order")
     ap.add_argument("--max-pages", type=int, metavar="N", help="v1.2: lower the page cap (or set one in cv mode)")
     ap.add_argument("--publications", metavar="publications.md", help="v1.2: fills citation sections and enables CITE")
     ap.add_argument("--posting", metavar="posting.md", help="v1.2: letter check against the posting's company and role")
+    ap.add_argument("--library", metavar="achievement_library.md", help="v1.2: the library EVIDENCE reads (default: the --sources file of that name)")
+    ap.add_argument("--techniques", metavar="techniques.md", help="v1.2: the TECHNIQUE check's list (default: techniques.md beside the library)")
     ap.add_argument("--strict", action="store_true", help="v1.2: exit 6 with STRICT-FAIL lines on any failed check")
     return ap.parse_args(argv)
 
@@ -676,11 +712,130 @@ def page_cap(mode, max_pages):
     return cap
 
 
+FINAL_JSON = "final.json"
+SHORT_LAST_PAGE = 10  # text lines; fewer on the last page of a multi-page build reads as unfinished
+
+
+def last_page_lines(pdf_path):
+    """Text lines on the PDF's last page, or None when pypdf is missing."""
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        return None
+    pages = PdfReader(str(pdf_path)).pages
+    return len([ln for ln in (pages[-1].extract_text() or "").splitlines() if ln.strip()])
+
+
+def techniques_for(args):
+    """v1.2: library.load_techniques() of --techniques, else techniques.md beside the library."""
+    import library
+    path = args.techniques
+    if not path:
+        libs = checks.library_paths(args.sources, args.library)
+        path = Path(libs[0]).parent / "techniques.md" if libs else None
+    return library.load_techniques(path) if path else []
+
+
+def read_final(out):
+    try:
+        data = json.loads((out / FINAL_JSON).read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def write_final(out, kind, name, emit):
+    """final.json after a strict build passes (shared decision 1): the resume or
+    letter file a reader uploads. A letter needs a passing resume there first."""
+    old = read_final(out)
+    if kind == "letter" and not (old.get("resume") and (out / str(old["resume"])).exists()):
+        emit(f"FINAL {FINAL_JSON} not written: build the resume with --strict here first, then the letter")
+        return
+    resume = name if kind == "resume" else old["resume"]
+    letter = name if kind == "letter" else old.get("letter")
+    if letter and not (out / str(letter)).exists():
+        letter = None
+    data = {"v": 1, "resume": resume, "letter": letter,
+            "built_at": datetime.now().astimezone().isoformat(timespec="seconds"), "verdict": "ok"}
+    tmp = out / f".{FINAL_JSON}.tmp"
+    tmp.write_text(json.dumps(data, indent=1) + "\n", encoding="utf-8")
+    tmp.replace(out / FINAL_JSON)
+    emit(f'FINAL {FINAL_JSON}: resume "{resume}", letter ' + (f'"{letter}"' if letter else "none"))
+
+
+def unfinal(out, kind, base, emit):
+    """After a strict failure: no file under the final names, and final.json
+    names no stale file (a failed resume removes it; a failed letter leaves the
+    resume and sets letter to null)."""
+    removed = []
+    for ext in (".pdf", ".docx", ".txt"):
+        p = out / (base + ext)
+        try:
+            if p.exists():
+                p.unlink()
+                removed.append(p.name)
+        except OSError as e:
+            emit(f"ERROR cannot remove {p} ({type(e).__name__}): close it in the program holding it")
+    old = read_final(out)
+    if old and (kind == "resume" or old.get("resume") == base + ".pdf"):
+        (out / FINAL_JSON).unlink(missing_ok=True)
+        removed.append(FINAL_JSON)
+    elif old and old.get("letter") == base + ".pdf":
+        old["letter"] = None
+        tmp = out / f".{FINAL_JSON}.tmp"
+        tmp.write_text(json.dumps(old, indent=1) + "\n", encoding="utf-8")
+        tmp.replace(out / FINAL_JSON)
+        removed.append(f"the letter in {FINAL_JSON}")
+    emit(f'FINAL none: nothing kept under "{base}"' + (f" (removed {', '.join(removed)})" if removed else ""))
+
+
+LONG_PATH = 240  # Windows' classic limit is 260; leave room for the extension and Word's lock file
+
+
+def strict_dir(out, base):
+    """A fresh temporary folder for a strict build: inside --out, so the move is
+    a rename on the same drive, unless that path would pass LONG_PATH (a long
+    job folder under OneDrive), then in the system temp folder."""
+    if len(str(Path(out).resolve() / ".build_xxxxxxxx" / (base + ".docx"))) <= LONG_PATH:
+        return Path(tempfile.mkdtemp(prefix=".build_", dir=out))
+    return Path(tempfile.mkdtemp(prefix="build_"))
+
+
+def move_file(src, dst):
+    try:
+        src.replace(dst)
+    except OSError as e:
+        if getattr(e, "errno", None) != 18 and getattr(e, "winerror", None) != 17:  # EXDEV / not same device
+            raise
+        shutil.copy2(src, dst)
+        src.unlink()
+
+
+def install_final(build_dir, out, base, emit):
+    """Move a passing strict build's files to their final names; False if one is locked."""
+    for ext in (".txt", ".docx", ".pdf"):
+        src = build_dir / (base + ext)
+        if not src.exists():
+            continue
+        try:
+            move_file(src, out / (base + ext))
+        except OSError as e:
+            emit(f"ERROR cannot write {out / (base + ext)} ({type(e).__name__}): close it in the program holding it, then build again")
+            return False
+        emit(f"wrote: {out / (base + ext)}")
+    return True
+
+
 def main(argv=None, emit=print):
     """Build and check; returns the exit code. emit receives every output line
-    (variants.py collects them in-process)."""
+    (variants.py collects them in-process).
+
+    --strict builds into a temporary folder inside --out and moves the files to
+    their final names only when every check passes, then writes final.json; on
+    a failure it leaves nothing under the final names and no stale final.json."""
     args = parse_args(argv)
-    v12 = bool(args.strict or args.mode or args.max_pages or args.publications or args.posting)
+    v12 = bool(args.strict or args.mode or args.max_pages or args.publications or args.posting
+               or args.library or args.techniques)
     mode = args.mode or ("industry" if args.strict else None)
     warnings = []
     try:
@@ -694,18 +849,28 @@ def main(argv=None, emit=print):
         return 1
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    build_dir = strict_dir(out, args.base) if args.strict else out
+    try:
+        return run_build(args, data, pubs, posting, mode, v12, warnings, paper, size, margin, out, build_dir, emit)
+    finally:
+        if build_dir != out:
+            shutil.rmtree(build_dir, ignore_errors=True)
+
+
+def run_build(args, data, pubs, posting, mode, v12, warnings, paper, size, margin, out, build_dir, emit):
     code = 0
+    verb = "built" if args.strict else "wrote"
 
     def target(ext):
         # Not with_suffix: a base like "John Q. Public Resume" would lose everything after "Q".
-        return out / (args.base + ext)
+        return build_dir / (args.base + ext)
 
     target(".txt").write_text(build_txt(data), encoding="utf-8")
-    emit(f"wrote: {target('.txt')}")
+    emit(f"{verb}: {target('.txt')}")
 
     try:
         build_docx(data, target(".docx"), paper, size, margin)
-        emit(f"wrote: {target('.docx')}")
+        emit(f"{verb}: {target('.docx')}")
     except ImportError:
         emit("MISSING python-docx: run  pip install python-docx  and build again")
         code = 2
@@ -714,7 +879,7 @@ def main(argv=None, emit=print):
     try:
         pages = build_pdf(data, target(".pdf"), paper, size, margin)
         pdf_built = True
-        emit(f"wrote: {target('.pdf')} ({pages} page{'s' if pages != 1 else ''})")
+        emit(f"{verb}: {target('.pdf')} ({pages} page{'s' if pages != 1 else ''})")
     except ImportError:
         emit("MISSING reportlab: run  pip install reportlab  and build again")
         code = 2
@@ -725,12 +890,25 @@ def main(argv=None, emit=print):
         warnings.append(f"pages {pages} > {cap} ({mode or 'page'} cap {cap})")
     elif mode == "cv" and pages and pages > CV_WARN_PAGES and cap is None:
         warnings.append(f"pages {pages}: a CV over {CV_WARN_PAGES} pages (no cap; trim older or minor items)")
+    if v12 and pdf_built and cap and pages and pages > 1 and not over:
+        try:
+            short = last_page_lines(target(".pdf"))
+        except Exception:  # a read-back problem is PARSE's to report
+            short = None
+        if short is not None and short < SHORT_LAST_PAGE:
+            warnings.append(f"page {pages} holds only {short} lines: tighten to {pages - 1} "
+                            f"page{'s' if pages != 2 else ''} or move content (writing_rules.md, Length)")
     lint_lines = lint(data)
     for w in warnings + lint_lines:
         emit(f"WARN {w}")
     evidence = (args.strict and "letter" not in data) or "auto"
+    try:
+        techniques = techniques_for(args) if v12 else None
+    except OSError:
+        techniques = []
     lines = checks.run_checks(data, target(".pdf") if pdf_built else None, target(".txt"), args.sources, args.terms,
-                              pubs=pubs, evidence=evidence, posting=posting, letter=v12)
+                              pubs=pubs, evidence=evidence, posting=posting, letter=v12, v12=v12,
+                              library=args.library, techniques=techniques)
     for line in lines:
         emit(line)
     if not v12:
@@ -744,8 +922,28 @@ def main(argv=None, emit=print):
     if over:
         failures.append(f"pages {pages} > {cap}")
     failures += [f"lint {w}" for w in lint_lines if "is on the banned-word list" in w]
-    for line in checks.verdict(failures, args.strict):
-        emit(line)
+    if args.strict and code == 2 and not failures:
+        failures.append("files not kept (a package is missing)")
+    verdict = checks.verdict(failures, args.strict)
+    if args.strict:
+        kind = "letter" if "letter" in data else "resume"
+        for line in verdict[:-1]:
+            emit(line)
+        if not failures:
+            if install_final(build_dir, out, args.base, emit):
+                write_final(out, kind, args.base + ".pdf", emit)
+            else:
+                failures.append("files not written (a file is open in another program)")
+                code = 1
+                emit(f"STRICT-FAIL {failures[-1]}")
+                unfinal(out, kind, args.base, emit)
+                verdict = checks.verdict(failures, args.strict)
+        else:
+            unfinal(out, kind, args.base, emit)
+        emit(verdict[-1])
+    else:
+        for line in verdict:
+            emit(line)
     if args.strict and failures and code == 0:
         code = 6
     return code

@@ -9,11 +9,16 @@ After I answer (or reply "go"):
    role and title I held when I did the work. Answers of "no" or "skip" add
    nothing to the resume (a "no" to having a skill, tool or credential still
    goes in Block C as "Not held"); do not stretch a "sort of" into a claim.
-2. Select and order material for this job. Lead each role with its most
+   Copy my answers as I gave them under `## Answers` in the job's `notes.md`.
+2. Put the new facts into the library before writing Block A: write Block C,
+   merge it (below), run `library.py ids --root "<folder>"`, and cite the new
+   IDs. The strict build accepts only library IDs as evidence, so a fact left
+   out of the library is a fact left off the resume.
+3. Select and order material for this job. Lead each role with its most
    relevant bullets. Cut or shorten material that doesn't serve this
    application, even if it's good. Older or less relevant roles get fewer
    bullets.
-3. Write the resume, run the check under Output, then output the blocks.
+4. Write the resume, run the check under Output, then output the blocks.
 
 Revisions: if I ask for changes, rebuild the files and post the complete
 updated Block A again (never a partial snippet), plus any new Block C entries
@@ -27,15 +32,19 @@ insist" case).
 ## Commands
 
 - **audit**: run it in a fresh context when you can, since a reviewer that
-  did not write the resume catches more. If you can start a subagent, give it
-  the paths of `resume.json`, `master_resume.md`, `achievement_library.md`,
-  `profile.md`, `notes.md`, `posting.md` and this file. Ask it for the
-  problem list described here plus a verdict (send, fix or rework), and tell
-  it to change no files. Then make the fixes yourself. Without a subagent
-  tool, do the audit yourself.
-  The audit: reread your last Block A and Block C line by line against my
-  resume, my library, my profile, my answers, and every rule below,
-  especially the items in the check under Output. A problem is anything that
+  did not write the resume catches more. If you can start a subagent (the
+  plugin's job-auditor), give it the paths of `resume.json`, any
+  `cover_letter.json`, `terms.json`, the built `.txt`, `notes.md`,
+  `posting.md`, `master_resume.md`, `achievement_library.md`, `profile.md`,
+  `answers.md`, `techniques.md`, `publications.md`, this file and
+  `cv_publications.md`. Ask it for the problem list described here plus a
+  verdict (send, fix or rework), and tell it to change no files. Then make
+  the fixes yourself. Without a subagent tool, do the audit yourself.
+  The audit: reread your last Block A, the cover letter if one exists, and
+  Block C line by line against my resume, my library, my profile, my
+  answers, and every rule below, especially the items in the check under
+  Output. A letter sentence gets the same test as a bullet: every claim in it
+  traces to a source, with its qualifiers. A problem is anything that
   breaks a rule, in either direction: a claim, verb or number stronger than
   my sources, or a hedge, qualifier or cut my sources don't call for, or a
   fact dropped from a claim that stays (cutting whole bullets for relevance
@@ -200,33 +209,47 @@ same in revisions.
 
 ### Block A: Tailored Resume
 
-Write the resume to `resume.json` in the job folder. Write the posting's key
-terms (the skills, tools, certifications and job titles from the Phase 1
-requirements) to `terms.json` there, as a list of strings or
-`{"term": "...", "aliases": ["..."]}` objects; aliases cover renamed products,
-such as Entra ID and Azure AD. Then run:
-
-`python "<skill>/scripts/build_resume.py" "<job folder>/resume.json" --out "<job folder>" --base "<Name> Resume" --sources "<folder>/master_resume.md" "<folder>/achievement_library.md" "<folder>/profile.md" "<job folder>/notes.md" --terms "<job folder>/terms.json"`
+Write the resume to `resume.json` in the job folder, with `ev` tags on every
+bullet ("Evidence tags" below). Write the posting's key terms (the skills,
+tools, certifications and job titles from the Phase 1 requirements) to
+`terms.json` there, as a list of strings or `{"term": "...", "aliases":
+["..."]}` objects; aliases cover renamed products, such as Entra ID and
+Azure AD. When the runner already wrote `terms.json` (its `.runner_files`
+lists it), leave it as it is and use it. Then build with the strict command under "Modes and the strict
+build" below, in the mode fit_and_questions.md names. Done when it ends
+`VERDICT ok`.
 
 `<Name>` and the JSON `name` are my name exactly as the master resume shows
 it. The build writes the .docx, .pdf and .txt (plain text, for "paste your
-resume" boxes), prints the PDF's page count and lint warnings, then three
-checks:
-- `FACT`: a number, title, employer or date on the resume that is not in my
-  sources. Correct it to match the source. A derived figure stays only if
-  it is listed under Verify.
+resume" boxes) and `final.json` (the files to upload), prints the PDF's
+page count and lint warnings, then these checks:
+- `FACT`: a number (digits or words: "twelve", "a dozen", "a decade"),
+  title, employer or date on the resume that is not in my sources; a role
+  whose title, employer and dates no single source line gives together;
+  "Present" for a role my sources show as ended; a certification name not
+  copied from my sources, or one my library lists as "Not held". Correct it
+  to match the source.
 - `PARSE`: how the PDF reads back to an applicant tracking system. Anything
   but `PARSE ok` is a layout problem to fix.
+- `TECHNIQUE`: a Skills or Techniques item that is not hands-on in
+  `techniques.md` (or, not listed there, not in my sources), or that my
+  library lists as "Not held". Drop it, or for a `familiar` technique write
+  the level: "confocal microscopy (familiar)".
+- `EVIDENCE`: a bullet without `ev`, an ID my library lacks, a number not
+  in the cited entries, or a cited entry filed under a different role.
 - `KEYWORD`: the posting's terms that are on the resume (one marked "only
   as" appears under an older name: switch to the posting's term), that are
   in my sources but not on this resume (work them in where they are true and
-  relevant), and that are not evidenced (gaps for Block B, never added
-  without a source).
+  relevant), that are not evidenced (gaps for Block B, never added without a
+  source), and that my library lists as "Not held" (gaps, never added).
+- `SOURCES notes.md`: only the `## Answers` section of `notes.md` counts as
+  a source. The fit table and Block B quote the posting, and the posting's
+  own numbers and titles never support a claim.
 
 If it prints `ERROR`, fix `resume.json` and build again. If it reports a
 missing package, run `pip install python-docx reportlab pypdf` and build
-again; if that fails, tell me which file could not be built. After a clean
-build, run `tracker.py update <ID> status="Resume ready"`.
+again; if that fails, tell me which file could not be built. After the
+build ends `VERDICT ok`, run `tracker.py update <ID> status="Resume ready"`.
 
 Then post the .txt content in one code block, so I can read the resume
 without opening a file, followed by the paths of the three files. Nothing
@@ -279,7 +302,7 @@ Post it, and save it to `notes.md`.
   check, plus any main duty of the role it left out. Mark Met only when the
   resume shows the requirement itself; related experience is Partial at most.
   If my answers changed a Phase 1 status, say so. Under the table, give the
-  build's three `KEYWORD` lines as printed.
+  build's `KEYWORD` lines as printed.
 - Remaining gaps: every requirement not marked Met, must-haves first, each
   with one honest suggestion (e.g. mention it in the cover letter, a
   certification worth pursuing, or "not a fit"). A suggestion never recasts a
@@ -297,8 +320,9 @@ Post it, and save it to `notes.md`.
   content falls short, say so instead of padding; if you cut material to fit,
   say what.
 - Verify before sending: at most 8 lines, riskiest first: the (-> Verify)
-  items, any `FACT` line kept for a derived figure, and any wording stronger
-  than a close paraphrase of my sources. If
+  items (a derived figure with its arithmetic, recorded in the library entry
+  it rests on), and any wording stronger than a close paraphrase of my
+  sources. A FACT or other strict-build failure is fixed, never listed here. If
   more qualify, put similar ones on one line (e.g. "Derived percents: 38% in
   bullet 2, 70% in bullet 5"); never drop a (-> Verify) item. Say nothing
   about checks that passed, changes I asked for, or facts I already
@@ -317,8 +341,13 @@ same titles, dates and values as Block A. If you corrected an existing entry,
 start it with "Replaces: <first few words of the old entry>". If a library
 heading is wrong, say so above the code block and output that whole section
 under the corrected heading. List things I said I don't have under `###
-Skills, Certifications & Education` as "Not held: ...". If nothing new came
-up, say so.
+Skills, Certifications & Education` as "Not held: ...". Record each Quick
+checks answer that will hold for the next job too as a line starting
+"Confirmed <Mon YYYY>:" under the heading it concerns (for example
+`- Confirmed Nov 2026: title unchanged Jan 2016 - Apr 2023.` under that role,
+or `- Confirmed Nov 2026: BSL-2 training earned 2016, not renewed.` under
+Skills, Certifications & Education); `library.py ids` never numbers these
+lines, and Phase 1 does not ask them again. If nothing new came up, say so.
 
 Then merge it into `achievement_library.md`, after copying the file to
 `backups/`:
@@ -332,7 +361,10 @@ Then merge it into `achievement_library.md`, after copying the file to
 
 Finish with one line offering: "audit" for a line-by-line check before I use
 this; "apply" to fill in the application; and a cover letter or interview prep
-for the gaps. Don't produce them unless I ask.
+for the gaps. Don't produce them unless I ask, with one exception: when
+posting.md lists a required cover letter (`Cover Letter (required)`), write
+and build it with the resume, without waiting to be asked, and include it in
+the audit; the form cannot be sent without it.
 
 ## Cover letter
 
@@ -342,8 +374,10 @@ posting and leading with the two strongest matches from Block B. The
 Truthfulness rules and the banned-word list apply; a gap is never recast as
 met, and facts about the employer come only from the posting. Write it to
 `cover_letter.json` in the job folder, dated from the system clock, and build
-it with the same command, without `--terms`, and with
-`--base "<Name> Cover Letter"`:
+it after the resume with the same strict command, without `--terms` and
+`--mode`, with `--posting "<job folder>/posting.md"` and
+`--base "<Name> Cover Letter"`. Its `final.json` entry needs a passing resume
+there first:
 
 ```json
 {
@@ -391,9 +425,15 @@ Everything above still applies. This part adds what the daily batch needs.
   `ev` lists the achievement library IDs (`[L-0004]` in
   `achievement_library.md`) of every entry the bullet's facts rest on.
 - Every number in the bullet must appear in a cited entry (the EVIDENCE
-  check reads them the way FACT does, so "a dozen" covers 12). A fact that
-  exists only in my answers in this chat goes into the library first (Block
-  C), gets its ID from `library.py ids --root "<folder>"`, and is then cited.
+  check reads them the way FACT does: "a dozen" covers 12, and "twelve" on
+  the resume is checked like "12"). A fact that exists only in my answers in
+  this chat goes into the library first (Block C), gets its ID from
+  `library.py ids --root "<folder>"`, and is then cited. EVIDENCE reads only
+  `achievement_library.md`: an `[L-]` line typed into `notes.md` is no
+  evidence.
+- A cited entry filed under a role heading must sit under that same role on
+  the resume (title, employer and dates): a Northwind achievement never goes
+  under Fabrikam, nor under an earlier stint at Northwind.
 - `"keep": true` marks a bullet Tier B tuning must never drop.
 - Education, Certifications, Licenses, Awards, Honors, Memberships, Service,
   References, Languages, Grants and Fellowships, and citation sections carry
@@ -425,22 +465,44 @@ Everything above still applies. This part adds what the daily batch needs.
   from `techniques.md`: hands-on techniques only, with a level qualifier
   where I partly meet a requirement (the Skills rule above). An alias goes on
   the resume only where it names the same thing (the renamed-product rule).
+- The TECHNIQUE check holds every Skills or Techniques item to this: a
+  `techniques.md` name or alias at level hands-on (a `familiar` one only
+  with that level written, "confocal microscopy (familiar)"), or, for a
+  skill techniques.md does not list, one my sources name; never one my
+  library lists as "Not held".
 
 ### Modes and the strict build
 
 - `--mode industry` (2 pages at most), `cv` (no cap, CV section order) or
   `usajobs` (2 pages, hard): see [cv_publications.md](cv_publications.md).
   A variant's mode and page cap come from its `approved.json`.
-- Tier A and variant builds add `--strict`, `--mode`, and
-  `--publications "<folder>/publications.md"` when that file exists:
+- Every resume build (a pasted link, Tier A, a variant) uses this strict
+  command, with the mode fit_and_questions.md names and `--publications
+  "<folder>/publications.md"` when that file exists. In cv mode the base is
+  `"<Name> CV"` (cv_publications.md):
 
   `python "<skill>/scripts/build_resume.py" "<job folder>/resume.json" --out "<job folder>" --base "<Name> Resume" --sources "<folder>/master_resume.md" "<folder>/achievement_library.md" "<folder>/profile.md" "<job folder>/notes.md" --terms "<job folder>/terms.json" --mode industry --publications "<folder>/publications.md" --strict`
 
+  `notes.md` counts only for its `## Answers` section; EVIDENCE reads
+  `achievement_library.md` and TECHNIQUE `techniques.md` beside it.
+
 - The build then ends with `VERDICT ok` or, after one `STRICT-FAIL` line per
   problem, `VERDICT fail` and exit code 6. It fails on any FACT line, PARSE
-  other than ok, an EVIDENCE or CITE problem, more pages than the cap, or a
-  banned word. Fix each one and build again; a strict failure is never
-  carried into Verify as it stands.
+  other than ok, an EVIDENCE, TECHNIQUE or CITE problem, more pages than the
+  cap, or a banned word. Fix each one and build again; a strict failure is
+  never carried into Verify as it stands.
+- It builds into a temporary folder (`built:` lines) and keeps the files
+  under their final names (`wrote:` lines) only on `VERDICT ok`, then writes
+  `final.json` in the job folder: `{"v": 1, "resume": "<Name> Resume.pdf",
+  "letter": "<Name> Cover Letter.pdf" or null, "built_at": ..., "verdict":
+  "ok"}`. That file is what the runner stages and the handover attaches. A
+  failed build prints `FINAL none`, keeps nothing under the final names and
+  removes a stale `final.json`, so a resume that failed a check is never
+  uploaded.
+- `WARN page 2 holds only 7 lines`: a page that is mostly empty looks
+  unfinished. Tighten to one page (cut the weakest older bullets, or the
+  font and margin room under Length), or move content so the last page is
+  worth having.
 - Letters: build with `--posting "<job folder>/posting.md"` as well. The
   LETTER check needs the posting's company and role named exactly as
   posting.md's `Company:` and `Role:` lines give them, and no unfilled

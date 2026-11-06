@@ -697,7 +697,7 @@ def draft(contact_first, item, link, req, pitch, me, applied=""):
 def fact_lines(text_, sources):
     import checks
     data = {"sections": [{"heading": "Ask", "paragraph": text_}]}
-    return [ln for ln in checks.fact_check(data, checks.strip_ids(sources)) if not ln.startswith("FACT ok")]
+    return [ln for ln in checks.fact_check(data, checks.strip_ids(sources), v12=True) if not ln.startswith("FACT ok")]
 
 
 def source_text(root, md, extra):

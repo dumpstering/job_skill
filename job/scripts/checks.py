@@ -6,13 +6,23 @@ build_resume.py --strict turns failures into exit 6.
 
     PARSE     the built PDF read back as text: name, contact, headings, entries
     FACT      numbers, titles, employers and dates against the --sources files
-    EVIDENCE  (v1.2) every bullet cites library IDs that exist, and every
-              number in it appears in a cited entry
+              (v1.2 flags: numbers written as words too, each role's title,
+              employer and dates together, "Present" only where a source
+              says so, certification names as written and never "Not held")
+    EVIDENCE  (v1.2) every bullet cites library IDs that exist, every number
+              in it appears in a cited entry, and a cited entry filed under a
+              role heading belongs to the role the bullet sits under
+    TECHNIQUE (v1.2) every Skills/Techniques item is hands-on in
+              techniques.md, or named in the sources, and never "Not held"
     CITE      (v1.2) every printed citation equals its publications.md line or
               its approved ascii: rendering
     LETTER    (v1.2) a letter names the posting's company and role, and has
               no unfilled {slot}
     KEYWORD   posting terms (--terms) found on the resume, in sources, or neither
+              (v1.2 flags: and a fourth line, terms the user said they lack)
+
+Under v1.2 flags a job's notes.md counts as a source only for its
+`## Answers` section, and EVIDENCE reads the achievement library alone.
 
 After them build_resume.py prints VERDICT ok|fail (v1.2 flags only), from
 strict_failures() and verdict() below.
@@ -71,12 +81,20 @@ NUM_RE = re.compile(
 _WORDS = "|".join(sorted(NUMBER_WORDS, key=len, reverse=True))
 WORD_RE = re.compile(r"\b(?P<w>" + _WORDS + r")\b(?P<pct>[\s-]*percent\b)?", re.I)
 DOZEN_RE = re.compile(r"\b(?:(?P<w>" + _WORDS + r"|a)[\s-]+)?dozen\b", re.I)
+# v1.2: numbers written as words on the resume side too ("twelve", "twenty-four",
+# "a dozen", "a decade"). "one" is left out there: "one of 8", "one-on-one" and
+# "no one" are rarely a count, and one is never an inflated figure.
+_UNITS = "one two three four five six seven eight nine".split()
+COMPOUND_RE = re.compile(r"\btwenty[\s-](?P<u>" + "|".join(_UNITS) + r")\b(?P<pct>[\s-]*percent\b)?", re.I)
+DECADE_RE = re.compile(r"\b(?P<w>" + _WORDS + r"|a)[\s-]+decades?\b", re.I)
 
 
-def numbers(text):
+def numbers(text, words=False):
     """[(token as written, (kind, value))] for the digit numbers in text.
 
     kind is "percent", "times" ("3x") or "plain" ($ and suffixes fold into plain).
+    With words (v1.2) it also reads two..twenty-nine, "a dozen" and "a decade"
+    as written words, so "twelve" is checked exactly like "12".
     """
     out = []
     for m in NUM_RE.finditer(text):
@@ -85,11 +103,37 @@ def numbers(text):
             value *= SUFFIX[m.group("suf").strip().lower()]
         kind = "percent" if m.group("pct") else "times" if m.group("times") else "plain"
         out.append((m.group(0), (kind, value)))
+    if words:
+        out += word_numbers(text, skip_one=True)
     return out
 
 
-def source_numbers(text):
-    """Set of (kind, value) in the sources: digit numbers plus one..twenty and dozens."""
+def word_numbers(text, skip_one=False):
+    """[(token, (kind, value))] for numbers written as words, each word read once."""
+    out, taken = [], []
+    for m in COMPOUND_RE.finditer(text):
+        kind = "percent" if m.group("pct") else "plain"
+        out.append((m.group(0), (kind, Decimal(20 + NUMBER_WORDS[m.group("u").lower()]))))
+        taken.append(m.span())
+    for rx, scale in ((DOZEN_RE, 12), (DECADE_RE, 10)):
+        for m in rx.finditer(text):
+            w = (m.group("w") or "a").lower()
+            out.append((m.group(0), ("plain", Decimal(scale * NUMBER_WORDS.get(w, 1)))))
+            taken.append(m.span())
+    for m in WORD_RE.finditer(text):
+        if any(a <= m.start() < b for a, b in taken):
+            continue
+        w = m.group("w").lower()
+        if skip_one and w == "one":
+            continue
+        kind = "percent" if m.group("pct") else "plain"
+        out.append((m.group(0), (kind, Decimal(NUMBER_WORDS[w]))))
+    return out
+
+
+def source_numbers(text, words=False):
+    """Set of (kind, value) in the sources: digit numbers plus one..twenty and dozens
+    (with words, v1.2: also twenty-one..twenty-nine and decades)."""
     keys = {key for _, key in numbers(text)}
     for m in WORD_RE.finditer(text):
         kind = "percent" if m.group("pct") else "plain"
@@ -97,6 +141,8 @@ def source_numbers(text):
     for m in DOZEN_RE.finditer(text):
         w = (m.group("w") or "a").lower()
         keys.add(("plain", Decimal(12 * NUMBER_WORDS.get(w, 1))))
+    if words:
+        keys |= {key for _, key in word_numbers(text)}
     return keys
 
 
@@ -142,15 +188,23 @@ def date_in_sources(part, text):
 
 # ---------- keywords ----------
 
-def term_regex(term):
+def term_regex(term, stems=False):
+    """The term as a whole word, plural allowed. With stems (v1.2 KEYWORD), a
+    single alphabetic word of 4+ letters also matches its -ed, -ing and -er
+    forms, so "mentor" is found in "Mentored" and "validate" in "validating"."""
     words = [re.escape(w) for w in term.split()]
     core = r"\s+".join(words)
     plural = r"(?:es|s)?" if term[-1:].isalpha() else ""
+    if stems and len(term.split()) == 1 and term.isalpha() and len(term) >= 4:
+        if term[-1:].lower() == "e":
+            core, plural = re.escape(term[:-1]), r"(?:e|es|ed|er|ers|ing)"
+        else:
+            plural = r"(?:s|es|ed|er|ers|ing)?"
     return re.compile(r"(?<![A-Za-z0-9])" + core + plural + r"(?![A-Za-z0-9])", re.I)
 
 
-def term_found(text, term, aliases=()):
-    return any(term_regex(t).search(text) for t in [term, *aliases] if t.strip())
+def term_found(text, term, aliases=(), stems=False):
+    return any(term_regex(t, stems).search(text) for t in [term, *aliases] if t.strip())
 
 
 def load_terms(path):
@@ -174,17 +228,25 @@ def load_terms(path):
     return terms
 
 
-def keyword_check(resume_text, source_text, terms, sources_given):
-    on, in_src, none = [], [], []
+def keyword_check(resume_text, source_text, terms, sources_given, v12=False):
+    """The three KEYWORD lines. v12: -ed/-ing forms count, the library's "Not
+    held:" lines are not a source, and a fourth line names the posting terms
+    the user said they do not have (gaps for Block B, never worked in)."""
+    on, in_src, none, not_held = [], [], [], []
+    held_text, refused = source_text, ""
+    if v12 and source_text is not None:
+        held_text, refused = split_not_held(source_text)
     for term, aliases in terms:
-        if term_found(resume_text, term):
+        if term_found(resume_text, term, stems=v12):
             on.append(term)
-        elif term_found(resume_text, term, aliases):
+        elif term_found(resume_text, term, aliases, stems=v12):
             # The rules say to use the posting's own term for a renamed product.
-            used = next(a for a in aliases if term_found(resume_text, a))
+            used = next(a for a in aliases if term_found(resume_text, a, stems=v12))
             on.append(f'{term} (only as "{used}"; use the posting\'s term)')
-        elif source_text is not None and term_found(source_text, term, aliases):
+        elif held_text is not None and term_found(held_text, term, aliases, stems=v12):
             in_src.append(term)
+        elif v12 and refused and term_found(refused, term, aliases, stems=v12):
+            not_held.append(term)
         else:
             none.append(term)
     join = lambda xs: ", ".join(xs) if xs else "(none)"
@@ -195,7 +257,23 @@ def keyword_check(resume_text, source_text, terms, sources_given):
     else:
         second = f"KEYWORD in your sources, not on this resume: {join(in_src)}"
         third = f"KEYWORD not evidenced: {join(none)}"
-    return [f"KEYWORD on resume: {join(on)}", second, third]
+    lines = [f"KEYWORD on resume: {join(on)}", second, third]
+    if v12 and source_text is not None:
+        lines.append(f"KEYWORD not held (you said you lack these): {join(not_held)}")
+    return lines
+
+
+NOT_HELD_LINE = re.compile(r"^[ \t]*[-*][ \t]+(?:\[L-\d{4,}\][ \t]*)?not held\b:?[ \t]*(?P<what>[^\n]*?)[ \t]*$",
+                           re.I | re.M)
+
+
+def split_not_held(text):
+    """(text without the library's "Not held:" lines, their subjects one per line).
+    "Not held: QIIME 2, shotgun metagenomics." gives two subjects."""
+    subjects = []
+    for m in NOT_HELD_LINE.finditer(text):
+        subjects += [s.strip().rstrip(".").strip() for s in re.split(r"[;,]", m.group("what"))]
+    return NOT_HELD_LINE.sub("", text), "\n".join(s for s in subjects if s)
 
 
 # ---------- resume content ----------
@@ -246,13 +324,18 @@ def resume_texts(data):
     return out
 
 
-def fact_check(data, source_text):
+def fact_check(data, source_text, v12=False):
+    """Numbers, titles, employers and dates against the sources. v12 adds: numbers
+    written as words; each entry's title, employer and dates as one role (one
+    source line names them together, "Present" only where a source says so);
+    and certification and license names copied from the sources, never one the
+    library lists as "Not held"."""
     out, n = [], 0
-    have = source_numbers(source_text)
+    have = source_numbers(source_text, words=v12)
     flat = norm(source_text).lower()
     for where, text in resume_texts(data):
         seen = set()
-        for token, key in numbers(text):
+        for token, key in numbers(text, words=v12):
             if token in seen:
                 continue
             seen.add(token)
@@ -262,11 +345,14 @@ def fact_check(data, source_text):
     for s in data.get("sections", []):
         for e in s.get("entries", []):
             n += 1
-            if norm(e["title"]).lower() not in flat:
+            title_ok = norm(e["title"]).lower() in flat
+            if not title_ok:
                 out.append(f'FACT title "{e["title"]}" not found in your sources')
+            org_ok = True
             if e.get("org"):
                 n += 1
-                if norm(e["org"]).lower() not in flat:
+                org_ok = norm(e["org"]).lower() in flat
+                if not org_ok:
                     out.append(f'FACT employer "{e["org"]}" not found in your sources')
             for part in date_parts(e.get("dates")):
                 found = date_in_sources(part, source_text)
@@ -275,7 +361,100 @@ def fact_check(data, source_text):
                 n += 1
                 if not found:
                     out.append(f'FACT date "{part}" of {e["title"]} not found in your sources in any format')
+            if v12 and title_ok and org_ok:
+                n += 1
+                out += role_problems(e, source_text)
+    if v12:
+        lines, k = credential_problems(data, source_text)
+        out += lines
+        n += k
     return out or [f"FACT ok ({n} checked)"]
+
+
+PRESENT_RE = re.compile(r"(?<![A-Za-z])(?:present|current|now)(?![A-Za-z])", re.I)
+
+
+def role_problems(e, source_text):
+    """v12: the entry's title, employer and dates are one role in the sources.
+
+    For a role with bullets, some source line (the library's `### Title |
+    Company | Mon YYYY - Mon YYYY` heading, or the master resume's role line)
+    names the title and the employer together, with every date part. "Present"
+    (or "Current") needs such a line that says so, and fails when one gives
+    this role's start with a real end date; that last rule also covers entries
+    without bullets (education, a role listed alone), whose layout in a master
+    resume varies too much for the rest."""
+    title = norm(e["title"]).lower()
+    org = norm(e.get("org") or "").lower()
+    lines = [ln for ln in source_text.splitlines()
+             if title in norm(ln).lower() and (not org or org in norm(ln).lower())]
+    who = f'{e["title"]} | {e["org"]}' if e.get("org") else e["title"]
+    role = bool(e.get("bullets"))
+    if not lines:
+        if not role:
+            return []
+        return [f'FACT "{who}" is not one role in your sources (no line names this title with this employer)']
+    parts = date_parts(e.get("dates"))
+    if not parts:
+        return []
+    ongoing = parts[-1].lower() in ("present", "current")
+    fixed = [p for p in parts if p.lower() not in ("present", "current")]
+    dated = [ln for ln in lines if all(date_in_sources(p, ln) for p in fixed)]
+    if not dated:
+        if not role:
+            return []
+        return [f'FACT dates "{e.get("dates")}" of {who} are not the dates your sources give for that role']
+    if ongoing:
+        current = [ln for ln in dated if PRESENT_RE.search(ln)]
+        ended = [ln for ln in dated if not PRESENT_RE.search(ln) and len(date_parts(role_dates(ln))) > len(fixed)]
+        if not current or ended:
+            shown = norm(ended[0])[:90] if ended else norm(dated[0])[:90]
+            return [f'FACT "{parts[-1]}" for {who}: your sources do not show this role as current ("{shown}")']
+    return []
+
+
+def role_dates(line):
+    """The dates part of a source role line ("... | 06/2023 - 10/2026"), else the line."""
+    parts = [p.strip() for p in line.split("|")]
+    return parts[-1] if len(parts) > 1 else line
+
+
+CREDENTIAL_HEADING = re.compile(r"certif|licen", re.I)
+PARENS = re.compile(r"\([^()]*\)")
+
+
+def credential_items(data):
+    """[(where, name)] for each item under a Certifications or Licenses heading:
+    the bullet or line text with parenthesized parts removed."""
+    out = []
+    for s in data.get("sections", []):
+        if is_citation(s) or not CREDENTIAL_HEADING.search(s["heading"]):
+            continue
+        texts = [(f'{s["heading"]} bullet {i}', bullet_text(b)) for i, b in enumerate(s.get("bullets", []), 1)]
+        texts += [(f'{s["heading"]} line "{ln["label"]}"', ln["text"]) for ln in s.get("lines", [])]
+        for where, text in texts:
+            name = norm(PARENS.sub(" ", text)).strip(" .,;")
+            if name:
+                out.append((where, name))
+    return out
+
+
+def credential_problems(data, source_text):
+    """v12: every certification or license name is in the sources (outside the
+    library's "Not held:" lines) and is not one of those lines."""
+    held, refused = split_not_held(source_text)
+    flat = norm(held).lower()
+    out, n = [], 0
+    for where, name in credential_items(data):
+        n += 1
+        hit = next((r for r in refused.splitlines() if r.strip() and
+                    (term_found(name, r.strip()) or term_found(r.strip(), name))), None)
+        if hit:
+            out.append(f'FACT "{name}" in {where}: your library says "Not held: {hit.strip()}"')
+        elif name.lower() not in flat:
+            out.append(f'FACT certification "{name}" in {where} is not in your sources as written '
+                       "(copy the name from master_resume.md, or ask)")
+    return out, n
 
 
 # ---------- evidence (v1.2) ----------
@@ -291,8 +470,9 @@ EV_EXEMPT = {
 }
 
 
-def evidence_units(data):
-    """[(where, bullet)] for every bullet EVIDENCE covers."""
+def evidence_units(data, with_entry=False):
+    """[(where, bullet)] for every bullet EVIDENCE covers; with_entry adds the
+    resume entry the bullet sits under (None for a section's own bullets)."""
     out = []
     for s in data.get("sections", []):
         h = s["heading"]
@@ -300,9 +480,9 @@ def evidence_units(data):
             continue
         for e in s.get("entries", []):
             for i, b in enumerate(e.get("bullets", []), 1):
-                out.append((f'{h} / {e["title"]} bullet {i}', b))
+                out.append((f'{h} / {e["title"]} bullet {i}', b, e) if with_entry else (f'{h} / {e["title"]} bullet {i}', b))
         for i, b in enumerate(s.get("bullets", []), 1):
-            out.append((f"{h} bullet {i}", b))
+            out.append((f"{h} bullet {i}", b, None) if with_entry else (f"{h} bullet {i}", b))
     return out
 
 
@@ -310,8 +490,9 @@ def has_ev(data):
     return any(isinstance(b, dict) and "ev" in b for _, b in evidence_units(data))
 
 
-def library_entries(paths):
-    """{L-id: entry text} from every source file that holds [L-] IDs, or None."""
+def library_entries(paths, headings=False):
+    """{L-id: entry text} from every source file that holds [L-] IDs, or None.
+    With headings, {L-id: (entry text, the ### heading above it)}."""
     import library  # same folder; imported here so checks.py stays standalone
     found = {}
     for p in paths or []:
@@ -321,16 +502,69 @@ def library_entries(paths):
             continue
         for entry in library.parse(text).entries:
             if entry.id:
-                found.setdefault(entry.id, entry.text)
+                found.setdefault(entry.id, (entry.text, entry.heading) if headings else entry.text)
     return found or None
 
 
-def evidence_check(data, entries):
-    """Every covered bullet cites existing IDs, and its numbers are in those entries."""
+def month_index(part):
+    """year*12 + month-1 for "Mar 2021", "03/2021", "2021-03"; "y<year>" for a
+    bare year; "present" for Present/Current; None when unreadable."""
+    p = norm(part).strip().rstrip(".").lower()
+    if p in ("present", "current", "now"):
+        return "present"
+    m = MONTH_YEAR.match(p)
+    if m and m.group(1).lower() in MONTH_NUM:
+        return int(m.group(2)) * 12 + MONTH_NUM[m.group(1).lower()] - 1
+    m = re.fullmatch(r"(\d{1,2})\s*[/.]\s*(\d{4})", p) or re.fullmatch(r"(\d{4})\s*-\s*(\d{1,2})", p)
+    if m:
+        a, b = int(m.group(1)), int(m.group(2))
+        year, month = (b, a) if a <= 12 and b > 12 else (a, b)
+        return year * 12 + month - 1
+    if re.fullmatch(r"\d{4}", p):
+        return f"y{p}"
+    return None
+
+
+def same_dates(a, b):
+    """The same span, written in any format; a year alone ("2016") matches any
+    month of that year, so a role shown in years only still binds."""
+    pa, pb = date_parts(a), date_parts(b)
+    ka, kb = [month_index(x) for x in pa], [month_index(x) for x in pb]
+    if None in ka or None in kb:
+        return norm(a).lower() == norm(b).lower()
+    if len(ka) != len(kb):
+        return False
+
+    def year(k):
+        return k if k == "present" else int(k[1:]) if isinstance(k, str) else k // 12
+
+    return all(x == y or (isinstance(x, str) or isinstance(y, str)) and x != "present" and y != "present"
+               and year(x) == year(y) for x, y in zip(ka, kb))
+
+
+def same_role(heading, e):
+    """True when a library role heading names the resume entry's title,
+    employer and dates; None when the heading is not a role heading."""
+    import library
+    role = library.role_of(heading)
+    if role is None or e is None:
+        return None
+    title, org, dates = role
+    return (norm(title).lower() == norm(e.get("title", "")).lower()
+            and norm(org).lower() == norm(e.get("org") or "").lower()
+            and same_dates(dates, e.get("dates") or ""))
+
+
+def evidence_check(data, entries, v12=False):
+    """Every covered bullet cites existing IDs, and its numbers are in those entries.
+
+    v12: entries is {id: (text, heading)}; numbers written as words count, and
+    a cited entry filed under a role heading must be that same role (title,
+    employer and dates), so a bullet never moves to another job or stint."""
     if entries is None:
         return ["EVIDENCE skipped: no achievement library with [L-] IDs in --sources"]
     out, n, cited = [], 0, set()
-    for where, b in evidence_units(data):
+    for where, b, entry in evidence_units(data, with_entry=True):
         n += 1
         ev = b.get("ev") if isinstance(b, dict) else None
         if not isinstance(ev, list) or not ev:
@@ -343,13 +577,90 @@ def evidence_check(data, entries):
         cited.update(ev)
         have = set()
         for i in ev:
-            have |= source_numbers(entries[i])
+            text = entries[i][0] if isinstance(entries[i], tuple) else entries[i]
+            have |= source_numbers(text, words=v12)
+        if v12:
+            for i in ev:
+                heading = entries[i][1] if isinstance(entries[i], tuple) else ""
+                if same_role(heading, entry) is False:
+                    out.append(f'EVIDENCE {i} in {where} is filed under "### {heading}" in your library, not this role')
         seen = set()
-        for token, key in numbers(bullet_text(b)):
+        for token, key in numbers(bullet_text(b), words=v12):
             if key not in have and token not in seen:
                 seen.add(token)
                 out.append(f'EVIDENCE number "{token}" in {where} is not in {", ".join(ev)}')
     return out or [f"EVIDENCE ok ({n} bullets, {len(cited)} entries cited)"]
+
+
+# ---------- techniques (v1.2) ----------
+
+SKILLS_HEADING = re.compile(r"skill|techni", re.I)
+
+
+def split_items(text):
+    """Comma-separated items at parenthesis depth 0; a trailing period is dropped."""
+    text = text.strip()
+    if text.endswith("."):
+        text = text[:-1]
+    items, depth, cur = [], 0, []
+    for ch in text:
+        if ch in "([":
+            depth += 1
+        elif ch in ")]" and depth:
+            depth -= 1
+        if ch == "," and depth == 0:
+            items.append("".join(cur).strip())
+            cur = []
+        else:
+            cur.append(ch)
+    items.append("".join(cur).strip())
+    return [i for i in items if i]
+
+
+def skill_items(data):
+    """[(where, item as written)] for every item of a Skills or Techniques section."""
+    out = []
+    for s in data.get("sections", []):
+        if is_citation(s) or not SKILLS_HEADING.search(s["heading"]):
+            continue
+        for ln in s.get("lines", []):
+            out += [(f'{s["heading"]} line "{ln["label"]}"', i) for i in split_items(ln["text"])]
+        for k, b in enumerate(s.get("bullets", []), 1):
+            out += [(f'{s["heading"]} bullet {k}', i) for i in split_items(bullet_text(b))]
+    return out
+
+
+def technique_check(data, techniques, source_text):
+    """Every Skills/Techniques item is a techniques.md name or alias at level
+    hands-on (another level only with that level stated in parentheses:
+    "confocal microscopy (familiar)"), or, not in techniques.md, a skill your
+    sources name; never one the library lists as "Not held". A qualifier in
+    parentheses ("SQL (basic queries)") is ignored for the match."""
+    held, refused = split_not_held(source_text or "")
+    known = {}
+    for t in techniques or []:
+        for form in t.forms:
+            known.setdefault(norm(form).lower(), t)
+    out, n = [], 0
+    for where, item in skill_items(data):
+        name = norm(PARENS.sub(" ", item)).strip(" .,;:")
+        if not name:
+            continue
+        n += 1
+        hit = next((r for r in refused.splitlines() if r.strip() and
+                    (term_found(name, r.strip()) or term_found(r.strip(), name))), None)
+        tech = known.get(name.lower())
+        if hit:
+            out.append(f'TECHNIQUE "{name}" in {where}: your library says "Not held: {hit.strip()}"')
+        elif tech is not None:
+            level = tech.level or "(none)"
+            stated = any(level.lower() in q.lower() for q in PARENS.findall(item))
+            if tech.level != "hands-on" and not stated:
+                out.append(f'TECHNIQUE "{name}" in {where}: techniques.md marks it level: {level}; '
+                           f'list it as "{name} ({level})" or leave it out')
+        elif not term_found(held, name):
+            out.append(f'TECHNIQUE "{name}" in {where} is not in techniques.md or your sources')
+    return out or [f"TECHNIQUE ok ({n} item{'s' if n != 1 else ''})"]
 
 
 # ---------- citations (v1.2) ----------
@@ -530,12 +841,12 @@ def letter_check(data, posting_text=None):
 
 # ---------- strict verdict (v1.2) ----------
 
-STRICT_TAGS = ("PARSE", "FACT", "EVIDENCE", "CITE", "LETTER")
+STRICT_TAGS = ("PARSE", "FACT", "EVIDENCE", "TECHNIQUE", "CITE", "LETTER")
 
 
 def strict_failures(check_lines):
     """The check lines a strict build fails on: PARSE other than ok, any FACT
-    line other than ok, and any EVIDENCE, CITE or LETTER problem."""
+    line other than ok, and any EVIDENCE, TECHNIQUE, CITE or LETTER problem."""
     bad = []
     for ln in check_lines:
         tag = ln.split(" ", 1)[0]
@@ -643,15 +954,48 @@ def parse_back(data, pdf_path):
 
 # ---------- entry point ----------
 
-def read_sources(paths):
-    """(concatenated text or None, [error lines])."""
+ANSWERS_HEADING = re.compile(r"^##\s+answers\b", re.I)
+
+
+def answers_section(text):
+    """The text under notes.md's `## Answers` heading(s), up to the next `## `."""
+    keep, inside = [], False
+    for line in text.splitlines():
+        if line.startswith("## "):
+            inside = bool(ANSWERS_HEADING.match(line))
+            continue
+        if inside:
+            keep.append(line)
+    return "\n".join(keep)
+
+
+def read_sources(paths, v12=False):
+    """(concatenated text or None, [lines to print]).
+
+    v12: a job's notes.md counts only for its `## Answers` section (the user's
+    own answers). Its fit table and match report quote the posting, and the
+    posting's numbers and titles are never a source."""
     chunks, errors = [], []
     for p in paths:
         try:
-            chunks.append(Path(p).read_text(encoding="utf-8", errors="replace"))
+            text = Path(p).read_text(encoding="utf-8", errors="replace")
         except OSError as e:
             errors.append(f"FACT source not read, checked without it: {p} ({type(e).__name__})")
+            continue
+        if v12 and Path(p).name.lower() == "notes.md":
+            text = answers_section(text)
+            errors.append(f"SOURCES {Path(p).name}: only its ## Answers section is a source "
+                          f"({len([ln for ln in text.splitlines() if ln.strip()])} lines)")
+        chunks.append(text)
     return ("\n".join(chunks) if chunks else None), errors
+
+
+def library_paths(sources, library=None):
+    """v12: the achievement library alone holds evidence; --library, else the
+    --sources file named achievement_library.md."""
+    if library:
+        return [library]
+    return [p for p in sources or [] if Path(p).name.lower() == "achievement_library.md"]
 
 
 def guarded(tag, fn):
@@ -662,7 +1006,8 @@ def guarded(tag, fn):
 
 
 def run_checks(data, pdf_path=None, txt_path=None, sources=None, terms=None, *,
-               pubs=None, evidence="auto", posting=None, letter=False):
+               pubs=None, evidence="auto", posting=None, letter=False, v12=False,
+               library=None, techniques=None):
     """Lines to print after the WARN lines. pdf_path is None when no PDF was built.
 
     v1.2 keywords (all off for a v1.1 call):
@@ -672,19 +1017,32 @@ def run_checks(data, pdf_path=None, txt_path=None, sources=None, terms=None, *,
       carries an ev list, False never.
     - posting: posting.md text for the letter check; letter=True runs the
       letter check even without it (unfilled slots).
+    - v12 (any v1.2 flag): notes.md counts only for its ## Answers section;
+      EVIDENCE reads the library alone (library, else the achievement_library.md
+      in sources) and binds each cited entry to its role; FACT and EVIDENCE
+      read numbers written as words; FACT binds title, employer and dates and
+      checks certification names; TECHNIQUE checks Skills/Techniques items
+      against techniques (library.load_techniques) and the sources; KEYWORD
+      adds its not-held line.
     """
     out = []
     if pdf_path:
         out += guarded("PARSE", lambda: parse_back(data, pdf_path))
     source_text = None
     if sources:
-        source_text, errors = read_sources(sources)
+        source_text, errors = read_sources(sources, v12=v12)
         out += errors
         if source_text is not None:
             source_text = strip_ids(source_text)
-            out += guarded("FACT", lambda: fact_check(data, source_text))
+            out += guarded("FACT", lambda: fact_check(data, source_text, v12=v12))
+            if v12 and "letter" not in data:
+                out += guarded("TECHNIQUE", lambda: technique_check(data, techniques, source_text))
     if "letter" not in data and (evidence is True or (evidence == "auto" and has_ev(data))):
-        out += guarded("EVIDENCE", lambda: evidence_check(data, library_entries(sources)))
+        if v12:
+            out += guarded("EVIDENCE", lambda: evidence_check(
+                data, library_entries(library_paths(sources, library), headings=True), v12=True))
+        else:
+            out += guarded("EVIDENCE", lambda: evidence_check(data, library_entries(sources)))
     if any(is_citation(s) for s in data.get("sections", [])):
         pdf_text = None
         if pdf_path:
@@ -698,6 +1056,6 @@ def run_checks(data, pdf_path=None, txt_path=None, sources=None, terms=None, *,
     if terms:
         def keywords():
             resume_text = Path(txt_path).read_text(encoding="utf-8")
-            return keyword_check(resume_text, source_text, load_terms(terms), bool(sources))
+            return keyword_check(resume_text, source_text, load_terms(terms), bool(sources), v12=v12)
         out += guarded("KEYWORD", keywords)
     return out

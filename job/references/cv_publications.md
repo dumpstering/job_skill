@@ -13,6 +13,10 @@ Pass the mode to every build: `build_resume.py ... --mode industry|cv|usajobs`.
 | cv | the family's `mode = "cv"`; a posting that asks for a "CV" or "curriculum vitae"; an employer that is a university, institute or government lab; a postdoc title | No page cap (a warning above 8 pages). The build puts the sections in this order, where present: Education, Research Experience, Professional Experience, Publications (all), Presentations, Patents, Grants and Fellowships, Teaching and Mentoring, Techniques, Awards, Service, Memberships, References (only if the user supplies them). Other headings stay after the section before them. |
 | usajobs | USAJOBS announcements; always Tier A, at most 1 a day | 2 pages, hard: a longer resume makes the applicant ineligible. Give each role month and year dates. A CV goes in only when the announcement asks for one as an "other document". Federal fields beyond the page cap (hours per week, grade, supervisor) are UNVERIFIED; where an announcement asks for hours, put them in the role's location, e.g. "Springfield, IL (40 hours per week)". |
 
+A CV is saved as a CV: build it with `--base "<Name> CV"`, so the committee
+receives `<Name> CV.pdf` (final.json names it for the upload). Industry and
+usajobs builds keep `--base "<Name> Resume"`.
+
 Headings the CV order knows by other names: Experience (Professional
 Experience), Selected Publications (Publications), Skills (Techniques),
 Honors (Awards), Grants or Fellowships, Teaching or Mentoring, Professional
@@ -56,7 +60,9 @@ One line per item, exactly as the user cites it:
   `*` markup, spacing and dash differences, and that it reads back from the
   PDF. A Publications, Presentations or Patents section typed out as bullets
   is checked the same way, and any difference fails (`CITE mismatch P-003`);
-  so never type one out, cite by ID.
+  so never type one out, cite by ID. A section of typed citations holds
+  nothing else: a paragraph or a line beside them stops the build with
+  `ERROR` (put it in its own section, where FACT checks it).
 - An ID missing from publications.md stops the build with `ERROR`.
 
 ## techniques.md
@@ -65,13 +71,17 @@ One line per item, exactly as the user cites it:
 
 - Review it with the user at setup, built from their resume and library.
 - It drives the Techniques section (hands-on only; a level qualifier where
-  the user partly meets a requirement), the fit check, KEYWORD terms, and alias
-  swaps. Aliases must name the same thing.
+  the user partly meets a requirement), the fit check, KEYWORD terms, alias
+  swaps and a Tier B letter's `{focus}`. Aliases must name the same thing.
+  The TECHNIQUE check fails a Techniques item that is `familiar` here unless
+  it says so, "(familiar)".
 - Life-science variants title the Skills section "Techniques".
 - `years_ok: yes` lets `answers.py years --skill <X>` answer a form's "how
   many years of X" from the dated roles of the evidence entries (the
   writing_rules counting rule, rounded down). Mark `no` where the evidence
   does not show the whole span; the form question then goes to the user.
+  A question that adds anything to X ("in a GMP-regulated lab", "and flow
+  cytometry") also goes to the user: the span says nothing about the rest.
 
 ## Licenses
 
@@ -80,4 +90,6 @@ One line per item, exactly as the user cites it:
   license, the Public Health Microbiologist certificate) never reach the
   queue; "preferred" ones are flagged.
 - A held license prints under Certifications with its year, under the
-  writing_rules lapsed-certification rule.
+  writing_rules lapsed-certification rule, named exactly as master_resume.md
+  gives it (FACT checks the name). One the library lists as "Not held" fails
+  the build wherever it appears in Certifications or Techniques.

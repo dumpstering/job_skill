@@ -37,6 +37,8 @@ import json
 import re
 import socket
 import sys
+import math
+import threading
 import time
 from email.utils import parsedate_to_datetime
 from http.cookiejar import CookieJar
@@ -54,6 +56,7 @@ UA_TOKEN = "jobsearchrunner"
 TIMEOUT = 20
 MAX_BYTES = 20_000_000
 MIN_INTERVAL = 1.0
+MAX_CRAWL_DELAY = 30.0    # a robots Crawl-delay above this (or not a finite number) means: do not crawl that host
 MAX_RETRY_AFTER = 120
 ROBOTS_TTL = 24 * 3600
 ROBOTS_MAX = 512_000
@@ -172,14 +175,29 @@ def host_of(url):
     return (urlparse(url).hostname or "").lower().rstrip(".")
 
 
+def idna_host(host):
+    """The ASCII name the socket layer resolves for host: http.client spells a
+    non-ASCII name with the IDNA codec, which drops soft hyphens and maps
+    fullwidth letters, sharp s and ideographic dots ('www.link<soft hyphen>edin.com'
+    reaches www.linkedin.com). '' when the name has no such spelling."""
+    host = (host or "").lower().rstrip(".")
+    if host.isascii():
+        return host
+    try:
+        return host.encode("idna").decode("ascii").lower().rstrip(".")
+    except (UnicodeError, ValueError):
+        return ""
+
+
 BOARD_NAMES = ("linkedin", "indeed", "glassdoor", "simplyhired", "ziprecruiter")
 SECOND_LEVEL = {"co", "com", "org", "net", "ac", "gov"}
 
 
 def job_board(host):
     """The job-board domain a host belongs to (linkedin.com, uk.indeed.com ->
-    indeed.com, indeed.co.uk), else None. These are never fetched (R2)."""
-    labels = (host or "").lower().rstrip(".").split(".")
+    indeed.com, indeed.co.uk), else None. These are never fetched (R2). A
+    non-ASCII spelling is judged by the name it resolves to (idna_host)."""
+    labels = (idna_host(host) or (host or "").lower().rstrip(".")).split(".")
     for i, label in enumerate(labels[:-1]):
         if label not in BOARD_NAMES:
             continue
@@ -206,11 +224,16 @@ def r3_list(host, path):
 
 
 def hard_deny(url):
-    """The DENY reason that holds for every fetch, attended or not, else None."""
-    host = host_of(url)
+    """The DENY reason that holds for every fetch, attended or not, else None.
+    A host spelled with anything but ASCII is refused (host-not-ascii): the
+    policy checks ASCII names, and a lookalike spelling resolves elsewhere."""
+    raw = host_of(url)
+    host = idna_host(raw)
     board = job_board(host)
     if board:
         return f"job-board {board}"
+    if raw and not raw.isascii():
+        return "host-not-ascii " + raw.encode("ascii", "backslashreplace").decode("ascii")
     if r3_list(host, urlparse(url).path):
         return f"r3-list {host}"
     return None
@@ -341,6 +364,9 @@ class RobotRules:
                     delay = float(value)
                 except ValueError:
                     pass
+                else:  # 'inf', 'nan' or negative: no usable delay, so the host is not crawled
+                    if not math.isfinite(delay) or delay < 0:
+                        delay = float("inf")
             last_was_agent = False
         if agents:
             self.groups.append((agents, rules, delay))
@@ -436,9 +462,12 @@ class Robots:
             return True, None, None
         rules = RobotRules(e["text"])
         path = (u.path or "/") + (f"?{u.query}" if u.query else "")
+        delay = rules.crawl_delay()
         if not rules.allowed(path):
-            return False, rules.crawl_delay(), f"robots {host}"
-        return True, rules.crawl_delay(), None
+            return False, delay, f"robots {host}"
+        if delay is not None and delay > MAX_CRAWL_DELAY:
+            return False, delay, f"robots {host}"  # one request a minute or slower: leave the host alone
+        return True, delay, None
 
 
 # ---------- politeness ----------
@@ -453,7 +482,7 @@ class Throttle:
     def wait(self, host, crawl_delay=None):
         if not self.enabled:
             return 0.0
-        gap = max(self.min_interval, crawl_delay or 0)
+        gap = max(self.min_interval, min(crawl_delay or 0, MAX_CRAWL_DELAY))
         waited = 0.0
         if host in self.last:
             waited = max(0.0, self.last[host] + gap - self.clock())
@@ -589,13 +618,16 @@ class Fetcher:
         cache = jobfs.Folder(root).robots_cache_json if root is not None else None
         self.robots = Robots(self._robots_text, cache, clock=clock) if robots else None
         self.log = []  # (method, url, status) per request made
+        self._in_robots = threading.local()  # set while this thread fetches a robots.txt
 
     def _gate(self, url, method="GET"):
         """Policy, then robots; returns the crawl delay. Raises Denied."""
         reason = self.policy.reason(url, method)
         if reason:
             raise Denied(reason)
-        if self.robots is None or urlparse(url).path == "/robots.txt":
+        if self.robots is None or urlparse(url).path == "/robots.txt" or getattr(self._in_robots, "on", False):
+            # A redirect hop of a robots.txt fetch is that fetch: its robots
+            # check would fetch robots.txt again, without end (W bug 1).
             return None
         ok, delay, why = self.robots.check(url)
         if not ok:
@@ -603,7 +635,11 @@ class Fetcher:
         return delay
 
     def _robots_text(self, url):
-        r = self._send("GET", url, None, {"Accept": "text/plain,*/*;q=0.5"}, None)
+        self._in_robots.on = True
+        try:
+            r = self._send("GET", url, None, {"Accept": "text/plain,*/*;q=0.5"}, None)
+        finally:
+            self._in_robots.on = False
         return r.status, r.text()
 
     def _send(self, method, url, data, headers, crawl_delay):

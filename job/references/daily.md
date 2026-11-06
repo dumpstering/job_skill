@@ -13,8 +13,9 @@ prints `OVERLAY <date>`).
 
 ## /job (the normal day)
 
-1. **Folder and mode.** Find the folder (SKILL.md step 1). Read `[runner]
-   mode` from `config/settings.toml`.
+1. **Folder and mode.** Find the folder (the folder part of SKILL.md step 1
+   only: skip `tracker.py due`, the card carries the follow-ups). Read
+   `[runner] mode` from `config/settings.toml`.
 2. **Session file.** Write `claude/session.json`:
    `{"task": "<a new id for this session>", "started": "<UTC ISO time>",
    "beat": "<UTC ISO time>", "current_n": 0}` (times from `date -u
@@ -24,60 +25,87 @@ prints `OVERLAY <date>`).
    id as `--session` on every `events.py emit` and `events.py add`.
 3. **The card.** Run `today_view.py card` and show its lines exactly as
    printed, nothing added. It already holds the urgent mail, the questions
-   (at most 6), the sensitive-answers line, one line per free-text draft
-   (its start, then `(say "drafts" for the full text)`) and the referral
-   line, and it ends `Starting #1 now.` With no job finder installed (mode
-   M, or no `runner/out/status.json`) its one line says to type `/job setup`
-   (setup.md sitting 2). With no list today its last line starts `No list
-   today yet. Paste a job link with /job <link>`: show it and wait for a
-   link.
+   (at most 6; answered ones and drafted fields drop out), the
+   sensitive-answers line (`Reply yes, ...`), one line per free-text draft
+   (its start, then `(say "drafts" for the full text)`), the referral line,
+   and a line naming any base resume that jobs wait for (`... wait for your
+   ok on the <family> base resume (type /job variants)`), and it ends
+   `Starting #<n> now.`, the same item `next` gives. With no job finder
+   installed (mode M, or no `runner/out/status.json`) its one line says to
+   type `/job setup` (setup.md sitting 2). With no list today its last line
+   starts `No list today yet. Paste a job link with /job <link>`: show it
+   and wait for a link. While the PC's job finder is building today's list
+   the last line is `Today's list is being built; say card again in a few
+   minutes.`: show it, and run the card again when the user says card. When,
+   in mode L, the card does not say the list is being built, the PC runner's `last_daily.at` in
+   `runner/out/status.json` is over 36 hours old and `selftest_s` `net` is
+   PASS (setup.md sitting 2 step 3), also say "Your PC's job finder has not
+   run since <day>; I'm building today's list here.", run `jobrunner.py daily
+   --mode S` in the sandbox, then show the card again.
 4. **Catch-up, when job-morning did not run** (no
    `claude/day_<date>/morning.done`; the card then says the morning prep did
    not run). Before #1, run the inbox check ([inbox.md](inbox.md)) and alert
-   intake ([discovery.md](discovery.md)) quietly, and show only their urgent
-   part in one block. Tier A prep waits for the first batch break; until
-   then the Tier A items fill with their Tier B files. Write the
-   `inbox.done` and `intake.done` markers when each step finishes.
+   intake ([discovery.md](discovery.md)) quietly (skip a step whose `.done`
+   marker exists), and show only their urgent part in one block. Tier A
+   prep waits for the first batch break. Until it has run, Tier A items
+   whose Tier A build is not ready come after the other items (`card` and
+   `next` agree on this); one that comes up first fills with its Tier B
+   file. Write the `inbox.done` and `intake.done` markers when each step
+   finishes.
 5. **Start #1 at once.** Run `today_view.py next` and follow
    [apply_batch.md](apply_batch.md). The user answers the card's questions
    whenever they like, in one reply; never wait for them.
 6. **Answers to the card** (`1 yes, Stanford 2 years 2 2026-12-01 3 skip;
-   ok`), any time:
-   - A recurring answer: `answers.py add ... --source user:<date>` (backup
-     first; the bank keeps its own backup). An achievement: a new library
-     entry, then `library.py ids`. A job-specific answer: that job's
-     `notes.md`, as a `- JOB-1 | <question> | <answer> | <kind> | any | no |
-     user:<date> | <date>` line.
+   yes`: a numbered part answers that question, a `yes` with no number
+   confirms the sensitive line), any time:
+   - A recurring answer: `answers.py add ... --kind <kind> --source
+     user:<date>`, with `--sensitive yes` when the card marked the question
+     sensitive (pay, rate, visa, sponsorship; a pay figure is stored
+     sensitive anyway). A yes/no answer is stored for that exact question
+     (backup first; the bank keeps its own backup). An achievement: a new
+     library entry, then `library.py ids`. A job-specific answer: that job's
+     `notes.md`, as a `- JOB-1 | <question> | <answer> | <kind> | any |
+     yes|no | user:<date> | <date>` line (`yes` for a sensitive one).
    - Then `answers.py unpark --date <date> --session <id>`: the parked jobs
      those answers settle get `unparked` events and move to the front of
      what is left.
-   - `ok` on the sensitive line confirms those values for the jobs listed;
-     a job named in "leave blank" gets the field left empty as the user's
-     part. Record the reply in `claude/<date>/sensitive_ok.json`
+   - `yes` on the sensitive line confirms those values for the jobs listed;
+     `yes, leave salary blank` (or a job number) leaves that field empty as
+     the user's part. `ok` never confirms it: `ok` means only "attached" or
+     "my part is done". Record the reply in `claude/<date>/sensitive_ok.json`
      ([apply_batch.md](apply_batch.md) "Sensitive confirmations"); each
-     item's handover `Check:` line comes from it.
-   - `skip` on a question: the jobs waiting on it stay parked today.
+     item's `SENSITIVE` and handover `Check:` lines come from it.
+   - `skip` on a question: the jobs waiting on it stay parked today and
+     come back tomorrow with the question.
    - `drafts`: run `today_view.py drafts` and show its lines as printed
-     (`DRAFT #<n> (<label>)`, then the full text; `--n <n>` for one). An
-     edit the user makes replaces that draft for that job's field.
+     (`DRAFT #<n> (<label>)`, then the full text; `--n <n>` for one). A
+     draft is used as written for that job's field; an edit the user makes
+     replaces it. The card never asks a drafted field as a question.
 
 ## /job short (an easy day)
 
-Say "Short day: I'll do the quick ones." and nothing else about it.
+- Run `today_view.py card --short` and show its lines as printed, nothing
+  added: "Short day: I'll do the quick ones.", any urgent mail, the one
+  sensitive line when a quick item still needs it, and `Starting #<n>
+  now.` Then start that item; never wait for the reply.
 - Run `today_view.py next --short` wherever the loop says `next`. It gives
   only items with no account to make, easiest first: Greenhouse, Lever,
   Ashby, Workable, BambooHR, Breezy, Teamtailor, Rippling, Pinpoint, then
   the other no-account sites (an item already started or handed over comes
-  before them). It passes over items with an open question, a sensitive
-  field the user has not settled today (`sensitive_ok.json`), or no resume
-  yet; emit nothing for those. They stay in today's list for a normal day
-  and in the pool while they are fresh.
-- No questions, no sensitive line, no referral drafts, no account block, no
-  usage readings.
+  before them). Items whose only sensitive fields are the profile's salary
+  and sponsorship stay in: until the user's `yes`, those fields are left
+  blank and the handover's `Check:` line says so. It passes over items with
+  an open question, any other sensitive field the user has not settled
+  today (`sensitive_ok.json`), or no resume yet; emit nothing for those.
+  They stay in today's list for a normal day and in the pool while they are
+  fresh.
+- No questions, no referral drafts, no account block, no usage readings.
 - `stop` ends it at once. The closing line comes from `today_view.py
-  progress` ("Today: 8 applications sent."), never with a comparison.
+  progress` ("Today: 8 applications sent.", or "Today: no applications sent
+  yet."), never with a comparison.
 - Even lower: `/job inbox` alone (about 2 minutes).
-- "short" typed mid-session switches to these rules from the next item.
+- "short" typed mid-session switches to these rules from the next item;
+  show `today_view.py card --short` once.
 
 ## The batch break (after every `batch_size` items, default 10)
 
@@ -93,9 +121,15 @@ Say "Short day: I'll do the quick ones." and nothing else about it.
    - Questions collected during the batch, held until now.
    - The account block when the next items need new accounts
      ([apply_batch.md](apply_batch.md) "Account block").
+   - Web searches for leads: when `runner/out/needs_search.json` is newer
+     than this morning's intake (its `date` is today and it lists a company
+     the morning did not search), do those searches and their `probe_url`
+     requests ([discovery.md](discovery.md) "needs_search.json"). Skip on a
+     short day.
 3. `/job` in the new task resumes at the first item with no final event.
-   The card it prints is shorter: answered questions and done items drop
-   out.
+   The card it prints is shorter: answered questions, drafts of done jobs,
+   a sensitive line already answered today, the referral line, and the
+   away, weekly and catch-up lines drop out.
 
 ## After a break of days
 
@@ -111,16 +145,20 @@ aged out are dropped. Never mention how many days passed.
 - **Anything** (lid closed, browser crash, a usage limit, a new task):
   `/job` resumes at the first item with no `applied`, `skipped`, `later` or
   `blocked` event. `events.py overlay --date <date>` shows each item's state.
-- **An item at `handed_over` with no `applied` event:** search Gmail for that
-  ATS's confirmation (inbox.md search, the company name, since the handover
-  time).
+- **An item at `handed_over` with no `applied` event**, or `next` printing
+  `STATE unsubmitted` (handed over on an earlier day with no `s`; the list
+  brings it back first): search Gmail for that ATS's confirmation (inbox.md
+  search, the company name, since the handover time).
   - Found: log it Applied with `confirmed=<date> proof=gmail:<message id>`,
     emit `applied` (`confirmation email`), and never reopen it.
-  - Not found: say "#11 may not have gone through; I'll reopen it" and fill
-    it again. A confirmed application is never resubmitted.
-- **A usage limit:** stop cleanly (event `parked`, reason `usage_limit`, for
-  the item in progress, if any). The card says when the window resets. The
-  queue and the events hold all the state.
+  - Not found: ask once, "#11 Ivy Bio: did it go through? (s / reopen)".
+    `s`: as in apply_batch.md. `reopen`: fill it again; its handover reuses
+    the row (`ADDED <ID> (existing row)`). `k`: as in apply_batch.md. A
+    confirmed application is never resubmitted.
+- **A usage limit:** stop cleanly and emit nothing for the item in progress:
+  it stays `started`, and `next` gives it first when `/job` resumes. The
+  queue and the events hold all the state. A job parked for any reason is
+  out of today's list only; it comes back the next day, never dropped.
 
 ## /job add <link> (one posting into today's list)
 
@@ -147,11 +185,13 @@ in its turn like the runner's items.
    second item today, since that job key is taken.
 5. When its turn comes with `UPLOAD none (no built resume yet)` (step 2 gave
    no Tier B file), write its resume first by SKILL.md steps 4-7 in that
-   folder, then fill it.
+   folder, run `today_view.py next` again so `UPLOAD` and the attach lines
+   name the new file, then fill it.
 - `NO LIST <date>` (mode M, or before the runner built today's list): run
   the single-job flow now (SKILL.md steps 1-9) instead.
 - A careers page rather than one posting: only the `probe_url` request. The
-  runner reads it within 15 minutes, gates what it finds and appends an
+  runner reads it within about 20 minutes (the next tick hands it to the
+  daily, never running it itself), gates what it finds and appends an
   addendum (`runner/out/results/<id>.json`; `DENY job-board ...` is a job
   board link, ats/linkedin.md; `gates.py explain --job-key <key>` names the
   gate that stopped one).
@@ -161,6 +201,9 @@ in its turn like the runner's items.
 - `tracker.py show --active`, `tracker.py due` and `tracker.py stats`: what
   is in flight, follow-ups ready (Tier A and referral rows only; "2
   follow-ups ready", never "overdue"), and replies so far as "x of n".
+  `due` also prints `UNSUBMITTED` (filled, no `s` after 2 days: ask whether
+  it went through, as in Interruptions), `STALE` (started 14 days ago and
+  left) and `UPCOMING` (a date in Next step within 7 days).
 - `today_view.py progress`: today's counts and the closing line.
 - When the user says they withdrew: `status=Withdrawn`. At 30 or more days
   with no reply the weekly summary offers `No response`; do not offer it
@@ -175,7 +218,12 @@ send mail, never Submit. When the folder cannot be reached, write nothing
 and end.
 
 1. Find the folder and today's date. If `claude/day_<date>/morning.done`
-   exists, end with one line: "Morning prep already done."
+   exists, end with one line: "Morning prep already done." If today's
+   `queue/<date>/queue.json` does not exist yet (the PC was asleep at 05:30,
+   or the job finder is still running), do steps 2-4 only, then write
+   `claude/<date>/morning.json` with `"prepared": false` and only `urgent`,
+   `away` and `weekly`, write no `morning.done`, and end with step 10. The
+   first `/job` then does the rest as the catch-up (below).
 2. **Inbox** ([inbox.md](inbox.md)), snippet first. Collect the Immediate
    items as one-line `urgent` texts (company, what they ask, by when) and,
    after a gap of days, the `away` texts. Marker `inbox.done`.
@@ -191,35 +239,45 @@ and end.
    with the plugin, start one job-tailor sub-agent per item in parallel,
    with paths only (the job folder, `<folder>`, `<skill>`, the family
    variant folder). Each writes `notes.md`, `resume.json` and
-   `questions.json` (at most 2 questions) and builds with `--strict`. Then
-   job-auditor in a fresh context: `fix` goes back to the tailor once more;
-   `rework`, or 2 failed rounds, leaves the item on its Tier B files (note
-   `audit rework`). For each ready one send `stage_tier_a` with its `n`.
+   `questions.json` (at most 2 questions) and builds with `--strict`, which
+   keeps the names `<Name> Resume.pdf` and `<Name> Cover Letter.pdf` and,
+   only when every check passes, writes `final.json` naming them (`next`,
+   staging and `stage_tier_a` read that file; with none the item keeps its
+   Tier B files). Then job-auditor in a fresh context: `fix` goes back to
+   the tailor once more; `rework`, or 2 failed rounds, leaves the item on
+   its Tier B files (note `audit rework`). For each ready one send
+   `stage_tier_a` with its `n`.
    Without the plugin (the job.zip install) do the same in this context, one
    at a time, with the same-context audit (writing_rules.md). If pip fails,
    send a `build` request instead. Marker `tier_a.done`.
 6. **Drafts.** For each item whose fill plan has a required free-text field
    with no `template:` answer, draft it under the writing_rules.md
    Truthfulness rules from the posting and the sources, at most one per job.
+   Keep the field's `qid` from `fill_plan.json` as the draft's
+   `question_id`: the card then leaves that job out of the question (the
+   draft is the answer, used as written unless the user edits it), and the
+   fill uses it (apply_batch.md step 6).
 7. **Referral drafts:** `network.py asks --date <date>` ([referrals.md](referrals.md));
    keep each `ASK` as `{"n", "contact_ref"}`. The texts are shown at the
    batch break, not in the card.
 8. **Questions:** `answers.py questions --date <date> --json`.
 9. **Write `claude/<date>/morning.json`**, create-only (if it exists, leave
-   it):
+   it, unless it holds `"prepared": false`: then write it whole):
    ```json
    {"v": 1, "date": "<date>",
     "urgent": [{"text": "Acme Bio asked for phone-screen times by Fri 11/14 (say \"draft\" for a reply)"}],
     "away": [],
     "questions": [{"id": "Q-1a2b3c", "text": "Earliest start date?", "jobs": [3, 7], "all_jobs": false, "saved": true}],
     "waiting": 5,
-    "drafts": [{"n": 7, "label": "Why this role", "text": "<the full draft>"}],
+    "drafts": [{"n": 7, "label": "Why this role", "question_id": "Q-0b9578", "text": "<the full draft>"}],
     "referral_drafts": [{"n": 7, "contact_ref": "N-0004"}],
     "weekly": ["Last week: 12 applications sent, 2 people contacted."]}
    ```
    `questions` and `waiting` come from step 8 (`saved` is true when the
    answer will go into answers.md). Leave out `sensitive`: the card builds
-   that line from the fill plans. Then the marker `morning.done`.
+   that line from the fill plans. A `morning.json` older than `queue.json`,
+   or with `"prepared": false`, counts as no prep: the card then takes the
+   questions from the fill plans. Then the marker `morning.done`.
 10. **The final message** is the phone notification, so it holds only the
     urgent texts, one line each, or "Nothing needs you before /job." Never
     a count of anything else.

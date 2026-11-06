@@ -76,12 +76,33 @@ TAG_BLOCK = (0xE0000, 0xE007F)
 # Visible text is flagged only for instructions aimed at an AI: AI companies'
 # postings name their products and "large language models" all the time.
 # Hidden text is flagged for product names too, since it has no business there.
+# AI_TEXT runs over text with its line breaks folded to spaces, so a trigger
+# that a pasted posting or an email wraps across lines is still found.
 AI_TEXT = re.compile(
-    r"ignore (all |any )?(previous|prior|above|earlier) instructions"
-    r"|if you are an? (ai|llm|language model|bot|chatbot|assistant)\b"
-    r"|\b(include|mention|use) the (word|phrase)\b", re.I)
+    r"\b(?:ignore|disregard|forget|override) (?:(?:all|any|your|the|of) )*"
+    r"(?:previous|prior|above|earlier|preceding|other|system) (?:instructions|prompts?|directions|rules)"
+    r"|\bif you are an? (?:ai|a\.i\.|llm|large language model|language model|bot|chatbot|gpt|chatgpt|claude"
+    r"|automated (?:system|tool|agent|assistant)|ai (?:assistant|agent|model|tool)"
+    r"|assistant(?! (?:professor|director|manager|scientist|researcher|specialist|editor|dean|teacher|coach)))\b"
+    r"|\b(?:include|mention|use|add|insert) the (?:word|phrase|code word|keyword)\b"
+    r"|\bignore (?:all |any )?(?:your|my) (?:previous |prior |original )?(?:instructions|prompts?)"
+    r"|\bnote to (?:the |any |all )?(?:ai|a\.i\.|llms?|chatgpt|claude|gemini|copilot|gpt|language models?|bots?"
+    r"|ai (?:assistants?|agents?|models?|tools?|systems?|applicants?|reviewers?)|assistants?)\b"
+    r"|(?:^|(?<=[.!?;:] )|(?<=\n))(?:dear |hey |hi )?(?:claude|chatgpt|gpt-?\d*|gemini|copilot|llms?|language models?"
+    r"|ai (?:assistants?|agents?|models?|tools?|systems?|applicants?|reviewers?))\s*[,:]\s*(?:please\s+)?"
+    r"(?:also\s+)?(?:ignore|disregard|fill|enter|type|write|answer|submit|add|include|insert|rate|mark|select|say"
+    r"|state|tell|use|put|respond|reply|mention|click|score|rank|recommend)\b", re.I)
+AI_SENTENCE_MAX = 200
 AI_NAMES = re.compile(r"\b(ai|llm|large language model|chatgpt|claude|gemini|copilot|gpt-?\d)\b", re.I)
-HIDDEN_STYLE = re.compile(r"display:none|visibility:hidden|font-size:0(?![\d.])")
+HIDDEN_STYLE = re.compile(
+    r"display:none|visibility:hidden|opacity:0?\.?0*(?:;|$|!)|font-size:0?\.?0*(?:px|pt|em|rem|%)?(?:;|$|!)"
+    r"|font-size:(?:0?\.\d+|1)(?:px|pt)(?:;|$|!)|(?:left|top|right|text-indent):-\d{4,}"
+    r"|clip:rect\(0|clip-path:inset\(50%|transform:scale\(0\)")
+ZERO_BOX = re.compile(r"(?:^|;)(?:max-)?(?:height|width):0(?:px)?(?:;|$|!)")
+# Classes that hide text from sighted readers in common CSS frameworks.
+HIDDEN_CLASSES = {"sr-only", "visually-hidden", "visuallyhidden", "screen-reader-text", "screenreader-only"}
+CSS_HIDDEN_RULE = re.compile(r"\.([A-Za-z0-9_-]{1,80})\s*\{([^{}]{0,2000})\}")
+MEDIA_BLOCK = re.compile(r"@media[^{]{0,500}\{(?:[^{}]{0,2000}\{[^{}]{0,2000}\})*[^{}]{0,2000}\}")
 LOCALE = re.compile(r"^[a-z]{2}-[A-Z]{2}$")
 
 
@@ -129,12 +150,29 @@ VOID = {"br", "hr", "img", "input", "meta", "link", "area", "base", "col", "embe
 SKIP = {"script", "style", "noscript", "template", "svg", "nav", "footer", "title"}
 
 
-def is_hidden(attrs):
+def hidden_style(style):
+    """True for an inline style that hides its text: display or visibility,
+    zero opacity, a font of 1px or less, off-screen, clipped, a zero box that
+    hides its overflow, or a text color equal to its background."""
+    st = re.sub(r"\s+", "", (style or "").lower())
+    if HIDDEN_STYLE.search(st):
+        return True
+    if ZERO_BOX.search(st) and "overflow:hidden" in st:
+        return True
+    color = re.search(r"(?:^|;)color:([#a-z0-9(),.]+)", st)
+    back = re.search(r"(?:^|;)background(?:-color)?:([#a-z0-9(),.]+)", st)
+    return bool(color and back and color.group(1) == back.group(1))
+
+
+def is_hidden(attrs, hidden_classes=()):
     names = {k.lower() for k, _ in attrs}
     if "hidden" in names:
         return True
     for k, v in attrs:
-        if k.lower() == "style" and HIDDEN_STYLE.search(re.sub(r"\s+", "", (v or "").lower())):
+        key = k.lower()
+        if key == "style" and hidden_style(v):
+            return True
+        if key == "class" and set((v or "").lower().split()) & (HIDDEN_CLASSES | set(hidden_classes)):
             return True
     return False
 
@@ -152,6 +190,8 @@ class TextExtractor(HTMLParser):
         self.skip_depth = 0
         self.title = ""
         self._in_title = False
+        self._in_style = False
+        self.hidden_classes = set()  # classes a <style> block on the page hides
 
     def _emit(self, s):
         if self.skip_depth:
@@ -166,11 +206,13 @@ class TextExtractor(HTMLParser):
             if tag == "hr":
                 self._emit("\n")
             return
-        hid = is_hidden(attrs)
+        hid = is_hidden(attrs, self.hidden_classes)
         skip = tag in SKIP
         self.stack.append((tag, hid, skip))
         if tag == "title":
             self._in_title = True
+        if tag == "style":
+            self._in_style = True
         if skip:
             self.skip_depth += 1
             return
@@ -201,6 +243,8 @@ class TextExtractor(HTMLParser):
             t, hid, skip = self.stack.pop()
             if t == "title":
                 self._in_title = False
+            if t == "style":
+                self._in_style = False
             if skip:
                 self.skip_depth -= 1
                 continue
@@ -222,6 +266,12 @@ class TextExtractor(HTMLParser):
         data = strip_invisible(data, self.report)
         if self._in_title:
             self.title += data
+            return
+        if self._in_style:
+            css = MEDIA_BLOCK.sub("", data[:200_000])  # a rule inside @media hides only on some screens
+            for m in CSS_HIDDEN_RULE.finditer(css):
+                if hidden_style(m.group(2)):
+                    self.hidden_classes.add(m.group(1).lower())
             return
         if self.skip_depth:
             return
@@ -245,7 +295,8 @@ def tidy(text):
 
 
 def looks_like_html(s):
-    return bool(re.search(r"<\s*/?\s*[a-zA-Z][^>]*>", s))
+    # [^<>]: each try stops at the next '<', so a page of unclosed tags is linear
+    return bool(re.search(r"<\s*/?\s*[a-zA-Z][^<>]*>", s))
 
 
 def html_to_text(src, report):
@@ -256,6 +307,11 @@ def html_to_text(src, report):
     if not looks_like_html(src):
         text = strip_invisible(html.unescape(src), report).replace("\r\n", "\n").replace("\r", "\n")
         return tidy(text)
+    # A '<' after the last '>' can never close; html.parser rescans the rest of
+    # the page for each one (quadratic), so they are read as text.
+    last = src.rfind(">")
+    if src.find("<", last + 1) >= 0:
+        src = src[:last + 1] + src[last + 1:].replace("<", "&lt;")
     p = TextExtractor(report)
     p.feed(src)
     p.close()
@@ -818,8 +874,24 @@ def closed_marker(source, d):
 
 # ---------- html: JSON-LD, then visible text ----------
 
-LD_BLOCK = re.compile(r"<script[^>]*type\s*=\s*[\"']?application/ld\+json[\"']?[^>]*>(.*?)</script>",
-                      re.I | re.S)
+LD_BLOCK = re.compile(r"<script\b[^>]{0,500}?type\s*=\s*[\"']?application/ld\+json[\"']?[^>]{0,500}>", re.I)
+SCRIPT_END = re.compile(r"</script\s*>", re.I)
+
+
+def ld_blocks(page):
+    """The text of each <script type="application/ld+json"> block, found in
+    one pass: after a block with no closing tag, nothing later can close."""
+    page = page or ""
+    pos = 0
+    while True:
+        m = LD_BLOCK.search(page, pos)
+        if not m:
+            return
+        end = SCRIPT_END.search(page, m.end())
+        if not end:
+            return
+        yield page[m.end():end.start()]
+        pos = end.end()
 
 
 def find_jobposting(node, depth=0):
@@ -842,8 +914,8 @@ def find_jobposting(node, depth=0):
 
 
 def jsonld_from_page(page):
-    for m in LD_BLOCK.finditer(page or ""):
-        raw = re.sub(r"^\s*(<!--|//?<!\[CDATA\[)|(-->|//?\]\]>)\s*$", "", m.group(1).strip())
+    for block in ld_blocks(page):
+        raw = re.sub(r"^\s*(<!--|//?<!\[CDATA\[)|(-->|//?\]\]>)\s*$", "", block.strip())
         try:
             data = json.loads(raw, strict=False)
         except ValueError:
@@ -1069,11 +1141,30 @@ def short(s, n=200):
     return one_line(s)[:n]
 
 
+def ai_sentence(flat, start, end):
+    """The whole sentence around flat[start:end] (at most AI_SENTENCE_MAX
+    characters, kept around the match), so the AI-TEXT line says what the
+    text asks for."""
+    a = max([flat.rfind(c, 0, start) for c in (". ", "! ", "? ", "\n\n")] + [-1]) + 1
+    ends = [i for i in (flat.find(c, end) for c in (". ", "! ", "? ", "\n\n")) if i >= 0]
+    b = (min(ends) + 1) if ends else len(flat)
+    if b - a > AI_SENTENCE_MAX:
+        a = max(a, start - 60)
+        b = min(b, a + AI_SENTENCE_MAX)
+    return re.sub(r"\s+", " ", flat[a:b]).strip()
+
+
 def ai_lines(p, report):
+    """Text addressed to an AI: each whole sentence once, found across hard
+    line wraps; then hidden text that names an AI or addresses one."""
     found = []
-    for ln in p["description"].split("\n"):
-        if AI_TEXT.search(ln) and ln not in found:
-            found.append(ln)
+    # paragraphs stay apart; the line breaks inside one fold to spaces
+    paras = re.split(r"\n\s*\n", p["description"] or "")
+    flat = "\n\n".join(re.sub(r"\s+", " ", x).strip() for x in paras)
+    for m in AI_TEXT.finditer(flat):
+        sent = ai_sentence(flat, m.start(), m.end())
+        if sent and sent not in found:
+            found.append(sent)
     for ln in report.hidden:
         if (AI_TEXT.search(ln) or AI_NAMES.search(ln)) and ln not in found:
             found.append(ln)
@@ -1113,7 +1204,16 @@ def denied(e, args):
         print(f"ROBOTS {host}")
         print(BROWSER_NEXT)
         return 3
+    if kind == "host-not-ascii":  # a lookalike host: no TRY, so no other tool fetches it either
+        print(f"FETCH-FAILED refused: {e.reason}")
+        print(BROWSER_NEXT)
+        return 3
     return fetch_failed(f"refused: {e.reason}", args.url, args)
+
+
+# Pasted text also says 'Requisition 2026-0114' or 'Req 4471', with no colon.
+PASTED_REQ = re.compile(r"\b(?:requisition|req)\.?\s+(?!(?:id|no|number)\b)([A-Z0-9][A-Z0-9_-]*\d[A-Z0-9_-]*)\b(?!%)",
+                        re.I)
 
 
 def from_text(text, company, role, location):
@@ -1123,7 +1223,7 @@ def from_text(text, company, role, location):
     p["company"], p["role"], p["location"] = company, role, location
     body = strip_invisible(text, report).replace("\r\n", "\n")
     p["description"] = re.sub(r"\n{3,}", "\n\n", body).strip()
-    reqs = sorted(jobkey.req_ids(body))
+    reqs = sorted(jobkey.req_ids(body) | {m.group(1).upper() for m in PASTED_REQ.finditer(body)})
     if len(reqs) == 1:
         p["req"] = reqs[0]
     return p, report
@@ -1246,9 +1346,85 @@ def iso_posted(p):
     return v if p.get("posted_field") and re.fullmatch(r"\d{4}-\d{2}-\d{2}", v) else ""
 
 
+US_STATE_NAMES = {"alabama": "AL", "alaska": "AK", "arizona": "AZ", "arkansas": "AR", "california": "CA",
+                  "colorado": "CO", "connecticut": "CT", "delaware": "DE", "florida": "FL", "georgia": "GA",
+                  "hawaii": "HI", "idaho": "ID", "illinois": "IL", "indiana": "IN", "iowa": "IA", "kansas": "KS",
+                  "kentucky": "KY", "louisiana": "LA", "maine": "ME", "maryland": "MD", "massachusetts": "MA",
+                  "michigan": "MI", "minnesota": "MN", "mississippi": "MS", "missouri": "MO", "montana": "MT",
+                  "nebraska": "NE", "nevada": "NV", "new hampshire": "NH", "new jersey": "NJ",
+                  "new mexico": "NM", "new york": "NY", "north carolina": "NC", "north dakota": "ND",
+                  "ohio": "OH", "oklahoma": "OK", "oregon": "OR", "pennsylvania": "PA", "rhode island": "RI",
+                  "south carolina": "SC", "south dakota": "SD", "tennessee": "TN", "texas": "TX", "utah": "UT",
+                  "vermont": "VT", "virginia": "VA", "washington": "WA", "west virginia": "WV",
+                  "wisconsin": "WI", "wyoming": "WY", "district of columbia": "DC", "puerto rico": "PR"}
+# Countries as job boards write them. Two-letter codes that are also US state
+# codes (CA, DE, IN, IL, AR, CO, ...) are read as states, never as countries.
+COUNTRY_NAMES = {
+    "canada", "mexico", "ireland", "united kingdom", "uk", "great britain", "england", "scotland", "wales",
+    "northern ireland", "germany", "france", "spain", "italy", "netherlands", "the netherlands", "belgium",
+    "switzerland", "austria", "denmark", "sweden", "norway", "finland", "iceland", "poland", "portugal",
+    "czech republic", "czechia", "slovakia", "hungary", "romania", "bulgaria", "greece", "croatia", "serbia",
+    "slovenia", "estonia", "latvia", "lithuania", "luxembourg", "israel", "india", "china", "japan", "korea",
+    "south korea", "republic of korea", "taiwan", "singapore", "malaysia", "thailand", "vietnam", "philippines",
+    "indonesia", "australia", "new zealand", "brazil", "argentina", "chile", "colombia", "peru", "costa rica",
+    "south africa", "egypt", "nigeria", "kenya", "morocco", "turkey", "turkiye", "saudi arabia",
+    "united arab emirates", "uae", "qatar", "russia", "ukraine", "hong kong", "pakistan", "bangladesh"}
+COUNTRY_CODES = {
+    "IE", "GB", "UK", "CN", "JP", "AU", "NL", "CH", "FR", "ES", "IT", "SE", "DK", "BE", "AT", "PL", "PT", "SG",
+    "KR", "TW", "MX", "BR", "NZ", "ZA", "CZ", "HU", "FI", "NO", "HK", "MY", "TH", "PH", "RO", "GR", "TR", "EG",
+    "IRL", "GBR", "DEU", "FRA", "ESP", "ITA", "NLD", "BEL", "CHE", "AUT", "DNK", "SWE", "NOR", "FIN", "POL",
+    "PRT", "CZE", "HUN", "ROU", "GRC", "ISR", "IND", "CHN", "JPN", "KOR", "TWN", "SGP", "MYS", "THA", "VNM",
+    "PHL", "IDN", "AUS", "NZL", "BRA", "ARG", "CHL", "COL", "PER", "ZAF", "EGY", "TUR", "SAU", "ARE", "CAN",
+    "MEX", "HKG", "CRI"}
+MULTI_LOCATION = re.compile(r"^\s*(\d+|multiple|several|various)\s+locations?\s*$", re.I)
+_COUNTRY_WORDS = re.compile(r"\b(" + "|".join(sorted((re.escape(c) for c in COUNTRY_NAMES), key=len, reverse=True))
+                            + r")\b")
+_STATE_WORDS = re.compile(r"\b(" + "|".join(sorted((re.escape(s) for s in US_STATE_NAMES), key=len, reverse=True))
+                          + r")\b")
+
+
+def place_parts(location):
+    """The separate places of a location field: boards join several with
+    ';', '|' or ' / ' ('Jersey City, NJ; Millbrae, CA')."""
+    return [x.strip() for x in re.split(r"\s*(?:[;|]|\s/\s)\s*", location or "") if x.strip()]
+
+
+def place_tokens(part):
+    """One place split into its pieces: 'US-CA-Menlo Park' and
+    'United States - California - Foster City' give their three pieces."""
+    s = re.sub(r"\b([A-Z]{2,3})-(?=\S)", r"\1 - ", part or "")
+    s = re.sub(r"(?<=[a-z])-([A-Z]{2,3})\b", r" - \1", s)
+    return [t.strip(" .") for t in re.split(r"\s*[,()\[\]/]\s*|\s+[-\u2013\u2014]+\s+", s) if t.strip(" .")]
+
+
+def region_of(part):
+    """(us_states, foreign, us) named in one place: the US state codes, the
+    non-US countries, and whether the US itself is named. Best effort; a
+    piece it does not know (a bare city) adds nothing."""
+    states, foreign, us = set(), set(), False
+    for tok in place_tokens(part):
+        low = tok.lower()
+        if low in US_NAMES or low in ("u.s.a", "us of america"):
+            us = True
+        elif low in US_STATE_NAMES:
+            states.add(US_STATE_NAMES[low])
+        elif tok in US_STATES:
+            states.add(tok)
+        elif low in COUNTRY_NAMES or tok in COUNTRY_CODES:
+            foreign.add(tok)
+        else:
+            if re.search(r"\b(usa|united states)\b", low):
+                us = True
+            states |= {US_STATE_NAMES[m] for m in _STATE_WORDS.findall(low)}
+            foreign |= set(_COUNTRY_WORDS.findall(low))
+    return states, foreign, us
+
+
 def split_place(location):
-    """(city, state, country) of the first location, best effort."""
-    first = (location or "").split("|")[0]
+    """(city, state, country) of the first location, best effort. A two-letter
+    US state code is a state, never a country."""
+    parts = place_parts(location)
+    first = parts[0] if parts else ""
     parts = [x.strip() for x in first.split(",") if x.strip()]
     if not parts:
         return "", "", ""
@@ -1259,7 +1435,10 @@ def split_place(location):
         country = parts[2] if len(parts) > 2 else "US"
         return parts[0], parts[1].upper(), "US" if country.lower() in US_NAMES else country
     if len(parts) >= 2:
-        return parts[0], "", parts[-1] if len(parts) > 2 else ""
+        last = parts[-1]
+        if last.upper() in US_STATES or last.lower() in US_STATE_NAMES:
+            return parts[0], US_STATE_NAMES.get(last.lower(), last.upper()), "US"
+        return parts[0], "", (("US" if last.lower() in US_NAMES else last) if len(parts) > 2 else "")
     return parts[0], "", ""
 
 
@@ -1275,9 +1454,17 @@ def remote_kind(p):
 
 
 def us_eligible(location, country, remote):
+    """True when the location names the US, False when it names only places
+    outside it (a remote job in 'TWN - Remote' or 'Remote (Vienna, Austria)'
+    included), None when it cannot tell."""
     loc = (location or "").lower()
     if country.upper() == "US" or re.search(r"\b(us|usa|united states)\b", loc):
         return True
+    parts = [region_of(x) for x in place_parts(location)]
+    if parts and any(states or us for states, _, us in parts):
+        return True
+    if parts and all(foreign for _, foreign, _ in parts):
+        return False
     if country and remote != "remote":
         return False
     return None

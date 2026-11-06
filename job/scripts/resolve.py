@@ -24,9 +24,12 @@ lead group:
 3. Still unknown, or a lead-only ATS (R3): listed in runner/out/needs_search.json
    for one web search ("<company> careers") by Claude, whose result comes back
    as a probe_url request.
-4. Unresolved on 2 different days: LinkedIn leads go to the do-yourself list
-   (queue/<date>/diy.md, company, title and location only, no link); other
-   leads are discarded with reason unresolved (queue/<date>/discards.csv).
+4. Unresolved on 2 different days, and (for a lead step 3 lists) listed in
+   needs_search.json on 2 different days, so at least one job-morning had it
+   to search: LinkedIn leads go to the do-yourself list (queue/<date>/diy.md,
+   company, title and location only, no link); other leads are discarded with
+   reason unresolved (queue/<date>/discards.csv). A lead still pending 30
+   days after it was seen goes the same way, never dropped silently.
 
 probe-url refuses job-board URLs unopened (DENY job-board <domain>, exit 7),
 reads a posting URL on an ATS host directly (an R3 host only where robots
@@ -37,7 +40,7 @@ and its first allowed iframe. A Workday site comes from the real URL.
 Output lines:
     RESOLVED <lead_id> <how> <job_key>          (how: known, probe <ats>:<slug>, url)
     PROBE <ats>:<slug> HIT <n> | MISS <why> | UNKNOWN <why> | CACHED miss
-    UNRESOLVED <lead_id> <company> day=<n> <why>
+    UNRESOLVED <lead_id> <company> day=<n> <why>   (why ends "expired" past 30 days)
     DIY <lead_id> | DISCARD <lead_id> unresolved
     DETECT <ats>:<board>[/<site>][@<host>] | DETECT none <host> | BROWSER_READ <url>
     RESOLVE leads=<n> groups=<n> resolved=<n> unresolved=<n> needs_search=<n> diy=<n> discarded=<n>
@@ -52,7 +55,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from urllib.parse import urljoin
+from urllib.parse import unquote, urljoin
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import boards  # noqa: E402
@@ -91,33 +94,33 @@ DETECT = [
     ("lever_eu", re.compile(r"jobs\.eu\.lever\.co/([A-Za-z0-9_.-]+)", re.I)),
     ("lever", re.compile(r"jobs\.lever\.co/([A-Za-z0-9_.-]+)", re.I)),
     ("ashby", re.compile(r"jobs\.ashbyhq\.com/([A-Za-z0-9_.%-]+)", re.I)),
-    ("workday", re.compile(r"([a-z0-9-]+)\.(wd\d+)\.myworkdayjobs\.com/(?:[a-z]{2}-[A-Z]{2}/)?([A-Za-z0-9_-]+)")),
+    ("workday", re.compile(r"(?<![a-z0-9-])([a-z0-9-]{1,63})\.(wd\d+)\.myworkdayjobs\.com/(?:[a-z]{2}-[A-Z]{2}/)?([A-Za-z0-9_-]+)")),
     ("workday_site",
-     re.compile(r"(wd\d+)\.myworkdaysite\.com/(?:[a-z]{2}-[A-Z]{2}/)?recruiting/([a-z0-9_-]+)/([A-Za-z0-9_-]+)")),
-    ("bamboohr", re.compile(r"([a-z0-9-]+)\.bamboohr\.com", re.I)),
-    ("breezy", re.compile(r"([a-z0-9-]+)\.breezy\.hr", re.I)),
+     re.compile(r"(?<![a-z0-9])(wd\d{1,4})\.myworkdaysite\.com/(?:[a-z]{2}-[A-Z]{2}/)?recruiting/([a-z0-9_-]+)/([A-Za-z0-9_-]+)")),
+    ("bamboohr", re.compile(r"(?<![a-z0-9-])([a-z0-9-]{1,63})\.bamboohr\.com", re.I)),
+    ("breezy", re.compile(r"(?<![a-z0-9-])([a-z0-9-]{1,63})\.breezy\.hr", re.I)),
     ("workable", re.compile(r"apply\.workable\.com/([A-Za-z0-9_-]+)", re.I)),
-    ("jazzhr", re.compile(r"([a-z0-9-]+)\.applytojob\.com", re.I)),
-    ("pinpoint", re.compile(r"([a-z0-9-]+)\.pinpointhq\.com", re.I)),
-    ("personio", re.compile(r"([a-z0-9-]+)\.jobs\.personio\.(?:de|com)", re.I)),
-    ("teamtailor", re.compile(r"([a-z0-9-]+)\.teamtailor\.com", re.I)),
+    ("jazzhr", re.compile(r"(?<![a-z0-9-])([a-z0-9-]{1,63})\.applytojob\.com", re.I)),
+    ("pinpoint", re.compile(r"(?<![a-z0-9-])([a-z0-9-]{1,63})\.pinpointhq\.com", re.I)),
+    ("personio", re.compile(r"(?<![a-z0-9-])([a-z0-9-]{1,63})\.jobs\.personio\.(?:de|com)", re.I)),
+    ("teamtailor", re.compile(r"(?<![a-z0-9-])([a-z0-9-]{1,63})\.teamtailor\.com", re.I)),
     ("rippling", re.compile(r"ats\.rippling\.com/([A-Za-z0-9_-]+)", re.I)),
-    ("recruitee", re.compile(r"([a-z0-9-]+)\.recruitee\.com", re.I)),
+    ("recruitee", re.compile(r"(?<![a-z0-9-])([a-z0-9-]{1,63})\.recruitee\.com", re.I)),
     ("jobvite", re.compile(r"jobs\.jobvite\.com/([A-Za-z0-9_-]+)", re.I)),
     ("smartrecruiters", re.compile(r"(?:jobs|careers)\.smartrecruiters\.com/([A-Za-z0-9_-]+)", re.I)),
-    ("icims", re.compile(r"careers-([a-z0-9-]+)\.icims\.com", re.I)),
+    ("icims", re.compile(r"careers-([a-z0-9-]{1,63})\.icims\.com", re.I)),
     ("ukg", re.compile(r"recruiting2?\.ultipro\.com/([A-Za-z0-9]+)/JobBoard/([0-9a-fA-F-]{36})")),
-    ("oracle", re.compile(r"([a-z0-9-]+)\.fa\.([a-z0-9-]+)\.oraclecloud\.com/hcmUI/CandidateExperience/[a-z]{2}"
+    ("oracle", re.compile(r"(?<![a-z0-9-])([a-z0-9-]{1,63})\.fa\.([a-z0-9-]{1,63})\.oraclecloud\.com/hcmUI/CandidateExperience/[a-z]{2}"
                           r"/sites/([A-Za-z0-9_]+)")),
     ("paylocity",
      re.compile(r"recruiting\.paylocity\.com/recruiting/jobs/All/([0-9a-fA-F-]{36})(?:/([A-Za-z0-9_-]+))?")),
     ("dayforce", re.compile(r"jobs\.dayforcehcm\.com/(?:[a-z]{2}-[A-Z]{2}/)?([a-z0-9]+)/([A-Za-z0-9_]+)")),
-    ("adp", re.compile(r"workforcenow\.adp\.com/[^\"'\s<>]*?cid=([0-9a-fA-F-]{36})")),
-    ("paycom", re.compile(r"([a-z0-9-]+)\.paycomonline\.net", re.I)),
+    ("adp", re.compile(r"workforcenow\.adp\.com/[^\"'\s<>]{0,400}?cid=([0-9a-fA-F-]{36})")),
+    ("paycom", re.compile(r"(?<![a-z0-9-])([a-z0-9-]{1,63})\.paycomonline\.net", re.I)),
 ]
 NOT_BOARDS = {"www", "api", "app", "apply", "jobs", "careers", "help", "support", "embed", "static", "cdn", "assets",
               "v1", "js", "css", "images", "img"}
-IFRAME = re.compile(r"<iframe[^>]+src\s*=\s*[\"']([^\"']+)[\"']", re.I)
+IFRAME = re.compile(r"<iframe\b[^<>]{0,500}?\bsrc\s*=\s*[\"']([^\"'<>]{1,2000})[\"']", re.I)
 
 
 class Parser(argparse.ArgumentParser):
@@ -236,6 +239,12 @@ def spec_of_match(ats, m):
         return {"ats": "oracle", "board": prefix, "site": site, "host": f"{prefix}.fa.{dc}.oraclecloud.com"}
     if ats in ("ukg", "paylocity", "dayforce"):
         return {"ats": ats, "board": board, "site": g[1] or "", "host": ""}
+    if ats == "ashby" and "%" in board:
+        # A board name with a space is linked as %20; read_ashby quotes the name
+        # itself, so a quoted one would be quoted twice and 404.
+        board = unquote(board)
+        if not re.fullmatch(r"[A-Za-z0-9 _.-]+", board):
+            return None
     if board.lower() in NOT_BOARDS:
         return None
     return {"ats": ats, "board": board, "site": "", "host": ""}
@@ -288,8 +297,11 @@ class Resolver:
                 continue  # leads.py validated it; anything else is dropped, fail closed
             leads[ld["lead_id"]] = dict(fields, lead_id=ld["lead_id"], source=str(ld.get("source", "")),
                                         seen=str(ld.get("seen", "")), status="pending", tries=[], job_keys=[])
+        return [ld for ld in leads.values() if ld["status"] == "pending"]
+
+    def expired(self, lead):
         cutoff = (self.today - timedelta(days=LEAD_MAX_AGE)).isoformat()
-        return [ld for ld in leads.values() if ld["status"] == "pending" and (ld.get("seen") or "9") >= cutoff]
+        return (lead.get("seen") or "9") < cutoff
 
     # ----- known boards -----
     def known_specs(self, company_norm):
@@ -380,9 +392,13 @@ class Resolver:
         groups = {}
         for ld in pending:
             groups.setdefault(group_key(ld), []).append(ld)
-        needs = {}
+        needs, offered = {}, {}
         for (cnorm, _, _), group in sorted(groups.items()):
             lead = group[0]
+            if all(self.expired(g) for g in group):
+                self.emit(f"UNRESOLVED {lead['lead_id']} {lead['company']} day={len(lead['tries'])} expired")
+                self.give_up(group, out)
+                continue
             found, why = self.resolve_group(lead, cnorm, list(readings), out)
             ids = [g["lead_id"] for g in group]
             if found:
@@ -401,14 +417,22 @@ class Resolver:
                     g["tries"].append(self.today.isoformat())
             days = len(group[0]["tries"])
             self.emit(f"UNRESOLVED {lead['lead_id']} {lead['company']} day={days} {why}")
-            if days >= GIVE_UP_DAYS:
+            searchable = why in ("unknown", "lead_only")
+            # A lead for the web search waits until needs_search.json listed it on
+            # GIVE_UP_DAYS days: the first listing is often written after that
+            # morning's job-morning read the file (a 06:45 tick).
+            if days >= GIVE_UP_DAYS and (not searchable or len(lead.get("offered") or []) >= GIVE_UP_DAYS):
                 self.give_up(group, out)
-            elif why in ("unknown", "lead_only"):
+            elif searchable:
                 e = needs.setdefault(cnorm, {"company": lead["company"], "company_norm": cnorm, "why": why,
                                              "titles": [], "leads": 0})
                 e["titles"] = sorted(set(e["titles"]) | {lead["title"]})
                 e["leads"] += len(group)
+                offered.setdefault(cnorm, []).extend(group)
         out.needs_search = sorted(needs.values(), key=lambda e: (-e["leads"], e["company_norm"]))[:SEARCHES_MAX]
+        for e in out.needs_search:
+            for g in offered.get(e["company_norm"], []):
+                g["offered"] = sorted(set(g.get("offered") or []) | {self.today.isoformat()})
         self.save(out)
         self.emit(f"RESOLVE leads={len(pending)} groups={len(groups)} resolved={len(out.resolved)} "
                   f"unresolved={sum(1 for g in groups.values() if g[0]['status'] == 'pending')} "
@@ -454,9 +478,9 @@ class Resolver:
             self.emit(f"DIY {lead['lead_id']}")
         else:
             out.discarded.append(lead["lead_id"])
-            gates.append_csv(self.folder.discards_csv(self.today), gates.DISCARD_COLUMNS,
-                             [self.today.isoformat(), lane_of(lead.get("source", "")), lead["company"],
-                              lead["title"], lead.get("location", ""), "", "", "resolve", "unresolved", ""])
+            gates.write_discards(self.root, self.today,
+                                 [[self.today.isoformat(), lane_of(lead.get("source", "")), lead["company"],
+                                   lead["title"], lead.get("location", ""), "", "", "resolve", "unresolved", ""]])
             self.emit(f"DISCARD {lead['lead_id']} unresolved")
 
     # ----- files -----

@@ -35,7 +35,10 @@ Lead-only ATSs never get a list call, whatever the row's status: smartrecruiters
 
 Rules every reader follows:
 - IDs are deduped across pages. A walk stops on an empty page, a page with no new IDs (`seen-ids`), the reported total (`total`), or 10 pages per board per run (`page-cap`).
-- Workday stops at offset >= total. A capped tenant reports exactly 2000 and wraps to page 0 past it, which the seen-ID guard catches. With `[home] places` set and more than one page, the page-0 location facets that name a place are applied and the walk restarts inside them.
+- Workday and Oracle are read whole and the gates filter titles; they are never searched by family terms (Workday ANDs every word of one searchText, so a family's terms joined found almost nothing).
+- Workday: one unfiltered call gives the tenant's size and its location facets. A tenant of 20 jobs or fewer is done. Otherwise the walk runs inside the facet values in the home area: a value naming a `[home]` place with no other state or country beside it ('Brisbane - CA - US' yes, 'Brisbane, Australia' and 'Richmond - VA - US' no), else a `[home] states` value itself ('California'), plus remote values within the US when remote counts. Only the facet parameter with the most matches is used (Workday ANDs parameters). Such a walk may take 30 pages. Facets that name states or countries but none at home: no walk (`no-local`, the board shows EMPTY). No location facet at all: the whole tenant when it fits the 10-page cap, else one search per title term, at most 2 pages each, under the 10-page cap, starting at a different term each day (`search-cap`). A row's `search=` text is sent with every call. Workday stops at offset >= total; a capped tenant reports exactly 2000 and wraps to page 0 past it, which the seen-ID guard catches.
+- Oracle: one walk newest first (`sortBy=POSTING_DATES_DESC`), no keyword, stopping at a page whose last posting is over 45 days old (`stale`).
+- The resolver's title lookups on a known board (`searches`) are sent as given.
 - ADP never stops on a short page; a page can hold 19 of 20 with more to come.
 - An empty board is `EMPTY` (unknown), never gone. Gone markers: a 404/410 on the list, a final URL off the tenant host (BambooHR to www.bamboohr.com, JazzHR to jazzhr.com, Jobvite to its support page), or an inactive career page.
 - A detail call is skipped for any record the runner's list gates drop. A posting counts as closed only on an explicit body marker: a Greenhouse error body, Workday `canApply` false, an empty Oracle detail.
@@ -60,11 +63,12 @@ JSONL lines are `jobfs.Posting` dicts plus `ai_text` and `hidden` lists (G11 rea
 
 ## Board health
 
-`state/board_health.csv`: `key,status,last_ok,last_count,last_error,consecutive_errors`. The key is `ats:board/site@host`.
+`state/board_health.csv`: `key,status,last_ok,last_count,last_error,consecutive_errors,error_day,empty_runs`. The key is `ats:board/site@host`.
 - OK or EMPTY: active, errors reset.
-- 3 errors in a row: paused. A robots disallow: robots_blocked.
+- 3 errors in a row: paused. Errors count once a day, so a rerun the same morning is not another strike. A run in which no board answered at all (the PC had no network yet) counts none and prints `WARN offline: no board answered (<n> tried); board errors not counted today`. A robots disallow, or a Crawl-delay over 30 seconds: robots_blocked.
+- A Workday tenant that lists 0 jobs even unfiltered on 3 polls (3 days): check_site. Its `site` in the watch list is probably wrong; open the employer's careers page and copy the site from the real Workday URL. A tenant with jobs but none at home is healthy.
 - A gone marker twice in a row: gone (never polled again until the row is edited).
-- Paused, robots_blocked and dormant boards are retried on `[schedule] weekly_day`.
+- Paused, robots_blocked, check_site and dormant boards are retried on `[schedule] weekly_day`.
 
 `poll` also skips Dayforce rows when `[sources] dayforce = false`, and Recruitee rows until `runner/out/status.json` has `selftest.recruitee = "PASS"`.
 
@@ -77,7 +81,7 @@ JSONL lines are `jobfs.Posting` dicts plus `ai_text` and `hidden` lists (G11 rea
 | Workable search | `sources.workable_search` (off) | postings, lane `workable_search` | GET jobs.workable.com/api/v1/jobs?query=&location= |
 | The Muse | `sources.muse` (off) | leads only, 14 days at most | GET www.themuse.com/api/public/jobs?page=0&descending=true&location= |
 
-- One query per active family (at most 4): Workday and Oracle use the family's `title_any` words, USAJOBS its first core title (usajobs-mode families first), Adzuna `what_or` its words.
+- One query per active family (at most 4): USAJOBS its first core title (usajobs-mode families first), Adzuna `what_or` its words. (Workday and Oracle boards are walked, not searched; above.)
 - Adzuna `redirect_url` is never requested. Lead lines carry company, title, location and seen only, and pass the 2.5 lead validation: no URLs or instruction-like text, length limits.
 - Keys live only in `%LOCALAPPDATA%\JobRunner\keys.toml` (`[usajobs] email, key`; `[adzuna] app_id, app_key`; `[muse] api_key`). They are never printed.
 

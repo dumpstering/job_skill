@@ -1,14 +1,17 @@
 # First-run setup: two short sittings
 
 Do only the parts SKILL.md step 2 (or `/job setup`) sent you here for. The
-user's time is about 25 minutes on day 1 and 20 on day 2; volume starts on
-day 2. The card sends the user here with `/job setup` when no job finder
+user's time is about 30-45 minutes on day 1, and on day 2 about 20 minutes
+for the job finder plus about 15-20 minutes per base resume (2-4 families,
+so 30-80 minutes; one family per sitting is fine). A family's jobs start
+once its base resume is approved. Say these times when setup starts. The
+card sends the user here with `/job setup` when no job finder
 runs: with sitting 1 done, start at Sitting 2 step 1 (no
 `runner/out/status.json`: install it) or step 2 (it is installed but mode
 is still M: switch it on). Commands are shortened (SKILL.md "Scripts"); each takes `--root
 "<folder>"`. If a Python package is missing, `pip install` it and carry on.
 
-## Sitting 1 (day 1, about 25 minutes)
+## Sitting 1 (day 1, about 30-45 minutes)
 
 Two messages to the user, with the file work between them.
 
@@ -16,9 +19,13 @@ Two messages to the user, with the file work between them.
 1. The resume summary (below) and any question about scrambled dates or
    titles.
 2. The numbered profile questions, saying "skip" is fine and the file stays
-   in their folder on their PC. Include: licenses or certificates held (with
+   in their folder on their PC. Ask only what applications gate on (work
+   authorization, sponsorship, salary range, earliest start, relocation),
+   any contact detail the resume lacks, licenses or certificates held (with
    the year), whether they are claiming unemployment and in which state, and
-   the field and region they are searching in.
+   the field and region they are searching in. Leave the self-identification
+   fields blank (each form then picks "decline to answer") and say once that
+   they can be filled in later.
 3. "Have you applied anywhere in the last few months? List them (company,
    role, date, link if you have it) so reposts get caught."
 4. The publications list (from the resume) for a yes, with any character the
@@ -102,7 +109,7 @@ Create `config/` and write, backing up anything already there:
 2. **The search profile, from a preset when one fits.** Presets live in
    `templates/presets/`; `lifesci_bayarea` holds life-science title
    families, license knockouts and San Francisco Bay Area places, plus a
-   watch list of about 225 employer boards and a list of life-science job boards.
+   watch list of about 270 employer boards and a list of life-science job boards.
    - When the user's field and region match a preset, say so in one line and
      offer it. On yes: copy
      [../templates/presets/lifesci_bayarea/families.toml](../templates/presets/lifesci_bayarea/families.toml)
@@ -111,7 +118,9 @@ Create `config/` and write, backing up anything already there:
      `boards.csv` into `config/`.
    - Otherwise copy [../templates/search_profile.toml](../templates/search_profile.toml),
      fill `[home]` from profile.md, ask once for the cities within commuting
-     distance (`places`), and propose 2-4 `[[family]]` tables from the master
+     distance (`places`), set `[home] states` to those cities' US state
+     code(s) (`["CA"]`; a place name beside another state, such as "Newark,
+     NJ", then does not count), and propose 2-4 `[[family]]` tables from the master
      resume (ids lowercase ASCII, `core_titles`, `title_any`, `terms`). Copy
      the header-only [../templates/watchlist.csv](../templates/watchlist.csv)
      and [../templates/boards.csv](../templates/boards.csv); employers come
@@ -146,24 +155,34 @@ They write the folder only while the desktop app is open; a missed run is
 caught up by the first `/job`. Free plans have no scheduled tasks; then
 `/job` does the morning steps itself.
 
-## Sitting 2 (day 2, about 20 minutes)
+## Sitting 2 (day 2, about 20 minutes, plus 15-20 minutes per base resume)
 
 1. **The job finder.** The user downloads `install_runner.cmd` from the
-   release page and double-clicks it (SmartScreen: More info > Run anyway).
+   release page, https://github.com/dumpstering/job_skill/releases/latest
+   (give this link), and double-clicks it (SmartScreen: More info > Run
+   anyway).
    It installs Python for this user, checks the download's SHA-256, sets up
    the two Windows tasks and a desktop shortcut "Run job finder now", and
    asks for optional API keys (Adzuna, USAJOBS) in its own window. **Keys
    are typed only there, never in chat**; if one is pasted into chat, do not
    store or repeat it, and suggest making a new key. It ends with
-   `SELFTEST PASS` or `FAIL` lines.
-2. **Switch to mode L** after the PASS (`runner/out/status.json` shows
-   `selftest` `net` PASS): back up `config/settings.toml`, set `[runner]
+   `SELFTEST PASS` or `FAIL` lines; `WARN` lines (a job site that did not
+   answer, Recruitee) are fine.
+2. **Switch to mode L** after `SELFTEST PASS` (`runner/out/status.json`
+   shows `selftest` `net` PASS): back up `config/settings.toml`, set `[runner]
    mode = "L"`, and, for each key the user entered, `[sources] adzuna =
    true` or `usajobs = true`. From now on tracker writes are events
-   ([runner.md](runner.md)).
-3. **The sandbox check:** run `jobrunner.py selftest --net` here. `SELFTEST
-   PASS` means mode S can stand in when the PC runner is off; a FAIL changes
-   nothing.
+   ([runner.md](runner.md)). On `SELFTEST FAIL`, ask which line failed and
+   stay in mode M: `python`, `packages`, `tzdata` or `build` means "double-click
+   install_runner.cmd again"; `folder` means the JobSearch folder is not
+   writable (OneDrive paused or out of space); `net` means nothing on the PC
+   reached a job site (a VPN, proxy or firewall). Run setup step 2 again after
+   the fix. An install that stopped with `ERROR the job finder cannot start`
+   registered nothing: run the installer again.
+3. **The sandbox check:** run `jobrunner.py selftest --net --mode S` here
+   (it records `selftest_s` and leaves the PC's result alone). `SELFTEST
+   PASS` means mode S can stand in when the PC runner has not run for 36
+   hours (daily.md step 3); a FAIL changes nothing.
 4. **The first pull:** the user double-clicks "Run job finder now" (or waits
    for 05:30). Then `today_view.py card`.
 5. **Places and families, one "ok":** list each `[[family]]` (label, status)
@@ -177,9 +196,15 @@ caught up by the first `/job`. Free plans have no scheduled tasks; then
    yes. Indeed, Glassdoor, SimplyHired and ZipRecruiter stay off unless the
    user turns them on ([settings.md](settings.md)).
 7. **Variants:** build and approve 2-4 role-family base resumes
-   ([variants.md](variants.md)), about 15-20 minutes for the user to read
-   them. Until a family is approved its jobs can only be full Tier A
-   tailoring.
+   ([variants.md](variants.md)), about 15-20 minutes per family for the
+   user to read; offer to stop after any family and do the rest another
+   day. Until a family is approved its jobs wait (the card names the family
+   and how many jobs wait). The list from step 4 was built before any
+   approval, so after the last `approve` of this sitting ask the user to
+   double-click "Run job finder now" once more: it builds those jobs'
+   resumes in a minute or two (`runner/out/status.json` then shows
+   `last_daily.counts.prep_failed` 0). Do this before the first `/job`: a
+   running session holds that run until it ends.
 8. **The export:** when the LinkedIn zip has arrived, the user drops it into
    `network\raw\` ([referrals.md](referrals.md)).
 9. **The usage check** on days 1-2 ([usage.md](usage.md)).

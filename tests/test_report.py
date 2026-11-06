@@ -78,6 +78,7 @@ def test_weekly_fixture():
     assert not any("Globex" in ln or "said no" in ln or "eject" in ln for ln in out), out
     assert "Too early to tell (13 applications so far" in md, md
     assert "- title: 5" in md and "- lever:quietlabs: paused" in md, md
+    assert "- workday:exampledx/External: check_site" in md, md  # a site that lists 0 jobs on 3 polls
     assert "Say \"mark no response\" to set it." in md
     assert md.count("Question:") == 1, md
     for line in md.splitlines():

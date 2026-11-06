@@ -62,8 +62,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import jobfs  # noqa: E402
 import jobkey  # noqa: E402
 import netfetch  # noqa: E402
+import posting  # noqa: E402
 
 STALE_DAYS = 30
+REQ_SECTION_MIN = 200   # requirements sections shorter than this ('PhD and 2 years') say too little for G9
+REQ_SECTION_MAX = 3000  # a requirements section with no heading after it stops here (before the company blurb)
 DORMANT_DAYS = 60       # no family match on a board for this long: dormant, polled weekly (3.7)
 SEEN_DAYS = 180
 TITLE_SIM = 0.8
@@ -83,10 +86,10 @@ STOP = {"of", "and", "the", "in", "for", "to", "a", "an", "at", "with", "on"}
 SENIORITY = {"intern", "junior", "associate", "senior", "staff", "principal", "lead", "manager", "i", "ii",
              "iii", "iv", "v", "1", "2", "3", "4"}
 PREFERRED_WORDS = re.compile(r"\b(preferred|a plus|desir(?:ed|able)|nice to have|bonus|advantageous)\b", re.I)
-REQ_HEADING = re.compile(r"^\s*(?:#+\s*)?(?:minimum |basic |required |preferred )?(?:requirements|qualifications|"
+REQ_HEADING = re.compile(r"^[ \t]*(?:#+[ \t]*)?(?:minimum |basic |required |preferred )?(?:requirements|qualifications|"
                          r"what you(?:'ll)? (?:bring|need)|who you are|you have|must have|skills|experience)\b.*$",
                          re.I | re.M)
-ANY_HEADING = re.compile(r"^\s*#+\s+\S.*$|^[A-Z][A-Za-z ,'&/-]{2,60}:?\s*$", re.M)
+ANY_HEADING = re.compile(r"^[ \t]*#+[ \t]+\S.*$|^[A-Z][A-Za-z ,'&/-]{2,60}:?[ \t]*$", re.M)
 NO_SPONSOR = re.compile(r"(unable|not able|cannot|can ?not|will not|won't|does not|do not|no)\s+(to\s+)?"
                         r"(provide\s+|offer\s+)?(visa\s+)?sponsor(ship)?", re.I)
 CITIZEN = re.compile(r"\b(U\.?S\.? citizen(ship)?|United States citizen(ship)?)\s+(is\s+)?(required|only)|"
@@ -213,6 +216,18 @@ def widen_steps(root):
         return []
 
 
+def home_states(home):
+    """The US state codes of [home] states (["CA"], or "California"). Empty:
+    no state check, only the country one. Not taken from the label: a user
+    may live in one state and search another region's places."""
+    out = set()
+    raw = home.get("states") or []
+    for x in [raw] if isinstance(raw, str) else raw:
+        states, _, _ = posting.region_of(str(x))
+        out |= states
+    return frozenset(out)
+
+
 class Rules:
     """search_profile.toml, profile.md and the widen state, ready for the gates."""
 
@@ -230,6 +245,7 @@ class Rules:
             self.places.append(label)
         if "second_ring" in self.widen:
             self.places += [p for p in self.home.get("second_ring") or [] if str(p).strip()]
+        self.home_states = home_states(self.home)
         self.remote_ok = str(self.home.get("remote", "us")).lower() == "us" or "remote_us" in self.widen
         self.families = [f for f in self.profile.get("family") or [] if self.family_on(f)]
         self.knockouts = [k for k in self.profile.get("knockout") or [] if k.get("id")]
@@ -278,10 +294,15 @@ def blank_hash(h):
 
 
 class Seen:
-    """state/seen/<YYYY-MM>.jsonl: the last 180 days in memory, newest record per key."""
+    """state/seen/<YYYY-MM>.jsonl: the last 180 days in memory, newest record per key.
 
-    def __init__(self, root, today):
+    buffered: records are kept in memory until flush() (GateRun.save calls it
+    after state/pool.json is written), so a pass that stops halfway leaves no
+    'pooled' record for a posting the pool never got."""
+
+    def __init__(self, root, today, buffered=False):
         self.folder, self.today = jobfs.Folder(root), today
+        self.buffered, self.pending = buffered, []
         self.by_key, self.by_url, self.by_req, self.by_cnt, self.by_band = {}, {}, {}, {}, {}
         first = (today - timedelta(days=SEEN_DAYS)).strftime("%Y-%m")
         base = self.folder.state / "seen"
@@ -321,14 +342,22 @@ class Seen:
 
     def related(self, p, text_only=False):
         """[(record, how)] for other keys: same req ID and company, same
-        company+title+city, or SimHash within 3 bits."""
+        company+title+city (unless both carry requisition IDs and none is
+        shared: one title open in two labs, as a university posts it), or
+        SimHash within 3 bits."""
         found = {}
         if not text_only:
+            mine = set(p.req_ids or [])
             for r in p.req_ids or []:
                 for k in self.by_req.get(f"{p.company_norm}|{r}", ()):
                     found.setdefault(k, f"req {r}")
-            for k in self.by_cnt.get(cnt_of(p), ()):
-                found.setdefault(k, "company+title+city")
+            title, city = cnt_of(p).split("|")[1:]
+            if title and city:  # a list with no location (Jobvite) or no title (Phenom) cannot tell jobs apart
+                for k in self.by_cnt.get(cnt_of(p), ()):
+                    theirs = set((self.by_key.get(k) or {}).get("req_ids") or [])
+                    if mine and theirs and not mine & theirs:
+                        continue  # two openings: a reworded repost is still caught by SimHash below
+                    found.setdefault(k, "company+title+city")
         if not blank_hash(p.simhash):
             for b in bands16(p.simhash):
                 for k in self.by_band.get(b, ()):
@@ -349,9 +378,18 @@ class Seen:
                "profile_hash": profile_hash}
         if old and all(old.get(k) == rec[k] for k in ("outcome", "profile_hash", "posted")):
             return old
-        jobfs.append_jsonl(self.folder.seen(self.today), rec)
+        if self.buffered:
+            self.pending.append(rec)
+        else:
+            jobfs.append_jsonl(self.folder.seen(self.today), rec)
         self._index(rec)
         return rec
+
+    def flush(self):
+        """Write the buffered records (state/seen/<month>.jsonl)."""
+        recs, self.pending = self.pending, []
+        for rec in recs:
+            jobfs.append_jsonl(self.folder.seen(self.today), rec)
 
 
 # ---------- verdicts and the trail ----------
@@ -395,6 +433,8 @@ def g1_host(p, v, fetcher):
         board = netfetch.job_board(netfetch.host_of(url))
         if board:
             return v.stop("G1", "discard", f"host:{board}")
+        if not netfetch.host_of(url).isascii():  # a lookalike spelling: never fetched, never handed to the user
+            return v.stop("G1", "discard", "host:not-ascii")
     if p.ats in LEAD_ONLY_ATS or r3_host(host) or netfetch.hard_deny(p.url):
         v.info["lead_only"] = True
         v.gate_line("G1", True, f"lead-only {host}")
@@ -412,27 +452,69 @@ def g1_host(p, v, fetcher):
     return None
 
 
+def place_verdict(part, rules):
+    """One place of a location field: ('in', place), ('remote', ''),
+    ('unknown', why) or ('out', why). A place name counts only when no other
+    state or country is named with it ('Dublin, Ireland', 'Newark, NJ' and
+    'Richmond - VA - US' are out for a California home)."""
+    states, foreign, us = posting.region_of(part)
+    if foreign and not us and not states:
+        return "out", "outside the US"
+    if states and rules.home_states and not states & rules.home_states:
+        return "out", f"state {'/'.join(sorted(states))}"
+    if re.search(r"\bremote\b", part, re.I):
+        return "remote", ""
+    hit = next((pl for pl in rules.places if term_hits(pl, words(part))), None)
+    if hit:
+        return "in", hit
+    if posting.MULTI_LOCATION.match(part):
+        return "unknown", "several locations"
+    known = all(t.lower() in posting.US_NAMES or t.lower() in posting.US_STATE_NAMES or t in posting.US_STATES
+                for t in posting.place_tokens(part))
+    if known:  # 'US', 'United States', 'CA, United States': no city given
+        return "unknown", "no city"
+    return "out", "not a home place"
+
+
 def g3_location(p, v, rules):
+    """Pass when any listed place is a home place (or remote within the US);
+    an empty location, 'N Locations' or a bare country or state is unknown,
+    judged again on the detail record (detail_gates)."""
     loc = p.location or p.city or ""
-    remote = p.remote == "remote" or re.search(r"\bremote\b", loc, re.I)
-    if remote and p.us_eligible is not False and rules.remote_ok:
-        v.gate_line("G3", True, f"remote {quote(loc)}")
-        return None
+    v.info["g3_loc"] = loc
+    flags = v.info.setdefault("flags", [])
+    if "location_unknown" in flags:
+        flags.remove("location_unknown")
     if not loc.strip():
-        v.info.setdefault("flags", []).append("location_unknown")
+        if p.remote == "remote" and rules.remote_ok and p.us_eligible is not False:
+            v.gate_line("G3", True, "remote")
+            return None
+        flags.append("location_unknown")
         v.gate_line("G3", True, "location unknown")
         return None
     if not rules.places:
         v.gate_line("G3", True, f"no places set {quote(loc)}")
         return None
-    if p.country and p.country.upper() not in ("US", "USA", "UNITED STATES"):
-        return v.stop("G3", "discard", "location", quote(loc))
-    text = words(" ".join([loc, p.city or ""]))
-    hit = next((pl for pl in rules.places if term_hits(pl, text)), None)
+    parts = posting.place_parts(loc)
+    verdicts = [place_verdict(part, rules) for part in parts]
+    hit = next((what for kind, what in verdicts if kind == "in"), None)
     if hit:
         v.gate_line("G3", True, f"{quote(loc)} place {quote(hit)}")
         return None
-    return v.stop("G3", "discard", "location", quote(loc))
+    # 'Remote, Florida, USA' names the state the remote worker must live in;
+    # a board's own remote flag with an office city ('Boston, MA') does not.
+    said_remote = any(re.search(r"\bremote\b", part, re.I) for part in parts)
+    if rules.remote_ok and (any(kind == "remote" for kind, _ in verdicts)
+                            or (p.remote == "remote" and not said_remote and p.us_eligible is not False)):
+        v.gate_line("G3", True, f"remote {quote(loc)}")
+        return None
+    unknown = next((what for kind, what in verdicts if kind == "unknown"), None)
+    if unknown:
+        flags.append("location_unknown")
+        v.gate_line("G3", True, f"location unknown ({unknown}) {quote(loc)}")
+        return None
+    why = next((what for kind, what in verdicts if kind == "out"), "")
+    return v.stop("G3", "discard", "location", quote(loc) + (f" ({why})" if why else ""))
 
 
 def family_match(fam, title):
@@ -480,6 +562,14 @@ def pick_family(rules, p, lane=""):
 
 
 def g4_title(p, v, rules):
+    v.info["g4_title"] = p.title or ""
+    if not (p.title or "").strip():  # Phenom and Workday sitemap lists carry no title
+        v.info.setdefault("flags", []).append("title_unknown")
+        v.gate_line("G4", True, "title unknown")
+        return None
+    flags = v.info.get("flags") or []
+    if "title_unknown" in flags:
+        flags.remove("title_unknown")
     tw = words(p.title)
     for word in rules.exclude:
         if exclude_hit(word, p.title, tw):
@@ -510,6 +600,7 @@ def freshness(p, seen_rec, polls_before, today):
 
 def g5_age(p, v, seen_rec, polls_before, today):
     age, band, pts, basis = freshness(p, seen_rec, polls_before, today)
+    v.info["g5_posted"] = p.posted or ""
     if band is None:
         return v.stop("G5", "discard", "stale", f"age={age} ({basis})")
     v.info.update(age_days=age, band=band, fresh=pts, date_basis=basis)
@@ -562,13 +653,18 @@ def g8_other(p, v, rules):
 
 
 def g9_words(p, v, fam):
+    """A require_any word in the requirements sections (company
+    boilerplate names biology everywhere, so the whole text says little); the
+    whole text when the requirements sections are missing or very short."""
     need = (fam or {}).get("require_any") or []
     if not need:
         v.gate_line("G9", True, "no require_any")
         return None
-    hit = first_hit(need, words(p.text))
+    section = requirement_text(p.text)
+    body = section if len(section.strip()) >= REQ_SECTION_MIN else (p.text or "")
+    hit = first_hit(need, words(body))
     if not hit:
-        return v.stop("G9", "discard", "title", "no require_any word in the description")
+        return v.stop("G9", "discard", "title", "no require_any word in the requirements")
     v.gate_line("G9", True, quote(hit))
     return None
 
@@ -602,6 +698,17 @@ def g12_route(p, v):
 
 
 # ---------- fit (3.12) ----------
+
+def requirement_text(text):
+    """Every requirements-like section (Requirements, Basic and Preferred
+    Qualifications, What you bring, ...) joined; '' when there is none."""
+    out = []
+    for m in REQ_HEADING.finditer(text or ""):
+        rest = text[m.end():]
+        nxt = ANY_HEADING.search(rest, 1)
+        out.append(rest[:nxt.start()] if nxt and nxt.start() > 40 else rest[:REQ_SECTION_MAX])
+    return "\n".join(out)
+
 
 def requirement_section(text):
     m = REQ_HEADING.search(text or "")
@@ -671,7 +778,8 @@ class GateRun:
         self.today = today or jobfs.today(root)
         self.fetcher = fetcher
         self.rules = Rules(root, self.today, widen)
-        self.seen = Seen(root, self.today)
+        self.seen = Seen(root, self.today, buffered=True)
+        self.discard_rows = []
         self.polls = self._load_polls()
         self.boards_today = set()
         self.cache = {}
@@ -779,6 +887,9 @@ class GateRun:
         v.info["posting_status"] = "browser_read" if (status == "browser_read" or
                                                       (v.info.get("lead_only") and not p.text)) else "read"
         unread = v.info["posting_status"] == "browser_read"
+        if not p.closed and self.rejudge(p, v):
+            self.finish(p, v, reading)
+            return v
         if p.closed:
             v.stop("G6", "discard", "closed")
         else:
@@ -790,6 +901,29 @@ class GateRun:
                  or g12_route(p, v))
         self.finish(p, v, reading)
         return v
+
+    def rejudge(self, p, v):
+        """G3, G4 and G5 again on the detailed record when the list record
+        lacked what they judge: a list with no location or 'N Locations', no
+        title, or no date (or a provisional one) is judged by its detail.
+        True when one of them stopped the posting."""
+        flags = v.info.get("flags") or []
+        loc = p.location or p.city or ""
+        if loc != v.info.get("g3_loc", loc) or ("location_unknown" in flags and loc):
+            v.lines.append("GATE G3 judged again on the detail")
+            if g3_location(p, v, self.rules):
+                return True
+        if "title_unknown" in flags or (p.title or "") != v.info.get("g4_title", p.title or ""):
+            v.lines.append("GATE G4 judged again on the detail")
+            if g4_title(p, v, self.rules):
+                return True
+            self.note_match(p)
+        if (p.posted or "") != v.info.get("g5_posted", p.posted or "") and p.posted:
+            v.lines.append("GATE G5 judged again on the detail")
+            seen_rec = self.seen.get(p.job_key)
+            if g5_age(p, v, seen_rec, self.polls_before(p, (seen_rec or {}).get("first_seen")), self.today):
+                return True
+        return False
 
     def recheck_simhash(self, p, v):
         """G2 again with the description's SimHash (list records may lack text)."""
@@ -853,10 +987,10 @@ class GateRun:
         jobfs.append_jsonl(month, {"job_key": p.job_key, "date": self.today.isoformat(), "lines": v.lines})
 
     def write_discard(self, p, gate, reason, profile_hash):
-        path = self.folder.discards_csv(self.today)
-        row = [self.today.isoformat(), p.lane, p.company, p.title, p.location, netfetch.host_of(p.url),
-               p.job_key, gate, reason, profile_hash]
-        append_csv(path, DISCARD_COLUMNS, row)
+        """Kept until save(): discards.csv may be open in Excel, and that must
+        not stop the pass (write_discards)."""
+        self.discard_rows.append([self.today.isoformat(), p.lane, p.company, p.title, p.location,
+                                  netfetch.host_of(p.url), p.job_key, gate, reason, profile_hash])
 
     def process(self, readings):
         """Gate detailed readings (Reading, Posting or saved dicts). Returns the
@@ -885,6 +1019,11 @@ class GateRun:
             needs.setdefault(n["job_key"], n)
         save_pool(self.root, list(items.values()), counts=self.counts, needs_you=list(needs.values()),
                   date_=self.today)
+        # Only now that pool.json holds the pooled postings do their seen
+        # records say so (G2 skips a seen posting on every later run).
+        self.seen.flush()
+        rows, self.discard_rows = self.discard_rows, []
+        write_discards(self.root, self.today, rows)
         return dict(self.counts)
 
 
@@ -917,15 +1056,56 @@ def neutral(v):
 
 
 def append_csv(path, columns, row):
+    append_csv_rows(path, columns, [row])
+
+
+def append_csv_rows(path, columns, rows):
+    """One append of several rows (a header first for a new file)."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator="\n")
     if not path.exists():
         w.writerow(columns)
-    w.writerow([neutral(x) for x in row])
+    for row in rows:
+        w.writerow([neutral(x) for x in row])
     with open(path, "a", encoding="utf-8", newline="") as f:
         f.write(buf.getvalue())
+
+
+def write_discards(root, day, rows, attempts=4, pause=0.25):
+    """Append rows to queue/<day>/discards.csv. A file another program holds
+    (Excel keeps an open CSV locked) is tried a few times; rows that still
+    cannot be written wait in state/discards_pending.jsonl and go out on the
+    next call. Nothing is dropped and the caller's pass goes on. Returns the
+    number of rows still waiting."""
+    import time
+    folder = jobfs.Folder(root)
+    pending = folder.state / "discards_pending.jsonl"
+    waiting = [r for r in jobfs.read_jsonl(pending) if isinstance(r, dict) and isinstance(r.get("row"), list)] \
+        if pending.exists() else []
+    batches = {}
+    for r in waiting:
+        batches.setdefault(str(r.get("day") or jobfs.iso_date(day)), []).append(r["row"])
+    if rows:
+        batches.setdefault(jobfs.iso_date(day), []).extend(rows)
+    left = []
+    for d, batch in sorted(batches.items()):
+        path = folder.discards_csv(datetime.strptime(d, "%Y-%m-%d").date())
+        for attempt in range(attempts):
+            try:
+                append_csv_rows(path, DISCARD_COLUMNS, batch)
+                break
+            except OSError:
+                if attempt + 1 < attempts:
+                    time.sleep(pause)
+        else:
+            left += [{"day": d, "row": [str(x) if x is not None else "" for x in row]} for row in batch]
+    if left:
+        jobfs.atomic_write_text(pending, "".join(json.dumps(r, ensure_ascii=True) + "\n" for r in left))
+    elif waiting:
+        pending.unlink(missing_ok=True)
+    return len(left)
 
 
 def load_pool(root, path=None):

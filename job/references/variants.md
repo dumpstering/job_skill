@@ -18,7 +18,7 @@ Run every command as `python "<skill>/scripts/variants.py" <command> --root "<fo
 | `pool.json` | What tuning may swap in (below). |
 | `letter.json` | The family cover letter, with `{company}`, `{role}`, `{focus}` and `{date}` slots. |
 | `review.md` | The Verify before sending list, the pool on one page, the audit verdict. |
-| `approved.json` | Written by `approve`: the sha256 of each file above. |
+| `approved.json` | Written by `approve`: the sha256 of each file above, and of every library entry they cite. |
 | `questions.json` | Open variant-gap questions (fit_and_questions.md). |
 | built files | The base build the user reads before approving. |
 
@@ -35,14 +35,19 @@ Run every command as `python "<skill>/scripts/variants.py" <command> --root "<fo
 }
 ```
 
-- `bullets` are keyed `"<title> | <org>"` exactly as in resume.json.
+- `bullets` are keyed `"<title> | <org>"` exactly as in resume.json. When two
+  roles share a title and employer (two stints, two postdocs at one
+  university), key each `"<title> | <org> | <dates>"`; `approve` refuses the
+  shorter key there, and a bullet never moves to the other stint.
 - `aliases` name the same thing in other words, never a related skill
   (writing_rules.md: the posting's terminology only where it names the same
   thing I did). An alias never lists its own term.
 - `publications` are extra citation IDs tuning may choose in industry mode.
 - `letter.json` uses the cover letter format with slots. `{focus}` becomes
-  the posting term the posting uses most, copied from posting.md; write the
-  letter so any of the family's terms reads correctly there.
+  the hands-on technique from techniques.md (name or alias) that the posting
+  uses most, copied from posting.md; never a knockout name or a family
+  term. Write the letter so any of the user's hands-on techniques reads
+  correctly there. A posting that names none gets no letter: the job parks.
 
 ## Building a variant (setup sitting 2, about 15-20 minutes of the user's time per family)
 
@@ -56,36 +61,58 @@ Run every command as `python "<skill>/scripts/variants.py" <command> --root "<fo
    pool.json, letter.json and review.md. Remove every TODO.
 4. Audit with job-auditor in a fresh context (send / fix / rework); fix, and
    build the base with `--strict` and the family's `--mode`.
-5. He reads one PDF and one page of pool per family and replies
+5. The user reads one PDF and one page of pool per family and replies
    `approve <family>`. Run `variants.py approve --family <id>`
    (`--max-pages 1` for a one-page family, `--publications-max N`).
 
 `approve` refuses a variant with TODO text, a bad pool or letter, an
-EVIDENCE or FACT problem anywhere in resume.json or pool.json, or a banned
-word. It writes approved.json and current.txt:
+EVIDENCE, FACT or TECHNIQUE problem anywhere in resume.json or pool.json, a
+banned word, or a letter that, filled with a sample posting, carries a
+number no source holds. It writes approved.json and current.txt:
 
 ```json
 {"family": "qc_micro", "version": 1, "approved_on": "2026-11-13", "library_rev": "<sha256 of the library>",
  "sha256": {"resume.json": "...", "pool.json": "...", "letter.json": "..."},
+ "entries": {"L-0004": "<sha256 of its heading and text>", "...": "..."},
  "mode": "industry", "max_pages": 2, "publications_max": 3}
 ```
 
-Until a family is approved its jobs can only be Tier A; the rest wait in the
-pool.
+Until a family is approved (or while its approval no longer holds) at most
+`tier_a_per_day` of its jobs are queued as Tier A; the rest are never cut
+silently: they fill the list's free places last as `prep_failed`, and
+`queue.json` `counts.variant_wait` holds how many jobs each such family has
+waiting, for the card's re-approval line (`more` says the same). The daily
+log prints `WAIT_VARIANT <family> <n> jobs`.
 
-## Approval holds only for the exact bytes
+## Approval holds only for the exact bytes and the cited entries
 
 - `variants.py check` prints `APPROVED <family> v<N>`, or
   `UNAPPROVED <family> v<N>: <file> changed since approval` when any approved
-  file changed by even one character (line endings included).
+  file changed by even one character (line endings included), or
+  `UNAPPROVED <family> v<N>: L-0006 changed since approval` when a library
+  entry the variant cites changed its text or role heading (a corrected
+  "Replaces:" entry keeps its ID, so the old wording would otherwise ship).
 - An unapproved current version falls back to the newest older approved one
   (`FALLBACK <family> v<N>`). With none, tuning refuses and the family's
-  items become `prep_failed`; the card shows "<family> needs a quick
-  re-approval".
-- `approve` never re-approves a changed version: put the change in a new
+  items become `prep_failed`; the card names the family and how many jobs
+  wait ("The <label> base resume changed, so 12 jobs wait for your ok
+  again (type /job variants).") and `next` never hands them over.
+- `approve` never re-approves a changed file: put the change in a new
   version (`new --copy`), and approve that. Earlier versions stay.
-- Library edits do not unapprove a variant. If one breaks a cited entry, the
-  strict build catches it and the job falls back.
+- After a cited entry changed, `check` prints each `CHANGED` entry with its
+  new text and every variant bullet citing it, then a `NEXT` line. Read each
+  bullet against the new text. If one now says more than its entry (the
+  library says "supported", the bullet "Led"), make `v<N+1>` with `new
+  --copy`, fix the bullet, audit, and ask for approval. If every bullet still
+  holds, ask the user for the one-line re-approval; on their `approve
+  <family>`, `approve` re-approves the same files (`APPROVED <family> v<N>
+  again`). Either way, tell the user in one line which family waits.
+- After merging a "Replaces:" entry (writing_rules.md, Block C), run
+  `variants.py check` at once, so a family that cites it is caught before
+  the next daily run.
+- An approval written before per-entry hashes holds while
+  `achievement_library.md` is byte-identical to `library_rev`; any library
+  edit then needs the re-approval above.
 
 ## What tuning may do (`tune`; spec 4.3), and nothing else
 
@@ -103,10 +130,10 @@ pool.
 5. **Publications** (industry mode): up to `publications_max` citations, by
    overlap, from the variant's and the pool's IDs.
 
-Never changed: names, titles, employers, dates, education, contact, numbers,
-or any sentence other than an alias swap. Terms come from `terms.json`:
-family terms, techniques.md names and aliases, and knockout names that
-posting.md uses.
+Never changed: names, titles, employers, dates, education, contact, numbers
+(digits or words), or any sentence other than an alias swap. Terms come
+from `terms.json`: family terms, techniques.md names and aliases, and
+knockout names that posting.md uses (for ranking only; never `{focus}`).
 
 `tune` writes `resume_B.json` and `tune_log.json` (the choices, the swaps,
 and a one-line note for today.md such as "summary 2; bullets 4 up; qPCR
@@ -119,7 +146,9 @@ and a one-line note for today.md such as "summary 2; bullets 4 up; qPCR
 3. `diff`: `VARIANT ok (<n> units)`, or one `VARIANT-FAIL <unit>` line per
    unit that is not an approved unit or an approved unit after the logged
    alias swaps (exit 6). Identity fields, `ev` and `keep` must match too.
-4. `build_resume.py --strict` with the approved mode and page cap.
+4. `build_resume.py --strict` with the approved mode and page cap (FACT,
+   EVIDENCE, TECHNIQUE, CITE, PARSE, the page cap and the banned words; a
+   techniques.md level change after approval is caught here).
 5. On any failure: `FALLBACK base`, the untouched approved resume.json built
    the same way. If that fails too: `PREP_FAILED`, nothing is staged, and the
    item parks (exit 6).

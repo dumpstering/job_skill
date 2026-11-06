@@ -377,6 +377,254 @@ def test_verdict():
     print("ok strict failures and VERDICT")
 
 
+# ---------- round 2: claims, not just tokens ----------
+
+VX_SOURCES = [VX / "master_resume.md", VX / "achievement_library.md", VX / "profile.md"]
+
+
+def vx_text():
+    text, _ = checks.read_sources(VX_SOURCES)
+    return checks.strip_ids(text)
+
+
+def role(title, org, dates, bullets=("Did a thing.",)):
+    return {"title": title, "org": org, "dates": dates, "bullets": [{"text": b, "ev": []} for b in bullets]}
+
+
+def test_word_numbers():
+    """SJ-03 / TR-11: words count like digits under v1.2 flags; "one" is not a count."""
+    got = [(t, k) for t, k in checks.numbers("Led twelve audits, twenty-four reviews and a dozen hires over a decade; one of 8.",
+                                             words=True)]
+    values = sorted(int(k[1]) for _, k in got)
+    assert values == [8, 10, 12, 12, 24], got
+    assert checks.numbers("Led twelve audits.") == [], "v1.1 reads digits only on the resume side"
+    entries = {"L-0006": ("Deviations: led 6 microbial data deviation investigations to closure, each within 30 days.",
+                          "Scientist II, QC Microbiology | Northwind Biologics | Jan 2016 - Apr 2023")}
+    data = {"name": "A", "contact": [], "sections": [{"heading": "Experience", "entries": [
+        {"title": "Scientist II, QC Microbiology", "org": "Northwind Biologics", "dates": "Jan 2016 - Apr 2023",
+         "bullets": [{"text": "Led twelve microbial data deviation investigations to closure, each within thirty days.",
+                      "ev": ["L-0006"]},
+                     {"text": "Led six investigations, each within thirty days.", "ev": ["L-0006"]}]}]}]}
+    got = checks.evidence_check(data, entries, v12=True)
+    assert got == ['EVIDENCE number "twelve" in Experience / Scientist II, QC Microbiology bullet 1 is not in L-0006'], got
+    assert checks.evidence_check(data, {k: v[0] for k, v in entries.items()}) == \
+        ["EVIDENCE ok (2 bullets, 1 entries cited)"], "v1.1 never read the words"
+    fact = checks.fact_check({"name": "A", "contact": [], "sections": [
+        {"heading": "Summary", "paragraph": "Microbiologist with thirteen years of GMP work and a decade of qPCR."}]},
+        vx_text(), v12=True)
+    assert 'FACT number "thirteen" in Summary is not in your sources (if derived, list it under Verify)' in fact, fact
+    assert 'FACT number "a decade" in Summary is not in your sources (if derived, list it under Verify)' in fact, fact
+    print("ok numbers written as words: FACT and EVIDENCE read them under v1.2 flags")
+
+
+def test_roles_bind():
+    """TR-12 / TR-05: title, employer and dates are one role; Present only where a source says so."""
+    text = vx_text()
+    ok = role("Scientist II, QC Microbiology", "Northwind Biologics", "Jan 2016 - Apr 2023")
+    assert checks.role_problems(ok, text) == []
+    merged = role("Scientist II, QC Microbiology", "Fabrikam Labs", "Jan 2016 - Present")
+    assert checks.role_problems(merged, text) == [
+        'FACT "Scientist II, QC Microbiology | Fabrikam Labs" is not one role in your sources '
+        "(no line names this title with this employer)"]
+    stretched = role("Scientist II, QC Microbiology", "Northwind Biologics", "Jan 2016 - Present")
+    got = checks.role_problems(stretched, text)
+    assert len(got) == 1 and got[0].startswith('FACT "Present" for Scientist II, QC Microbiology | Northwind Biologics'), got
+    current = role("Microbiology Consultant", "Fabrikam Labs", "Jun 2023 - Present")
+    assert checks.role_problems(current, text) == []
+    # The role ended: the master resume (and library) give an end date.
+    ended = text.replace("06/2023 - Present", "06/2023 - 10/2026").replace("Jun 2023 - Present", "Jun 2023 - Oct 2026")
+    got = checks.role_problems(current, ended)
+    assert len(got) == 1 and "your sources do not show this role as current" in got[0], got
+    # Only the master resume changed: the sources disagree, which fails too.
+    half = text.replace("06/2023 - Present", "06/2023 - 10/2026")
+    got = checks.role_problems(current, half)
+    assert len(got) == 1 and '06/2023 - 10/2026' in got[0], got
+    wrong_dates = role("Postdoctoral Fellow", "Contoso Research Institute", "Sep 2011 - Dec 2015")
+    assert checks.role_problems(wrong_dates, text) == [
+        'FACT dates "Sep 2011 - Dec 2015" of Postdoctoral Fellow | Contoso Research Institute are not the dates '
+        "your sources give for that role"]
+    # A bullet-less entry (education) is held only to the Present rule.
+    degree = {"title": "Ph.D., Microbiology", "org": "Springfield State University", "dates": "Aug 2012"}
+    assert checks.role_problems(degree, text) == []
+    print("ok roles: title, employer and dates bound; Present needs a source")
+
+
+def test_evidence_binds_roles():
+    """TR-06: a cited entry filed under another role (or stint) fails EVIDENCE."""
+    lib = checks.library_entries([VX / "achievement_library.md"], headings=True)
+    data = {"name": "A", "contact": [], "sections": [{"heading": "Experience", "entries": [
+        {"title": "Scientist II, QC Microbiology", "org": "Northwind Biologics", "dates": "Sep 2010 - Aug 2011",
+         "bullets": [{"text": "Performed bioburden and sterility testing under GMP for 2 commercial products.",
+                      "ev": ["L-0008"]}]},
+        {"title": "Postdoctoral Fellow", "org": "Contoso Research Institute", "dates": "Sep 2012 - Dec 2015",
+         "bullets": [{"text": "Ran sandwich ELISAs for cytokine panels.", "ev": ["L-0017"]},
+                     {"text": "Built a real-time PCR panel for 8 gut anaerobes, used in 2 published studies.",
+                      "ev": ["L-0010"]}]}]}]}
+    got = checks.evidence_check(data, lib, v12=True)
+    assert got == ['EVIDENCE L-0008 in Experience / Scientist II, QC Microbiology bullet 1 is filed under '
+                   '"### Scientist II, QC Microbiology | Northwind Biologics | Jan 2016 - Apr 2023" in your library, '
+                   "not this role"], got
+    assert checks.same_dates("Jan 2016 - Apr 2023", "01/2016 - 2023-04") and checks.same_dates("2016 - 2023", "Jan 2016 - Apr 2023")
+    assert not checks.same_dates("2015", "Jan 2016") and not checks.same_dates("Jan 2016 - Present", "Jan 2016 - Apr 2023")
+    print("ok EVIDENCE binds each cited entry to its role and stint")
+
+
+def test_techniques_and_credentials():
+    """SJ-04 / TR-12: Skills items are hands-on and held; certification names come from the sources."""
+    import library
+    techs = library.load_techniques(VX / "techniques.md")
+    text = vx_text()
+    data = {"name": "A", "contact": [], "sections": [
+        {"heading": "Techniques", "lines": [
+            {"label": "Molecular", "text": "qPCR, endotoxin testing (LAL), confocal microscopy, flow cytometry"},
+            {"label": "Imaging", "text": "confocal imaging (familiar)"},
+            {"label": "Clinical", "text": "California CLS license"},
+            {"label": "Tools", "text": "ELISA, MALDI-TOF"}]},
+        {"heading": "Certifications", "bullets": ["BSL-2 biosafety training (earned 2016)",
+                                                  "California Clinical Laboratory Scientist license (earned 2016)",
+                                                  "California CLS license (2019)"]}]}
+    got = checks.technique_check(data, techs, text)
+    assert got == [
+        'TECHNIQUE "confocal microscopy" in Techniques line "Molecular": techniques.md marks it level: familiar; '
+        'list it as "confocal microscopy (familiar)" or leave it out',
+        'TECHNIQUE "flow cytometry" in Techniques line "Molecular" is not in techniques.md or your sources',
+        'TECHNIQUE "California CLS license" in Techniques line "Clinical": your library says "Not held: California CLS license"',
+    ], got
+    lines, n = checks.credential_problems(data, text)
+    assert n == 3 and lines == [
+        'FACT certification "California Clinical Laboratory Scientist license" in Certifications bullet 2 is not in '
+        "your sources as written (copy the name from master_resume.md, or ask)",
+        'FACT "California CLS license" in Certifications bullet 3: your library says "Not held: California CLS license"',
+    ], lines
+    assert checks.split_not_held("- Not held: QIIME 2, shotgun metagenomics.\n- x\n")[1] == "QIIME 2\nshotgun metagenomics"
+    print("ok TECHNIQUE and certification names: hands-on, held, as written")
+
+
+def test_notes_answers_only(out):
+    """SJ-02 / TR-09: under v1.2 flags notes.md counts only for ## Answers, and
+    EVIDENCE reads the library alone."""
+    job = out / "notes_job"
+    job.mkdir(exist_ok=True)
+    notes = job / "notes.md"
+    notes.write_text("# Notes\n\n**Job Fit Assessment**\n| Requirement | Status |\n|---|---|\n"
+                     "| Senior QC Microbiologist, 10+ years of GMP | Partial |\n\n"
+                     "### Scientist II, QC Microbiology | Northwind Biologics | Jan 2016 - Apr 2023\n"
+                     "- [L-0099] Led 4 qPCR method transfers to 2 partner sites.\n\n"
+                     "## Answers\n\n- One method transfer in 2021, with the QC lead's protocol.\n", encoding="utf-8")
+    data = json.loads((VX / "variants" / "qc_micro" / "v1" / "resume.json").read_text(encoding="utf-8"))
+    data["sections"] = [s for s in data["sections"] if "citations" not in s]
+    data["sections"][0]["paragraph"] = "Senior QC Microbiologist with 10+ years of GMP work since 2021."
+    path = out / "notes_resume.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    code, log = strict([path, "--sources", *VX_SOURCES, notes, "--strict"], out, "notes")
+    assert code == 6, log
+    assert "SOURCES notes.md: only its ## Answers section is a source (1 lines)" in log, log
+    assert 'STRICT-FAIL FACT number "10+" in Summary is not in your sources (if derived, list it under Verify)' in log, log
+    assert "2021" not in log, "2021 is in the Answers section, so it is a source"
+    data["sections"][1]["entries"][1]["bullets"][0] = {"text": "Led 4 qPCR method transfers to 2 partner sites.",
+                                                       "ev": ["L-0099"]}
+    data["sections"][0]["paragraph"] = "Microbiologist (Ph.D.) with 7 years of GMP QC microbiology."
+    path.write_text(json.dumps(data), encoding="utf-8")
+    code, log = strict([path, "--sources", *VX_SOURCES, notes, "--strict"], out, "notes")
+    assert code == 6 and "STRICT-FAIL EVIDENCE unknown L-0099 in Experience / Scientist II, QC Microbiology bullet 1" in log, log
+    print("ok notes.md: only ## Answers is a source; EVIDENCE reads the library alone")
+
+
+def test_keywords_v12():
+    """SJ-08 / SJ-15: -ed/-ing forms count; Not held lines are no source and get their own line."""
+    terms = [("mentor", []), ("QIIME 2", []), ("validate", []), ("gnotobiotic", []), ("anaerobic", [])]
+    src = "Mentored 3 students.\n- Not held: QIIME 2, gnotobiotic mouse models.\n- validating assays\n"
+    got = checks.keyword_check("Mentored 3 graduate students.", src, terms, True, v12=True)
+    assert got == ["KEYWORD on resume: mentor", "KEYWORD in your sources, not on this resume: validate",
+                   "KEYWORD not evidenced: anaerobic",
+                   "KEYWORD not held (you said you lack these): QIIME 2, gnotobiotic"], got
+    old = checks.keyword_check("Mentored 3 graduate students.", src, terms, True)
+    assert len(old) == 3 and old[0] == "KEYWORD on resume: (none)", old
+    print("ok KEYWORD under v1.2 flags: stems, and Not held terms named apart")
+
+
+def test_final_json(out):
+    """TR-07 / shared decision 1: a strict build keeps files under the final
+    names and writes final.json only when every check passes."""
+    job = out / "final_job"
+    job.mkdir(exist_ok=True)
+    good = json.loads((HERE / "sample_resume_ev.json").read_text(encoding="utf-8"))
+    path = job / "resume.json"
+    path.write_text(json.dumps(good), encoding="utf-8")
+    args = [path, "--sources", *IT_SOURCES, "--strict", "--mode", "industry"]
+    code, log = strict(args, job, "Jordan Avery Resume")
+    assert code == 0 and log.rstrip().endswith("VERDICT ok"), log
+    final = json.loads((job / "final.json").read_text(encoding="utf-8"))
+    assert final["v"] == 1 and final["resume"] == "Jordan Avery Resume.pdf" and final["letter"] is None, final
+    assert final["verdict"] == "ok" and final["built_at"], final
+    assert (job / "Jordan Avery Resume.pdf").exists() and not list(job.glob(".build_*")), list(job.iterdir())
+    assert 'FINAL final.json: resume "Jordan Avery Resume.pdf", letter none' in log, log
+    # A letter beside it.
+    letter = json.loads((HERE / "sample_letter.json").read_text(encoding="utf-8"))
+    lpath = job / "cover_letter.json"
+    lpath.write_text(json.dumps(letter), encoding="utf-8")
+    code, log = strict([lpath, "--sources", *IT_SOURCES, "--strict"], job, "Jordan Avery Cover Letter")
+    assert code == 0, log
+    assert json.loads((job / "final.json").read_text(encoding="utf-8"))["letter"] == "Jordan Avery Cover Letter.pdf"
+    # A failing rebuild: nothing under the final names, final.json gone.
+    bad = copy.deepcopy(good)
+    bad["sections"][0]["paragraph"] = "IT lead with 15 years of service desk work."
+    path.write_text(json.dumps(bad), encoding="utf-8")
+    code, log = strict(args, job, "Jordan Avery Resume")
+    assert code == 6 and log.rstrip().endswith("VERDICT fail"), log
+    assert not any((job / ("Jordan Avery Resume" + e)).exists() for e in (".pdf", ".docx", ".txt"))
+    assert not (job / "final.json").exists() and not list(job.glob(".build_*"))
+    assert 'FINAL none: nothing kept under "Jordan Avery Resume" (removed Jordan Avery Resume.pdf' in log, log
+    assert any(ln.startswith("built: ") for ln in log.splitlines()) and "wrote: " not in log, log
+    # A letter with no passing resume beside it is built but not named in final.json.
+    code, log = strict([lpath, "--sources", *IT_SOURCES, "--strict"], job, "Jordan Avery Cover Letter")
+    assert code == 0 and "FINAL final.json not written: build the resume with --strict here first" in log, log
+    assert not (job / "final.json").exists()
+    # A long job folder path builds in the system temp folder instead (Windows path limit).
+    import build_resume
+    near = build_resume.strict_dir(job, "Jordan Avery Resume")
+    far = build_resume.strict_dir(job, "x" * 230)
+    assert near.parent == job and job not in far.parents, (near, far)
+    near.rmdir()
+    far.rmdir()
+    print("ok strict build: final names and final.json only after VERDICT ok")
+
+
+def test_build_input_rules(out):
+    """TR-10: typed citations share their section with nothing; contracts-15: a
+    bad argument exits 1, never 2 (a missing package)."""
+    data = {"name": "Jordan Q. Avery", "contact": ["jordan.q.avery@example.com"], "sections": [
+        {"heading": "Publications and Patents", "paragraph": "Inventor on 4 issued patents.",
+         "lines": [{"label": "Licenses", "text": "California CLS license"}],
+         "bullets": ["Avery JQ, Patel S, Rivera M. Biofilm formation by *Pseudomonas aeruginosa* on three surface types. "
+                     "*Springfield J Microbiol*. 2011;12(3):45-52."]}]}
+    path = out / "typed_cites.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    code, log = strict([path, "--publications", VX / "publications.md", "--strict"], out, "typed")
+    assert code == 1 and 'ERROR section "Publications and Patents" holds typed citations and lines, paragraph' in log, log
+    code, log = strict([path, "--bogus"], out, "typed")
+    assert code == 1 and log.startswith("ERROR "), log
+    print("ok typed citations stand alone; a bad argument is exit 1")
+
+
+def test_short_last_page(out):
+    """SJ-13: a capped build whose last page holds a few lines gets a WARN."""
+    data = json.loads((HERE / "sample_resume_ev.json").read_text(encoding="utf-8"))
+    import build_resume
+    for k in range(1, 40):
+        trial = copy.deepcopy(data)
+        trial["sections"][-1]["bullets"] = data["sections"][-1]["bullets"] + ["ITIL 4 Foundation"] * k
+        if build_resume.count_pages(build_resume.prepare(copy.deepcopy(trial))) == 2:
+            break
+    path = out / "short_last.json"
+    path.write_text(json.dumps(trial), encoding="utf-8")
+    code, log = strict([path, "--mode", "industry"], out, "short")
+    assert code == 0 and "WARN page 2 holds only" in log and "tighten to 1 page" in log, log
+    code, log = strict([path], out, "short_v11")
+    assert "WARN page" not in log, "v1.1 builds unchanged"
+    print("ok a near-empty last page gets a WARN")
+
+
 def main():
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(tempfile.mkdtemp(prefix="job_skill_checks_"))
     test_numbers()
@@ -390,6 +638,15 @@ def main():
     test_cite(out)
     test_letter(out)
     test_verdict()
+    test_word_numbers()
+    test_roles_bind()
+    test_evidence_binds_roles()
+    test_techniques_and_credentials()
+    test_notes_answers_only(out)
+    test_keywords_v12()
+    test_final_json(out)
+    test_build_input_rules(out)
+    test_short_last_page(out)
     print(f"PASS  outputs in {out}")
 
 

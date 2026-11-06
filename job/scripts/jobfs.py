@@ -7,7 +7,7 @@ Every script that touches the JobSearch folder goes through this module:
   last-good fallback when a hand-edited file stops parsing;
 - atomic_write_json() (adds _rev and _sha256), read_json_verified(),
   atomic_write_text(), create_only(), append_jsonl(), read_jsonl();
-- RunLock, the runner's O_EXCL self-lock;
+- RunLock, the runner's self-lock (an OS lock on an open file);
 - the Posting record, ascii_name(), upload_name() and Folder(root), which names
   every path in the folder layout.
 
@@ -45,8 +45,9 @@ SETTINGS_DEFAULTS = {
     "followups": {"tiers": ["A", "referral"], "days": 7},
     "apply": {"browser": "auto", "try_chrome_upload": True, "fill_mode": "sequential", "rounds_size": 5,
               "sensitive_confirm": "per_job", "screener": False, "mygreenhouse_autofill": False},
-    "caps": {"per_company_30d": 3, "per_family_per_company_30d": 1, "reject_reapply_days": 90,
-             "ashby_one_open": True, "per_company_per_day": 2,
+    "caps": {"per_company_30d": 5, "per_family_per_company_30d": 2, "reject_reapply_days": 90,
+             "ashby_one_open": True, "per_company_per_day": 2, "per_unit_30d": 2, "per_institution_30d": 15,
+             "unit_segments": ["academic", "institute", "hospital", "government"],
              "employer": [{"name": "Google", "match": ["google"], "per_30d": 3,
                            "same_job_reapply_days": 90}]},
     "worksearch": {"claiming": False, "state": "CA", "claim_effective": "", "de8405_received": ""},
@@ -57,7 +58,7 @@ SETTINGS_DEFAULTS = {
 # The keys are fixed; research presets and setup fill the values (amendment 2).
 SEARCH_PROFILE_DEFAULTS = {
     "version": 1,
-    "home": {"label": "", "zip": "", "radius_miles": 40, "places": [], "second_ring": [],
+    "home": {"label": "", "zip": "", "radius_miles": 40, "places": [], "second_ring": [], "states": [],
              "remote": "us", "relocate": False},
     "gates": {"exclude_title_words": ["Director", "Vice President", "VP", "Intern", "Internship", "Chief"],
               "employment_types": ["full-time", "contract", "temporary"],
@@ -464,70 +465,130 @@ def runner_home():
 
 
 class RunLock:
-    """O_EXCL lock file holding {pid, started, cmd}; stale after stale_after seconds.
+    """The runner's self-lock: an OS lock on an open file (msvcrt.locking on
+    Windows, fcntl.flock elsewhere). The OS releases it when the holder's
+    process ends, however it ends (killed by a time limit, a shutdown), so a
+    lock is never "stale" and is never taken from a live holder. The file also
+    holds {pid, started, cmd} for messages; a clean release empties and
+    removes it.
 
-    with RunLock(path, cmd="daily"): ...  raises LockBusy while another holds it.
+    with RunLock(path, cmd="daily"): ...   raises LockBusy while another holds it.
+    acquire(wait=s) keeps trying for up to s seconds.
+    .left_by is the {pid, started, cmd} a holder that died left in the file.
     """
 
-    def __init__(self, path=None, stale_after=7200, cmd=""):
+    # Windows locks are mandatory: the locked byte sits past the info, so other
+    # processes can still read who holds the lock.
+    LOCK_OFFSET = 1 << 20
+
+    def __init__(self, path=None, cmd=""):
         self.path = Path(path) if path else runner_home() / "run.lock"
-        self.stale_after = stale_after
         self.cmd = cmd
         self.held = False
+        self.left_by = None
+        self._fd = None
 
     def _holder(self):
         try:
-            return json.loads(self.path.read_text(encoding="utf-8"))
+            data = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             return None
+        return data if isinstance(data, dict) else None
 
-    def _is_stale(self, info):
+    def _lock(self, fd):
         try:
-            started = datetime.fromisoformat(str(info["started"]))
-            if started.tzinfo is None:
-                started = started.replace(tzinfo=timezone.utc)
-            return (utcnow() - started).total_seconds() > self.stale_after
-        except (TypeError, KeyError, ValueError):
-            # Unreadable content: judge by the file's age instead.
-            try:
-                return time.time() - self.path.stat().st_mtime > self.stale_after
-            except OSError:
-                return True
+            if os.name == "nt":
+                import msvcrt
+                os.lseek(fd, self.LOCK_OFFSET, os.SEEK_SET)
+                msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except OSError:
+            return False
 
-    def acquire(self):
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        for _ in range(2):
+    def _unlock(self, fd):
+        try:
+            if os.name == "nt":
+                import msvcrt
+                os.lseek(fd, self.LOCK_OFFSET, os.SEEK_SET)
+                msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(fd, fcntl.LOCK_UN)
+        except OSError:
+            pass
+
+    def _try(self):
+        """One attempt; True when this call took the lock."""
+        try:
+            fd = os.open(self.path, os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0), 0o600)
+        except OSError:  # Windows: the last holder is removing the file this moment
+            return False
+        if not self._lock(fd):
+            os.close(fd)
+            return False
+        if os.name != "nt":
+            # The last holder removes the file before it unlocks: a lock on the
+            # removed file is no lock, so try the new file.
             try:
-                fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            except FileExistsError:
-                info = self._holder()
-                if not self._is_stale(info):
-                    raise LockBusy(self.path, info)
-                try:
-                    self.path.unlink()
-                except FileNotFoundError:
-                    pass
-                continue
-            info = {"pid": os.getpid(), "started": utcnow().replace(microsecond=0).isoformat(),
-                    "cmd": self.cmd}
-            with os.fdopen(fd, "w", encoding="ascii") as f:
-                json.dump(info, f)
-            self.held = True
-            return self
-        raise LockBusy(self.path, self._holder())
+                same = os.path.samestat(os.fstat(fd), os.stat(self.path))
+            except OSError:
+                same = False
+            if not same:
+                self._unlock(fd)
+                os.close(fd)
+                return False
+        os.lseek(fd, 0, os.SEEK_SET)
+        old = os.read(fd, 4096)
+        try:
+            left = json.loads(old.decode("utf-8")) if old.strip() else None
+        except (UnicodeDecodeError, ValueError):
+            left = {"pid": "?", "started": "?", "cmd": "?"}
+        self.left_by = left if isinstance(left, dict) else None
+        info = {"pid": os.getpid(), "started": utcnow().replace(microsecond=0).isoformat(), "cmd": self.cmd}
+        os.lseek(fd, 0, os.SEEK_SET)
+        os.ftruncate(fd, 0)
+        os.write(fd, json.dumps(info).encode("ascii"))
+        self._fd = fd
+        self.held = True
+        return True
+
+    def acquire(self, wait=0, poll=1.0, sleep=time.sleep):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        deadline = time.monotonic() + max(0, wait)
+        while True:
+            for _ in range(3):  # a file removed under us is retried at once
+                if self._try():
+                    return self
+            if time.monotonic() >= deadline:
+                raise LockBusy(self.path, self._holder())
+            sleep(poll)
 
     def release(self):
-        if self.held:
-            info = self._holder()
-            if info and info.get("pid") == os.getpid():
-                try:
-                    self.path.unlink()
-                except FileNotFoundError:
-                    pass
-            self.held = False
+        if not self.held:
+            return
+        fd, self._fd, self.held = self._fd, None, False
+        try:
+            os.ftruncate(fd, 0)
+        except OSError:
+            pass
+        if os.name != "nt":
+            try:
+                self.path.unlink()  # before the unlock, so a waiter never locks a removed file
+            except OSError:
+                pass
+        self._unlock(fd)
+        os.close(fd)
+        if os.name == "nt":
+            try:
+                self.path.unlink()  # fails while a waiting run has it open; that run takes it next
+            except OSError:
+                pass
 
     def __enter__(self):
-        return self.acquire()
+        return self if self.held else self.acquire()
 
     def __exit__(self, *exc):
         self.release()

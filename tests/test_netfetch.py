@@ -330,9 +330,97 @@ def test_live():
     print("live lever ok:", reading.posting.title, reading.posting.posted)
 
 
+def test_lookalike_hosts():
+    """A job-board host spelled with a soft hyphen, a sharp s, fullwidth
+    letters, an ideographic dot or a zero-width space resolves to the board
+    itself (the IDNA codec maps them), so it is the board: denied attended
+    and unattended, before any request. Any other non-ASCII host is refused
+    too (host-not-ascii); the punycode spelling stays an ordinary host."""
+    shy, zwsp, ideo, fwdot = chr(0xAD), chr(0x200B), chr(0x3002), chr(0xFF0E)
+    fw = "".join(chr(0xFF41 + ord(c) - ord("a")) for c in "linkedin")
+    cases = {"https://www.link" + shy + "edin.com/jobs/view/1": "job-board linkedin.com",
+             "https://uk.in" + shy + "deed.com/viewjob?jk=1": "job-board indeed.com",
+             "https://www.gla" + chr(0xDF) + "door.com/job-listing/x": "job-board glassdoor.com",
+             "https://www.glass" + zwsp + "door.com/x": "job-board glassdoor.com",
+             "https://www.linkedin" + ideo + "com/jobs/view/1": "job-board linkedin.com",
+             "https://uk.indeed" + fwdot + "com/viewjob?jk=1": "job-board indeed.com",
+             "https://www." + fw + ".com/jobs/view/1": "job-board linkedin.com"}
+    for url, want in cases.items():
+        assert netfetch.hard_deny(url) == want, (ascii(url), netfetch.hard_deny(url))
+        for unattended in (True, False):
+            assert netfetch.Policy(unattended=unattended).reason(url) == want, ascii(url)
+        assert netfetch.job_board(netfetch.host_of(url)), ascii(url)
+    odd = "https://exam" + shy + "ple.com/jobs/1"
+    assert netfetch.hard_deny(odd) == "host-not-ascii exam\\xadple.com", netfetch.hard_deny(odd)
+    f, _ = offline_fetcher(robots=False, unattended=False)
+    try:
+        f.get(odd)
+        raise AssertionError("fetched a non-ASCII host")
+    except netfetch.Denied as e:
+        assert e.reason.startswith("host-not-ascii"), e.reason
+    assert f.log == []
+    assert netfetch.hard_deny("https://xn--exmple-cua.com/jobs/1") is None
+
+
+def test_crawl_delay_limits():
+    """A Crawl-delay over 30 s (or inf, nan, negative) leaves the host alone
+    (robots <host>, nothing fetched, nothing slept); a sane one is honored."""
+    for value in ("86400", "inf", "nan", "-5", "31"):
+        robots = netfetch.Robots(lambda url, v=value: (200, f"User-agent: *\nCrawl-delay: {v}\n"))
+        ok, delay, why = robots.check("https://careers.example.com/jobs/1")
+        assert not ok and why == "robots careers.example.com", (value, ok, delay, why)
+    robots = netfetch.Robots(lambda url: (200, "User-agent: *\nCrawl-delay: 5\n"))
+    assert robots.check("https://careers.example.com/jobs/1") == (True, 5.0, None)
+    clock = FakeClock()
+    t = netfetch.Throttle(clock=clock.now, sleep=clock.sleep)
+    t.wait("a.example", float("inf"))
+    t.wait("a.example", float("inf"))
+    assert clock.slept == [netfetch.MAX_CRAWL_DELAY], clock.slept
+
+
+def test_robots_redirect_loop():
+    """A robots.txt that redirects to another path on its own host: the
+    redirect hop re-ran the gate, whose robots check fetched robots.txt again,
+    until RecursionError (about one request a second; W's live run hit it on 4
+    careers hosts). A hop of a robots.txt fetch is that fetch: the policy still
+    runs on it, the robots check does not."""
+    host = "www.example-bio.com"
+    f = netfetch.Fetcher(extra_hosts=[host], throttle=netfetch.Throttle(enabled=False))
+    calls = []
+
+    def fake_send(method, url, data, headers, crawl_delay):
+        calls.append(url)
+        assert len(calls) < 10, calls
+        if url.endswith("/robots.txt"):
+            f._gate(f"https://{host}/robots-file", "GET")  # the redirect hop, as PolicyRedirects runs it
+            return netfetch.Response(f"https://{host}/robots-file", 200, {}, b"User-agent: *\nDisallow: /private\n")
+        return netfetch.Response(url, 200, {}, b"ok")
+    f._send = fake_send
+    assert f.get(f"https://{host}/careers").status == 200
+    assert calls == [f"https://{host}/robots.txt", f"https://{host}/careers"], calls
+    try:
+        f.get(f"https://{host}/private/x")
+        raise AssertionError("the robots rules read through the redirect were not honored")
+    except netfetch.Denied as e:
+        assert e.reason == f"robots {host}", e.reason
+    # the policy still holds on a robots redirect hop: a job board is refused, never fetched
+    f2 = netfetch.Fetcher(extra_hosts=["careers.example-two.com"], throttle=netfetch.Throttle(enabled=False))
+
+    def to_board(method, url, data, headers, crawl_delay):
+        f2._gate("https://www.linkedin.com/robots.txt", "GET")
+        raise AssertionError("not reached")
+    f2._send = to_board
+    try:
+        f2.get("https://careers.example-two.com/jobs")
+        raise AssertionError("a robots redirect to a job board was not refused")
+    except netfetch.Denied as e:
+        assert e.reason == "job-board linkedin.com", e.reason
+
+
 def main():
     for t in (test_cli_policy, test_policy_rules, test_public_address_guard, test_proxy_means_no_fetch,
-              test_robots_rules, test_robots_fetching_and_cache, test_politeness, test_size_cap):
+              test_robots_rules, test_robots_fetching_and_cache, test_politeness, test_size_cap,
+              test_lookalike_hosts, test_crawl_delay_limits, test_robots_redirect_loop):
         t()
         print("ok", t.__name__)
     if os.environ.get("JOB_SKILL_LIVE") == "1":

@@ -18,7 +18,7 @@ network.
 1. At setup the user requests their LinkedIn data (desktop: Me > Settings & Privacy >
    Data Privacy > Download your data). Connections can take up to 48 hours.
    A Google Contacts export (Google CSV) is optional.
-2. He drops the zip (or the CSV files) into `network\raw\`. Nothing is
+2. The user drops the zip (or the CSV files) into `network\raw\`. Nothing is
    unzipped by hand.
 3. The runner imports new files on its next run (`import_network` request).
    In mode M run it yourself: `network.py import --root "<folder>"`.

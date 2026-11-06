@@ -216,33 +216,93 @@ def test_tier_b_built_with_letter(root):
 
 
 def test_tier_b_fallback_and_prep_failed(root):
-    lib = root / "achievement_library.md"
-    original = lib.read_bytes().decode("utf-8")
-    # A library edit after approval: the pool bullet citing L-0011 loses its number.
-    lib.write_text(original.replace("on about 400 stool samples", "on about 350 stool samples"), encoding="utf-8")
+    tech = root / "techniques.md"
+    original = tech.read_bytes().decode("utf-8")
+    # techniques.md is not part of the approval; the strict build's TECHNIQUE
+    # check catches a level change. 16S drops to familiar: the tuned resume adds
+    # the pool skill "16S sequencing" for this posting and fails; the base passes.
+    tech.write_text(original.replace("amplicon sequencing | level: hands-on", "amplicon sequencing | level: familiar"),
+                    encoding="utf-8")
     folder = job(root, "2026-11-06 Lakeside Microbiome - Scientist", "posting_16s.md")
     code, out = cli("tier-b", "--root", root, "--item", folder, "--family", FAMILY)
     assert code == 0, out
     lines = out.splitlines()
-    assert any(ln.startswith('STRICT-FAIL EVIDENCE number "400"') for ln in lines), out
+    assert any(ln.startswith('STRICT-FAIL TECHNIQUE "16S sequencing"') and "level: familiar" in ln for ln in lines), out
     assert "FALLBACK base" in lines, out
     assert lines[-1].startswith("TIER-B fallback_base qc_micro@v1"), out
     base = json.loads((root / "variants" / FAMILY / "v1" / "resume.json").read_text(encoding="utf-8"))
     assert json.loads((folder / "resume_B.json").read_text(encoding="utf-8")) == base, "the base is staged untouched"
     assert (folder / "resume_B.pdf").exists()
-    assert "400" not in (folder / "resume_B.txt").read_text(encoding="utf-8")
+    assert "16S" not in (folder / "resume_B.txt").read_text(encoding="utf-8")
     assert json.loads((folder / "tune_log.json").read_text(encoding="utf-8"))["status"] == "fallback_base"
-    # Now a base bullet's entry changes too: the base fails, and the item is prep_failed.
-    lib.write_text(original.replace("on about 400 stool samples", "on about 350 stool samples")
-                   .replace("validated 3 real-time PCR assays", "validated 5 real-time PCR assays"), encoding="utf-8")
+    # Now a base Techniques item drops too: the base fails, and the item is prep_failed.
+    tech.write_text(original.replace("amplicon sequencing | level: hands-on", "amplicon sequencing | level: familiar")
+                    .replace("quantitative PCR | level: hands-on", "quantitative PCR | level: familiar"), encoding="utf-8")
     folder = job(root, "2026-11-06 Lakeside Microbiome - Scientist II", "posting_16s.md")
     code, out = cli("tier-b", "--root", root, "--item", folder, "--family", FAMILY)
     assert code == 6, out
     assert "FALLBACK base" in out.splitlines() and out.rstrip().splitlines()[-1].startswith("PREP_FAILED qc_micro@v1"), out
     assert not (folder / "resume_B.pdf").exists(), "a failed build is never staged"
     assert json.loads((folder / "tune_log.json").read_text(encoding="utf-8"))["status"] == "prep_failed"
-    lib.write_bytes(original.encode("utf-8"))
+    tech.write_bytes(original.encode("utf-8"))
+    # A log tune() never wrote (it raised first) still names the approval it was
+    # built under, so the runner can keep a carried folder's file (TR-13).
+    bare = job(root, "2026-11-06 Lakeside Microbiome - Scientist III", "posting_16s.md")
+    variants.finish_log(root, bare, None, FAMILY, 1, "fallback_base", "tuned build failed", lambda s: None,
+                        approved={"sha256": "a" * 64})
+    log = json.loads((bare / "tune_log.json").read_text(encoding="utf-8"))
+    assert (log["family"], log["version"], log["approved_sha256"], log["status"]) == \
+        (FAMILY, 1, "a" * 64, "fallback_base"), log
     print("ok tier-b: tuned failure stages FALLBACK base; base failure is PREP_FAILED")
+
+
+def test_library_change_unapproves(root):
+    """SJ-01: approval covers the text of every cited library entry. A corrected
+    entry ('Replaces:' keeps the ID) unapproves the version; tier-b parks the item;
+    check names the entry and the bullets citing it; the user re-approves."""
+    lib = root / "achievement_library.md"
+    original = lib.read_bytes()
+    approved = json.loads((root / "variants" / FAMILY / "v1" / "approved.json").read_text(encoding="utf-8"))
+    assert "L-0006" in approved["entries"] and "L-0008" in approved["entries"] and "L-0017" not in approved["entries"], \
+        approved.get("entries")
+    lib.write_bytes(original.replace(b"led 6 microbial data deviation investigations to closure",
+                                     b"supported 6 microbial data deviation investigations that the QA lead led"))
+    code, out = cli("check", "--root", root, "--family", FAMILY)
+    assert out.startswith(f"UNAPPROVED {FAMILY} v1: L-0006 changed since approval"), out
+    assert 'cited in resume.json: "Led 6 microbial data deviation investigations' in out, out
+    assert "NEXT if every cited line above still holds" in out, out
+    folder = job(root, "2026-11-06 Acme Bio - QC Microbiologist IV", "posting_qpcr.md")
+    code, out = cli("tier-b", "--root", root, "--item", folder, "--family", FAMILY)
+    assert code == 6 and f"PREP_FAILED {FAMILY}: no approved variant" in out, out
+    assert not (folder / "resume_B.pdf").exists(), "the old, stronger claim is never built"
+    # An entry the variant does not cite changes nothing.
+    lib.write_bytes(original.replace(b"ran sandwich ELISAs", b"ran sandwich ELISA panels"))
+    code, out = cli("check", "--root", root, "--family", FAMILY)
+    assert out.strip() == f"APPROVED {FAMILY} v1 (on 2026-11-06)", out
+    # The same files re-approved against a harmless edit of a cited entry.
+    lib.write_bytes(original.replace(b"Gram stain and identification", b"Gram stain, and identification"))
+    code, out = cli("approve", "--root", root, "--family", FAMILY)
+    assert code == 0 and "CHANGED L-0007 changed since approval" in out, out
+    assert out.rstrip().splitlines()[-1].startswith(f"APPROVED {FAMILY} v1 again ("), out
+    code, out = cli("check", "--root", root, "--family", FAMILY)
+    assert out.strip() == f"APPROVED {FAMILY} v1 (on 2026-11-06)", out
+    lib.write_bytes(original)
+    code, out = cli("approve", "--root", root, "--family", FAMILY)
+    assert code == 0 and "again" in out, out
+    # An approval written before per-entry hashes holds while the library is byte-identical.
+    path = root / "variants" / FAMILY / "v1" / "approved.json"
+    legacy = json.loads(path.read_text(encoding="utf-8"))
+    legacy.pop("entries")
+    path.write_text(json.dumps(legacy, indent=1) + "\n", encoding="utf-8")
+    code, out = cli("check", "--root", root, "--family", FAMILY)
+    assert out.strip() == f"APPROVED {FAMILY} v1 (on 2026-11-06)", out
+    lib.write_bytes(original + b"\n")
+    code, out = cli("check", "--root", root, "--family", FAMILY)
+    assert out.startswith(f"UNAPPROVED {FAMILY} v1: achievement_library.md changed since approval"), out
+    lib.write_bytes(original)
+    code, out = cli("approve", "--root", root, "--family", FAMILY)
+    assert code == 0, out
+    print("ok a changed cited library entry unapproves the variant; tier-b parks; re-approval")
 
 
 def test_folder_rules(root):
@@ -320,6 +380,125 @@ def test_approve_runs_the_checks():
     print("ok approve refuses a pool that fails EVIDENCE, FACT or the banned words")
 
 
+def two_stints(root):
+    """TR-06 setup: an earlier stint with the same title at the same employer."""
+    mr = root / "master_resume.md"
+    mr.write_text(mr.read_text(encoding="utf-8").replace(
+        "### Postdoctoral Fellow |",
+        "### Scientist II, QC Microbiology | Northwind Biologics | Springfield, IL | 09/2010 - 08/2011\n\n"
+        "- Ran 2 media fill studies.\n\n### Postdoctoral Fellow |"), encoding="utf-8")
+    lib = root / "achievement_library.md"
+    lib.write_text(lib.read_text(encoding="utf-8").replace(
+        "### Postdoctoral Fellow |",
+        "### Scientist II, QC Microbiology | Northwind Biologics | Sep 2010 - Aug 2011\n\n"
+        "- [L-0018] Media fills: ran 2 media fill studies.\n\n### Postdoctoral Fellow |").replace(
+        "<!-- last-id: L-0017 -->", "<!-- last-id: L-0018 -->"), encoding="utf-8")
+    vdir = root / "variants" / FAMILY / "v1"
+    resume = json.loads((vdir / "resume.json").read_text(encoding="utf-8"))
+    resume["sections"][1]["entries"].insert(2, {
+        "title": "Scientist II, QC Microbiology", "dates": "Sep 2010 - Aug 2011", "org": "Northwind Biologics",
+        "location": "Springfield, IL", "bullets": [{"text": "Ran 2 media fill studies.", "ev": ["L-0018"]}]})
+    (vdir / "resume.json").write_text(json.dumps(resume, indent=1) + "\n", encoding="utf-8")
+    return vdir
+
+
+def test_shared_role_key():
+    """TR-06: two stints share "<title> | <org>"; a pool bullet never moves to the other one."""
+    root = fresh_root()
+    vdir = two_stints(root)
+    code, out = cli("approve", "--root", root, "--family", FAMILY)
+    assert code == 1 and ('PROBLEM pool bullets for "Scientist II, QC Microbiology | Northwind Biologics" match 2 roles '
+                          'in resume.json: key them "<title> | <org> | <dates>"') in out, out
+    pool = json.loads((vdir / "pool.json").read_text(encoding="utf-8"))
+    pool["bullets"]["Scientist II, QC Microbiology | Northwind Biologics | Jan 2016 - Apr 2023"] = \
+        pool["bullets"].pop("Scientist II, QC Microbiology | Northwind Biologics")
+    (vdir / "pool.json").write_text(json.dumps(pool, indent=1) + "\n", encoding="utf-8")
+    approve(root)
+    folder = job(root, "2026-11-06 Acme Bio - QC Microbiologist", (
+        "Company: Acme Bio\nRole: QC Microbiologist\nSource: greenhouse-api\n\n## Description\n\n"
+        "Bioburden testing and sterility testing for commercial products; BSL-2 lab work with MALDI-TOF identification.\n"))
+    code, out = cli("tier-b", "--root", root, "--item", folder, "--family", FAMILY)
+    assert code == 0 and "VARIANT ok" in out, out
+    txt = (folder / "resume_B.txt").read_text(encoding="utf-8")
+    early = txt[txt.index("Sep 2010 - Aug 2011"):txt.index("Postdoctoral")]
+    assert "Ran 2 media fill studies." in early and "bioburden" not in early.lower(), early
+    # A bullet moved by hand to the other stint fails the diff, and EVIDENCE.
+    tuned = json.loads((folder / "resume_B.json").read_text(encoding="utf-8"))
+    stint = tuned["sections"][1]["entries"][2]
+    stint["bullets"] = [{"text": "Performed bioburden and sterility testing under GMP for 2 commercial products.",
+                         "ev": ["L-0008"]}]
+    data = variants.merged_for_checks(tuned, {})
+    lines = checks.evidence_check(data, checks.library_entries([root / "achievement_library.md"], headings=True), v12=True)
+    assert any("L-0008" in ln and "not this role" in ln for ln in lines), lines
+    print("ok two stints under one title and employer keep their own bullets")
+
+
+def test_focus_is_a_technique():
+    """TR-04: {focus} is a hands-on technique the posting names, never a knockout or family term."""
+    import library
+    techs = library.load_techniques(FIXTURE / "techniques.md")
+    posting = ("Company: Acme Bio\nRole: QC Microbiologist II\n\n## Description\n\nGMP role. A Clinical Laboratory "
+               "Scientist license is preferred; Clinical Laboratory Scientist license holders, apply. Clinical "
+               "Laboratory Scientist license again. Run qPCR.\n")
+    assert variants.pick_focus(posting, techs) == "qPCR"
+    assert variants.pick_focus(posting.replace("Run qPCR.", "Run confocal imaging."), techs) is None, "familiar never"
+    root = fresh_root()
+    approve(root)
+    folder = job(root, "2026-11-06 Acme Bio - QC Microbiologist II", (
+        "Company: Acme Bio\nRole: QC Microbiologist II\nSource: greenhouse-api\n\n## Description\n\n"
+        "GMP QC role. A Clinical Laboratory Scientist license is preferred; Clinical Laboratory Scientist "
+        "license holders welcome; Clinical Laboratory Scientist license.\n\n## Application questions\n\n"
+        "1. Cover Letter (required) - input_file\n"))
+    code, out = cli("tier-b", "--root", root, "--item", folder, "--family", FAMILY)
+    assert code == 6 and "letter: the posting names none of your hands-on techniques to fill {focus}" in out, out
+    assert not (folder / "cover_B.pdf").exists()
+    # Approval renders the letter: a number no source holds is refused.
+    vdir = root / "variants" / FAMILY / "v1"
+    fresh = fresh_root()
+    letter = json.loads((fresh / "variants" / FAMILY / "v1" / "letter.json").read_text(encoding="utf-8"))
+    letter["letter"]["paragraphs"][0] = letter["letter"]["paragraphs"][0].replace("For 7 years", "For 11 years")
+    (fresh / "variants" / FAMILY / "v1" / "letter.json").write_text(json.dumps(letter, indent=1), encoding="utf-8")
+    code, out = cli("approve", "--root", fresh, "--family", FAMILY)
+    assert code == 1 and 'PROBLEM letter.json FACT number "11" in letter paragraph 1' in out, out
+    assert vdir.exists()
+    print("ok {focus} comes from hands-on techniques; approval checks the letter")
+
+
+def test_cli_rules():
+    """contracts-15: a bad argument exits 1; LIVE-12: a family's variant key is named when it is not read."""
+    root = fresh_root()
+    code, out = cli("approve", "--root", root)
+    assert code == 1 and out.startswith("ERROR ") and "--family" in out, out
+    prof = root / "config" / "search_profile.toml"
+    prof.parent.mkdir(exist_ok=True)
+    prof.write_text('[[family]]\nid = "qc_micro"\nvariant = "assay_dev"\n', encoding="utf-8")
+    code, out = cli("check", "--root", root)
+    assert out.startswith('WARN family qc_micro: variant = "assay_dev" is not read; its variant is variants/qc_micro'), out
+    print("ok bad arguments exit 1; an unread variant key is named")
+
+
+def test_docs_round2():
+    """The writing docs say what the round-2 checks enforce (SJ-01, SJ-05, SJ-06,
+    SJ-07, SJ-09, SJ-11, SJ-12)."""
+    refs = HERE.parent / "job" / "references"
+    rules = (refs / "writing_rules.md").read_text(encoding="ascii")
+    flat = " ".join(rules.split())
+    builds = [ln for ln in rules.splitlines() if "scripts/build_resume.py" in ln]
+    assert builds and all("--strict" in ln for ln in builds), "one build command, the strict one (SJ-11)"
+    assert "Put the new facts into the library before writing Block A" in flat, "SJ-07"
+    for name in ("cover_letter.json", "techniques.md", "publications.md", "the cover letter if one exists"):
+        assert name in flat, f"audit list lacks {name} (SJ-05)"
+    assert "posting.md lists a required cover letter" in flat, "SJ-06"
+    assert '"Confirmed <Mon YYYY>:"' in flat, "SJ-09"
+    assert "Confirmed" in (refs / "fit_and_questions.md").read_text(encoding="ascii"), "SJ-09"
+    assert '--base "<Name> CV"' in (refs / "cv_publications.md").read_text(encoding="ascii"), "SJ-12"
+    vmd = " ".join((refs / "variants.md").read_text(encoding="ascii").split())
+    assert "Library edits do not unapprove" not in vmd and "L-0006 changed since approval" in vmd, "SJ-01"
+    tailor = " ".join((HERE.parent / "plugin" / "agents" / "job-tailor.md").read_text(encoding="ascii").split())
+    assert "A pasted link (the single-job flow in SKILL.md) is written in the main conversation" in tailor, "SJ-07"
+    print("ok writing docs match the round-2 checks")
+
+
 def test_split_items_and_swaps():
     assert variants.split_items("SQL (basic queries, simple joins), Python, R.") == ["SQL (basic queries, simple joins)", "Python", "R"]
     swaps = [{"variant": "real-time PCR", "to": "qPCR"}]
@@ -354,9 +533,14 @@ def main():
     test_diff_catches_changes(root)
     test_tier_b_built_with_letter(root)
     test_tier_b_fallback_and_prep_failed(root)
+    test_library_change_unapproves(root)
     test_folder_rules(root)
     test_new_versions_and_fallback(root)
     test_approve_runs_the_checks()
+    test_shared_role_key()
+    test_focus_is_a_technique()
+    test_cli_rules()
+    test_docs_round2()
     test_split_items_and_swaps()
     test_agents()
     print("PASS")

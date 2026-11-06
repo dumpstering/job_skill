@@ -303,10 +303,328 @@ def test_preset():
     assert set(data) == set(jobfs.SEARCH_PROFILE_DEFAULTS) - {"knockout", "family"}, set(data)
 
 
+LIVE_DAY = FIX / "live_day_2026-11-05.json"
+
+
+def preset_rules(tmp, segments=None):
+    """Rules over the life-science preset with a California home ('Springfield,
+    CA' is made up; only its state matters)."""
+    root = Path(tmp)
+    (root / "config").mkdir(parents=True, exist_ok=True)
+    text = PRESET.read_text(encoding="utf-8").replace('label = ""                  # setup fills',
+                                                      'label = "Springfield, CA"  # setup fills', 1)
+    assert 'label = "Springfield, CA"' in text
+    (root / "config" / "search_profile.toml").write_text(text, encoding="utf-8")
+    rows = ["employer,employer_norm,parent,ats,board,host,site,extra,careers_url,main_website,segment,city,families,"
+            "priority,status,added_on,added_by,ref,notes"]
+    for name, seg in (segments or {}).items():
+        rows.append(f"{name},,,greenhouse,x,,,,,,{seg},,,1,active,2026-11-01,test,,")
+    (root / "config" / "watchlist.csv").write_text("\n".join(rows) + "\n", encoding="utf-8")
+    return gates.Rules(root, DAY, widen=[])
+
+
+def list_verdict(rules, company, title, location, n=1):
+    """G3 and G4 on a list-level record built the way the readers build one."""
+    import posting
+    import jobkey
+    d = posting.new_posting("greenhouse-api")
+    d.update(company=company, role=title, location=location)
+    posting.clean_fields(d, posting.Report())
+    rec = posting.to_record(d, f"https://job-boards.greenhouse.io/x/jobs/{7000000 + n}", lane="watch",
+                            first_seen=DAY.isoformat(), ats="greenhouse")
+    rec.company_norm = jobkey.norm_company(company)
+    v = gates.Verdict()
+    ok = gates.g3_location(rec, v, rules) is None and gates.g4_title(rec, v, rules) is None
+    return ok, v
+
+
+def test_live_day_corpus():
+    """Round 1's live day (2026-11-05, real public postings: title, company,
+    location): the 29 queued items with the live judge's verdict, 22 relevant
+    postings the gates dropped, and 9 pooled postings that were out of area.
+    Title and location gates alone must keep every relevant posting (no
+    relevant queued item lost, every missed one kept), drop every out-of-area
+    one, and leave at least 80 percent of what passes relevant. Five queued
+    items the judge turned down cannot be told by title and place (an ML
+    'Research Scientist', a physics 'Staff Scientist', a 119-day-old posting);
+    G9 and G5 judge those on the detail."""
+    data = json.loads(LIVE_DAY.read_text(encoding="ascii"))
+    with tempfile.TemporaryDirectory() as tmp:
+        rules = preset_rules(tmp, data["segments"])
+        assert rules.home_states == {"CA"}, rules.home_states
+        kept = {}
+        for i, it in enumerate(data["items"]):
+            ok, v = list_verdict(rules, it["company"], it["title"], it["location"], i)
+            kept[i] = (ok, v)
+        items = data["items"]
+        lost = [it["title"] for i, it in enumerate(items) if it["relevant"] and not kept[i][0]]
+        assert not lost, [(it["title"], kept[i][1].lines[-1]) for i, it in enumerate(items)
+                          if it["relevant"] and not kept[i][0]]
+        wrong = [(it["title"], it["location"]) for i, it in enumerate(items)
+                 if it["group"] == "pooled_wrong" and kept[i][0]]
+        assert not wrong, wrong
+        passed = [it for i, it in enumerate(items) if kept[i][0]]
+        share = sum(1 for it in passed if it["relevant"]) / len(passed)
+        queued = [it for i, it in enumerate(items) if it["group"] == "queued" and kept[i][0]]
+        q_share = sum(1 for it in queued if it["relevant"]) / len(queued)
+        assert share >= 0.80, (share, [it["title"] for it in passed if not it["relevant"]])
+        # the judged-wrong queued items title and place can tell apart are all out now
+        still = sorted(it["n"] for it in queued if not it["relevant"])
+        assert still == [3, 5, 14, 15, 23], still
+        assert q_share >= 0.68, q_share  # 11 of 16 (was 11 of 29)
+    print(f"   corpus: {sum(1 for it in passed if it['relevant'])} of {len(passed)} passing relevant "
+          f"({share:.0%}); queued alone {q_share:.0%}")
+
+
+def test_place_rules():
+    """G3 (LIVE-02, LIVE-04): any listed place counts, a place name needs no
+    other state or country beside it, foreign remote is out, and 'N Locations'
+    or a bare country is judged on the detail."""
+    with tempfile.TemporaryDirectory() as tmp:
+        rules = preset_rules(tmp)
+        cases = {
+            "Jersey City, NJ; Millbrae, CA": True, "Millbrae, CA": True, "2 Locations": "unknown",
+            "US": "unknown", "United States": "unknown", "CA, United States": "unknown",
+            "Dublin, Ireland": False, "Dublin, CA": True, "Richmond, VA": False, "Newark, NJ": False,
+            "US - New Jersey - Newark": False, "Richmond - VA - US": False, "Brisbane, Australia": False,
+            "Brisbane - CA - US": True, "Remote - Canada": False, "Remote (Vienna, Austria)": False,
+            "TWN - Remote": False, "Remote (US)": True, "USA - Remote": True, "Remote, California, USA": True,
+            "Remote, Florida, USA": False, "San Rafael, California, United States": False,
+            "US - California - South San Francisco": True, "Boston, MA | South San Francisco, CA": True,
+            "London, United Kingdom | South San Francisco, CA": True, "Vizag": False, "": "unknown"}
+        for loc, want in cases.items():
+            ok, v = list_verdict(rules, "Acme Bio", "QC Microbiologist", loc)
+            unknown = "location_unknown" in (v.info.get("flags") or [])
+            got = "unknown" if ok and unknown else ok
+            assert got == want, (loc, got, want, v.lines)
+    import posting
+    assert posting.split_place("Jersey City, NJ; Millbrae, CA") == ("Jersey City", "NJ", "US")
+    assert posting.split_place("Novato, California") == ("Novato", "CA", "US")
+    assert posting.us_eligible("TWN - Remote", "", "remote") is False
+    assert posting.us_eligible("Remote (Vienna, Austria)", "", "remote") is False
+    assert posting.us_eligible("Remote", "", "remote") is None
+
+
+def detail_reading(base, **kw):
+    import posting
+    p = jobfs.Posting.from_dict(dict(base, **kw))
+    return posting.Reading(p, "", "jobvite", [], [], 0)
+
+
+def test_detail_rejudged():
+    """LIVE-03: a list record with no location, no date or 'N Locations' is
+    judged again by G3 and G5 on its detail: an Irish or 4-month-old detail is
+    discarded, a dated one gets its real band, and a Workday 'N Locations'
+    record whose detail names a home place is pooled."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = copy_root(tmp)
+        run = gates.GateRun(root, DAY)
+        mk = make_gates_root.posting
+
+        def jv(n, **kw):
+            return mk(f"jobvite:acmebio:o{n}", "QC Microbiologist", f"https://jobs.jobvite.com/acmebio/job/o{n}",
+                      ats="jobvite", location="", city="", state="", country="", posted=None, posted_field="",
+                      text="", **kw)
+        cases = [(jv(1), {"location": "Shanbally, Cork, Ireland", "posted": "2026-11-01"}, "G3"),
+                 (jv(2), {"location": "Springfield, IL", "city": "Springfield", "posted": "2026-07-08"}, "G5"),
+                 (jv(3), {"location": "Springfield, IL", "city": "Springfield", "posted": "2026-11-04"}, None),
+                 (jv(4), {"location": "Ogdenville, IL", "city": "Ogdenville", "posted": "2026-11-04"}, "G3")]
+        for lst, det, _ in cases:
+            assert run.keep(jobfs.Posting.from_dict(dict(lst))), lst["job_key"]
+        wd = mk("workday:acmebio:R-1", "QC Microbiologist", "https://acmebio.wd1.myworkdayjobs.com/en-US/x/job/R-1",
+                ats="workday", location="2 Locations", city="", state="", country="", posted=None, posted_field="",
+                text="")
+        assert run.keep(jobfs.Posting.from_dict(dict(wd)))
+        run.process([detail_reading(lst, text=make_gates_root.MICRO, posted_field="datePosted",
+                                    **{k: v for k, v in det.items()}) for lst, det, _ in cases] +
+                    [detail_reading(wd, text=make_gates_root.MICRO, location="Boston, MA | Springfield, IL",
+                                    city="Boston", state="MA", posted="2026-11-03", posted_field="startDate")])
+        run.save()
+        rows = {r["job_key"]: r for r in discards(root)}
+        for lst, _, gate in cases:
+            if gate:
+                assert rows[lst["job_key"]]["gate"] == gate, (lst["job_key"], rows.get(lst["job_key"]))
+        items = pool(root)
+        assert set(items) == {"jobvite:acmebio:o3", "workday:acmebio:R-1"}, set(items)
+        it = items["jobvite:acmebio:o3"]
+        assert (it["band"], it["date_basis"], it["age_days"]) == ("0-3", "posted", 2), it
+        assert items["workday:acmebio:R-1"]["band"] == "0-3" and "location_unknown" not in items[
+            "workday:acmebio:R-1"]["flags"], items["workday:acmebio:R-1"]
+
+
+def test_pool_age_basis():
+    """LIVE-03, queue side: a pool item stored as 'undated' before its detail
+    date was judged ages by that posted date, and an undated item first seen
+    over 30 days ago is stale, so neither keeps 5 fresh points forever."""
+    import jobqueue
+    old = {"date_basis": "undated", "posted": "2026-07-09", "first_seen": "2026-11-05"}
+    assert jobqueue.age_now(old, DAY)[1] is None, jobqueue.age_now(old, DAY)
+    fresh = {"date_basis": "undated", "posted": "2026-11-05", "first_seen": "2026-11-05"}
+    assert jobqueue.age_now(fresh, DAY)[1:] == ("0-3", 40), jobqueue.age_now(fresh, DAY)
+    long_seen = {"date_basis": "undated", "posted": None, "first_seen": "2026-09-20"}
+    assert jobqueue.age_now(long_seen, DAY)[1] is None, jobqueue.age_now(long_seen, DAY)
+    new_seen = {"date_basis": "undated", "posted": None, "first_seen": "2026-11-05"}
+    assert jobqueue.age_now(new_seen, DAY)[1:] == ("undated", 5)
+
+
+def test_untitled_list_records():
+    """Phenom and Workday sitemap lists carry no title or place: each record is
+    judged on its detail, not skipped as a duplicate of the first one."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = copy_root(tmp)
+        run = gates.GateRun(root, DAY)
+        mk = make_gates_root.posting
+        recs = [mk(f"phenom:careers.acmebio.example:J{n}", "", f"https://careers.acmebio.example/job/J{n}",
+                   ats="phenom", location="", city="", state="", country="", text="") for n in range(4)]
+        assert all(run.keep(jobfs.Posting.from_dict(dict(r))) for r in recs)
+        titles = ["QC Microbiologist", "Sales Manager", "Microbiologist II", "QC Microbiologist III"]
+        run.process([detail_reading(r, title=t, title_norm=t.lower(), location="Springfield, IL",
+                                    city="Springfield", text=make_gates_root.MICRO + f" Job {i}.")
+                     for i, (r, t) in enumerate(zip(recs, titles))])
+        run.save()
+        assert sorted(pool(root)) == sorted(r["job_key"] for i, r in enumerate(recs) if i != 1), sorted(pool(root))
+        assert [r["gate"] for r in discards(root)] == ["G4"], discards(root)
+
+
+def test_pass_stops_halfway():
+    """PIPE-05: a gate pass that stops partway (an exception, a kill) leaves
+    no 'pooled' seen record for postings pool.json never got, so the next
+    run pools them; discards.csv held open the way Excel holds it cannot stop
+    the pass, and its rows are written once the file is free."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = copy_root(tmp)
+        allp = {p["job_key"]: p for p, _ in make_gates_root.postings()}
+        batch = [allp["greenhouse:900002"], allp["greenhouse:900016"], allp["greenhouse:900004"]]
+        real = gates.g12_route
+        calls = []
+
+        def boom(p, v):
+            calls.append(p.job_key)
+            if len(calls) == 2:
+                raise RuntimeError("stopped halfway")
+            return real(p, v)
+        gates.g12_route = boom
+        try:
+            run = gates.GateRun(root, DAY)
+            try:
+                run.process(batch)
+            except RuntimeError:
+                pass
+        finally:
+            gates.g12_route = real
+        seen = [r for p in (root / "state" / "seen").glob("*.jsonl") for r in jobfs.read_jsonl(p)] \
+            if (root / "state" / "seen").exists() else []
+        assert seen == [] and not (root / "state" / "pool.json").exists(), seen
+        run2 = gates.GateRun(root, DAY)
+        run2.process(batch)
+        run2.save()
+        assert sorted(pool(root)) == ["greenhouse:900002", "greenhouse:900016"], sorted(pool(root))
+        # Excel holds today's discards.csv: the pass finishes, the row waits, then lands
+        if os.name == "nt":
+            disc = jobfs.Folder(root).discards_csv(DAY)
+            before = len(discards(root))
+            holder = hold_open(disc)
+            try:
+                run3 = gates.GateRun(root, DAY)
+                run3.process([allp["greenhouse:900014"]])
+                assert run3.save()["discarded"] == 1
+                pending = root / "state" / "discards_pending.jsonl"
+                assert pending.exists() and len(jobfs.read_jsonl(pending)) == 1
+                assert "greenhouse:900014" in {r["job_key"] for r in jobfs.read_jsonl(next((root / "state" /
+                                                                                          "seen").glob("*.jsonl")))}
+            finally:
+                close_handle(holder)
+            assert gates.write_discards(root, DAY, []) == 0 and not pending.exists()
+            assert len(discards(root)) == before + 1 and discards(root)[-1]["job_key"] == "greenhouse:900014"
+
+
+def hold_open(path):
+    """Open a file the way Excel holds a CSV: others may read, not write."""
+    import ctypes
+    from ctypes import wintypes
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.CreateFileW.restype = wintypes.HANDLE
+    k32.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
+                                wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+    h = k32.CreateFileW(str(path), 0x80000000, 1, None, 3, 0, None)  # GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING
+    assert h != wintypes.HANDLE(-1).value, ctypes.get_last_error()
+    return h
+
+
+def close_handle(h):
+    import ctypes
+    ctypes.WinDLL("kernel32").CloseHandle(h)
+
+
+def test_g1_lookalike_host():
+    """A posting or apply URL on a lookalike host (a soft hyphen in
+    'linkedin', or any non-ASCII host) is discarded at G1, never pooled as a
+    browser read for the user to open."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = copy_root(tmp)
+        mk = make_gates_root.posting
+        shy = chr(0xAD)
+        a = mk("url:link" + shy + "edin.com/jobs/view/1", "QC Microbiologist",
+               "https://www.link" + shy + "edin.com/jobs/view/1", ats="other", board="")
+        b = mk("greenhouse:900301", "Microbiologist II", make_gates_root.gh(900301),
+               apply_url="https://careers.exam" + shy + "ple.com/apply/1")
+        run_all(root, postings=[a, b])
+        rows = {r["job_key"]: r["reason"] for r in discards(root)}
+        assert rows == {a["job_key"]: "host:linkedin.com", "greenhouse:900301": "host:not-ascii"}, rows
+        assert not pool(root)
+
+
+def test_g9_requirements():
+    """LIVE-05: require_any is read in the requirements section, so a company
+    blurb naming biology no longer lets a chemistry or statistics job through."""
+    fam = {"id": "rd", "require_any": ["biolog*", "microb*", "cell*"]}
+    blurb = "About us: we are a biology company curing disease with cell therapies. " * 4
+    chem = blurb + ("\n\nBasic Qualifications\nPhD in organic chemistry with 5 years of process chemistry and "
+                    "scale-up of small molecules; HPLC and NMR. Strong written and spoken communication.\n"
+                    "\nPreferred Qualifications\nRoute scouting, crystallization and impurity control for "
+                    "late-stage small-molecule programs; experience filing CMC sections.\n")
+    bio = blurb + ("\n\nBasic Qualifications\nPhD and 2 years of industry experience.\n"
+                   "\nPreferred Qualifications\nHands-on mammalian cell culture, cell biology or microbiology "
+                   "methods, qPCR and ELISA; industry assay development; clear written communication.\n")
+    short = blurb + "\n\nQualifications\nPhD and 2 years of industry experience.\n"
+    for text, ok in ((chem, False), (bio, True), (blurb, True), (short, True)):
+        p = jobfs.Posting(job_key="k", title="Scientist", text=text)
+        v = gates.Verdict()
+        assert (gates.g9_words(p, v, fam) is None) == ok, (ok, v.lines)
+
+
+def test_two_openings_one_title():
+    """One title open in two labs (a university posts each opening with its own
+    requisition ID, same title and city): the second, seen a day later, is a
+    new job, not 'same job as' the first. Without requisition IDs on both, the
+    company+title+city rule still joins them; a shared ID always does."""
+    from datetime import timedelta
+    texts = ["The Ruiz lab studies gut microbes and needs help with anaerobic culture and 16S sequencing.",
+             "The Okafor lab maps immune signaling in mouse models with flow cytometry and ELISA work.",
+             "The Lindqvist lab builds CRISPR screens in human cell lines and runs the plate reader core."]
+
+    def opening(n, req, text):
+        return make_gates_root.posting(f"workday:stanford:R{n}", "Research Associate",
+                                       f"https://stanford.wd1.myworkdayjobs.com/en-US/careers/job/R{n}",
+                                       company="Stanford University", board="stanford", req_ids=req,
+                                       text=text + " " + make_gates_root.MICRO)
+    with tempfile.TemporaryDirectory() as tmp:
+        root = copy_root(tmp)
+        run_all(root, postings=[opening(1, ["R1"], texts[0])])
+        nxt = DAY + timedelta(days=1)
+        run_all(root, today=nxt, postings=[opening(2, ["R2"], texts[1]), opening(3, [], texts[2]),
+                                           opening(4, ["R1"], texts[2])])
+        got = pool(root)
+        assert "workday:stanford:R1" in got and "workday:stanford:R2" in got, sorted(got)
+        assert "workday:stanford:R3" not in got and "workday:stanford:R4" not in got, sorted(got)
+
+
 def main():
     for fn in (test_every_gate, test_knockouts, test_freshness_and_repost, test_undated_board,
                test_ai_text_parked_once, test_profile_edit_reopens, test_two_stage_keep, test_dormant_board, test_explain, test_terms,
-               test_preset):
+               test_preset, test_live_day_corpus, test_place_rules, test_detail_rejudged, test_untitled_list_records,
+               test_pass_stops_halfway, test_g9_requirements, test_pool_age_basis, test_g1_lookalike_host,
+               test_two_openings_one_title):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

@@ -122,6 +122,8 @@ It prints `DAILY ok queue=30 pool_left=41 discards=141 tier_b_built=30
 prep_failed=0`. `runner/README.md` has the installer commands.
 
 Release: `gh release create v1.2.0 dist/v1.2.0/* -R dumpstering/job_skill`.
+The release page is https://github.com/dumpstering/job_skill/releases/latest
+(setup.md and SETUP_GUIDE.md send the user there for `install_runner.cmd`).
 `install_runner.cmd` downloads `jobrunner-1.2.0.zip` from that release and
 checks it against the SHA-256 build_zip.py wrote into it. Send
 `job-search-plugin.zip`, `install_runner.cmd` and `SETUP_GUIDE.md`;

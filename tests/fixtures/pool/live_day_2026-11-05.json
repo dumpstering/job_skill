@@ -1,0 +1,493 @@
+{
+ "v": 1,
+ "source": "round 1 live day 2026-11-05 (public postings: company, title, location only)",
+ "home": {
+  "state": "CA",
+  "note": "the preset's San Francisco Bay Area places"
+ },
+ "segments": {
+  "Stanford University": "academic",
+  "UCSF": "academic",
+  "SLAC National Accelerator Laboratory": "government"
+ },
+ "items": [
+  {
+   "group": "queued",
+   "n": 1,
+   "company": "4D Molecular Therapeutics",
+   "title": "Scientist II",
+   "location": "Emeryville, California",
+   "family": "industry_rd_scientist",
+   "relevant": true
+  },
+  {
+   "group": "queued",
+   "n": 2,
+   "company": "Vaxcyte",
+   "title": "Scientist II, Analytical Development",
+   "location": "San Carlos, California, United States",
+   "family": "industry_rd_scientist",
+   "relevant": true
+  },
+  {
+   "group": "queued",
+   "n": 3,
+   "company": "Chai Discovery",
+   "title": "Research Scientist, Applied Research",
+   "location": "San Francisco office",
+   "family": "industry_rd_scientist",
+   "relevant": false
+  },
+  {
+   "group": "queued",
+   "n": 4,
+   "company": "Eikon Therapeutics",
+   "title": "Scientist I, High-Throughput Biology",
+   "location": "Millbrae, CA",
+   "family": "industry_rd_scientist",
+   "relevant": true
+  },
+  {
+   "group": "queued",
+   "n": 5,
+   "company": "Natera",
+   "title": "Scientist, Genomics and Cancer Biology",
+   "location": "San Carlos, CA",
+   "family": "industry_rd_scientist",
+   "relevant": false
+  },
+  {
+   "group": "queued",
+   "n": 6,
+   "company": "Revolution Medicines",
+   "title": "Senior Safety Scientist I",
+   "location": "Redwood City, California, United States",
+   "family": "industry_rd_scientist",
+   "relevant": false
+  },
+  {
+   "group": "queued",
+   "n": 7,
+   "company": "Nurix Therapeutics",
+   "title": "Senior Scientist, Chemical Development",
+   "location": "Brisbane, California",
+   "family": "industry_rd_scientist",
+   "relevant": false
+  },
+  {
+   "group": "queued",
+   "n": 8,
+   "company": "Codexis",
+   "title": "Associate Scientist, Attribute Sciences",
+   "location": "Redwood City, CA, US",
+   "family": "industry_rd_scientist",
+   "relevant": true
+  },
+  {
+   "group": "queued",
+   "n": 9,
+   "company": "Xaira Therapeutics",
+   "title": "Senior Scientist, High Throughput Biology (Contract)",
+   "location": "South San Francisco, California, United States",
+   "family": "industry_rd_scientist",
+   "relevant": true
+  },
+  {
+   "group": "queued",
+   "n": 10,
+   "company": "Calico Life Sciences",
+   "title": "Principal Scientist, Peptide Chemistry",
+   "location": "South San Francisco, CA",
+   "family": "industry_rd_scientist",
+   "relevant": false
+  },
+  {
+   "group": "queued",
+   "n": 11,
+   "company": "Stanford University",
+   "title": "Life Science Research Professional 1",
+   "location": "Stanford, CA, United States",
+   "family": "academic_staff_research",
+   "relevant": true
+  },
+  {
+   "group": "queued",
+   "n": 12,
+   "company": "UCSF",
+   "title": "Senior Statistical Scientist",
+   "location": "San Francisco, CA, United States",
+   "family": "industry_rd_scientist",
+   "relevant": false
+  },
+  {
+   "group": "queued",
+   "n": 13,
+   "company": "Roche",
+   "title": "Postdoctoral Fellow - Materials Engineering & Advanced Microfabrication - Next-Gen Sequencing and Diagnostics Systems, Research & Early Development",
+   "location": "Santa Clara",
+   "family": "assay_development",
+   "relevant": false
+  },
+  {
+   "group": "queued",
+   "n": 14,
+   "company": "SLAC National Accelerator Laboratory",
+   "title": "Staff Scientist",
+   "location": "Menlo Park, CA, United States",
+   "family": "academic_staff_research",
+   "relevant": false
+  },
+  {
+   "group": "queued",
+   "n": 15,
+   "company": "Genentech",
+   "title": "Scientist 3- Translational Medicine (Multiple Sclerosis & TR focused)",
+   "location": "South San Francisco",
+   "family": "industry_rd_scientist",
+   "relevant": false
+  },
+  {
+   "group": "queued",
+   "n": 16,
+   "company": "SLAC National Accelerator Laboratory",
+   "title": "Cryo-EM Specialist",
+   "location": "Menlo Park, CA, United States",
+   "family": "qc_micro_sterility",
+   "relevant": false
+  },
+  {
+   "group": "queued",
+   "n": 17,
+   "company": "NewLimit",
+   "title": "Scientist, mRNA Analytical Development",
+   "location": "South San Francisco",
+   "family": "industry_rd_scientist",
+   "relevant": true
+  },
+  {
+   "group": "queued",
+   "n": 18,
+   "company": "Revolution Medicines",
+   "title": "Senior Applications Engineer, Field Applications",
+   "location": "Redwood City, California, United States",
+   "family": "field_application_tech_support",
+   "relevant": false
+  },
+  {
+   "group": "queued",
+   "n": 19,
+   "company": "Twist Bioscience",
+   "title": "Bioinformatics Application Scientist, NGS - AMER",
+   "location": "USA - Remote",
+   "family": "field_application_tech_support",
+   "relevant": false
+  },
+  {
+   "group": "queued",
+   "n": 20,
+   "company": "Convergent Research",
+   "title": "E11 Bio - Scientist I/II - Advanced Imaging",
+   "location": "Alameda, California",
+   "family": "industry_rd_scientist",
+   "relevant": false
+  },
+  {
+   "group": "queued",
+   "n": 21,
+   "company": "Alector",
+   "title": "Scientist, Biology",
+   "location": "South San Francisco, CA",
+   "family": "industry_rd_scientist",
+   "relevant": true
+  },
+  {
+   "group": "queued",
+   "n": 22,
+   "company": "Profluent Bio",
+   "title": "Scientist II, Screening",
+   "location": "Emeryville, California, United States; On-site",
+   "family": "industry_rd_scientist",
+   "relevant": true
+  },
+  {
+   "group": "queued",
+   "n": 23,
+   "company": "Astera Institute",
+   "title": "Senior Scientist, Ensemble-Function Mapping",
+   "location": "Emeryville HQ",
+   "family": "industry_rd_scientist",
+   "relevant": false
+  },
+  {
+   "group": "queued",
+   "n": 24,
+   "company": "Xaira Therapeutics",
+   "title": "Senior Scientist Single Cell Assay and Technology Development",
+   "location": "South San Francisco, California, United States",
+   "family": "assay_development",
+   "relevant": true
+  },
+  {
+   "group": "queued",
+   "n": 25,
+   "company": "Octant Bio",
+   "title": "Scientist, Discovery Cheminformatics",
+   "location": "Emeryville, California, United States",
+   "family": "industry_rd_scientist",
+   "relevant": false
+  },
+  {
+   "group": "queued",
+   "n": 26,
+   "company": "Natera",
+   "title": "Scientist, Research- Oncology Diagnostics",
+   "location": "San Carlos, CA",
+   "family": "assay_development",
+   "relevant": true
+  },
+  {
+   "group": "queued",
+   "n": 27,
+   "company": "Personalis",
+   "title": "Sr. Bioinformatics Scientist - Collaborations",
+   "location": "Fremont, CA",
+   "family": "industry_rd_scientist",
+   "relevant": false
+  },
+  {
+   "group": "queued",
+   "n": 28,
+   "company": "BioMarin Pharmaceutical",
+   "title": "Senior Scientist II, Toxicologist",
+   "location": "San Rafael, California, United States",
+   "family": "industry_rd_scientist",
+   "relevant": false
+  },
+  {
+   "group": "queued",
+   "n": 29,
+   "company": "BioMarin Pharmaceutical",
+   "title": "Sr Scientist 1, Separations and Biophysics Assays",
+   "location": "Novato, California, United States",
+   "family": "assay_development",
+   "relevant": false
+  },
+  {
+   "group": "missed",
+   "company": "Amgen",
+   "title": "Medical Science Liaison - Obesity and Related Conditions - San Francisco, CA",
+   "location": "4 Locations",
+   "relevant": true
+  },
+  {
+   "group": "missed",
+   "company": "Thermo Fisher Scientific",
+   "title": "Sr Field Application Scientist, Downstream Bioproduction (Northern California)",
+   "location": "13 Locations",
+   "relevant": true
+  },
+  {
+   "group": "missed",
+   "company": "Danaher",
+   "title": "Bioprocess Applications Scientist",
+   "location": "4 Locations",
+   "relevant": true
+  },
+  {
+   "group": "missed",
+   "company": "Danaher",
+   "title": "Application Support Scientist",
+   "location": "5 Locations",
+   "relevant": true
+  },
+  {
+   "group": "missed",
+   "company": "Labcorp",
+   "title": "Senior Laboratory Application Support Specialist",
+   "location": "2 Locations",
+   "relevant": true
+  },
+  {
+   "group": "missed",
+   "company": "Amgen",
+   "title": "Senior Principal Scientist, Skin Biology and Inflammation",
+   "location": "2 Locations",
+   "relevant": true
+  },
+  {
+   "group": "missed",
+   "company": "Cytek Biosciences",
+   "title": "Field Applications Specialist III, Bay Area, SoCal, Seattle",
+   "location": "US",
+   "relevant": true
+  },
+  {
+   "group": "missed",
+   "company": "UCSF",
+   "title": "Staff Research Associate 1/2 - Neurological Surgery",
+   "location": "United States",
+   "relevant": true
+  },
+  {
+   "group": "missed",
+   "company": "Eikon Therapeutics",
+   "title": "Clinical Trial Associate, APAC (CONTRACT)",
+   "location": "Jersey City, NJ; Millbrae, CA",
+   "relevant": true
+  },
+  {
+   "group": "missed",
+   "company": "CareDx",
+   "title": "Clinical Operations Associate - California",
+   "location": "United States",
+   "relevant": true
+  },
+  {
+   "group": "missed",
+   "company": "Freenome",
+   "title": "Quality Control Specialist I (Contractor)",
+   "location": "Brisbane, California",
+   "relevant": true
+  },
+  {
+   "group": "missed",
+   "company": "Freenome",
+   "title": "Quality Control Specialist II (Contractor)",
+   "location": "Brisbane, California",
+   "relevant": true
+  },
+  {
+   "group": "missed",
+   "company": "BioMarin Pharmaceutical",
+   "title": "(CW) QC Analyst Contract",
+   "location": "",
+   "relevant": true
+  },
+  {
+   "group": "missed",
+   "company": "Synthego",
+   "title": "Laboratory Associate II, Pre-Clinical (Night Shift)",
+   "location": "Redwood City, CA",
+   "relevant": true
+  },
+  {
+   "group": "missed",
+   "company": "Arcadia Science",
+   "title": "Evolutionary Cell Biology Fellow",
+   "location": "Emeryville, CA",
+   "relevant": true
+  },
+  {
+   "group": "missed",
+   "company": "Stanford University",
+   "title": "Research Safety Specialist 2",
+   "location": "Stanford, CA, United States",
+   "relevant": true
+  },
+  {
+   "group": "missed",
+   "company": "Stanford University",
+   "title": "Research Safety Specialist - Fixed Term",
+   "location": "Stanford, CA, United States",
+   "relevant": true
+  },
+  {
+   "group": "missed",
+   "company": "Karius",
+   "title": "Clinical Laboratory Associate II",
+   "location": "Redwood City, CA",
+   "relevant": true
+  },
+  {
+   "group": "missed",
+   "company": "Genentech",
+   "title": "Scientist 3, Microscopy Specialist",
+   "location": "South San Francisco",
+   "relevant": true
+  },
+  {
+   "group": "missed",
+   "company": "Genentech",
+   "title": "Senior Principal Scientist -Bioanalytical Assay- Cell Therapy",
+   "location": "South San Francisco",
+   "relevant": true
+  },
+  {
+   "group": "missed",
+   "company": "Genentech",
+   "title": "Postdoctoral Fellow - Human Genetics, Bhangale Lab",
+   "location": "South San Francisco",
+   "relevant": true
+  },
+  {
+   "group": "missed",
+   "company": "Genentech",
+   "title": "Postdoctoral Fellow - Multimodal Technologies & Complex Human Model",
+   "location": "South San Francisco",
+   "relevant": true
+  },
+  {
+   "group": "pooled_wrong",
+   "company": "BioMarin Pharmaceutical",
+   "title": "QA Associate",
+   "location": "Ireland",
+   "relevant": false
+  },
+  {
+   "group": "pooled_wrong",
+   "company": "BioMarin Pharmaceutical",
+   "title": "QA Systems & Compliance Associate - 12 Month Assignment",
+   "location": "Ireland",
+   "relevant": false
+  },
+  {
+   "group": "pooled_wrong",
+   "company": "BioMarin Pharmaceutical",
+   "title": "Senior Engineer, Global Process Validation",
+   "location": "Ireland",
+   "relevant": false
+  },
+  {
+   "group": "pooled_wrong",
+   "company": "BioMarin Pharmaceutical",
+   "title": "Senior Medical Writer",
+   "location": "United Kingdom",
+   "relevant": false
+  },
+  {
+   "group": "pooled_wrong",
+   "company": "Danaher",
+   "title": "Field Application Specialist",
+   "location": "TWN - Remote",
+   "relevant": false
+  },
+  {
+   "group": "pooled_wrong",
+   "company": "Danaher",
+   "title": "Field Application Specialist - Flow Cytometry",
+   "location": "ZAF - Remote",
+   "relevant": false
+  },
+  {
+   "group": "pooled_wrong",
+   "company": "ZymoChem",
+   "title": "Bioprocess Engineer, Manufacturing",
+   "location": "Vizag",
+   "relevant": false
+  },
+  {
+   "group": "pooled_wrong",
+   "company": "Amgen",
+   "title": "Sr. Medical Science Liaison - Obesity and Related Conditions - Newark, NJ",
+   "location": "US - New Jersey - Newark",
+   "relevant": false
+  },
+  {
+   "group": "pooled_wrong",
+   "company": "Revolution Medicines",
+   "title": "MSL, Netherlands",
+   "location": "Remote (Amsterdam, Netherlands)",
+   "relevant": false
+  }
+ ]
+}

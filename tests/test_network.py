@@ -265,9 +265,18 @@ def test_same_text_guard():
     assert len(set(bodies)) == len(bodies)
 
 
+def test_fact_words():
+    """A referral pitch's numbers written as words are checked like digits (the
+    v1.2 FACT check): 'twelve years' with sources saying 5 years is dropped."""
+    sources = "Jordan Q. Avery\nQC Microbiologist, Example Labs, 2020 - Present\n- 5 years of GMP release testing.\n"
+    assert network.fact_lines("I bring 5 years of GMP release testing.", sources) == []
+    bad = network.fact_lines("I bring twelve years of GMP release testing.", sources)
+    assert bad and any("twelve" in ln.lower() or "12" in ln for ln in bad), bad
+
+
 def main():
     for fn in (test_import_zip, test_import_old_layout, test_zip_traversal, test_matching, test_match_cli,
-               test_asks, test_same_text_guard):
+               test_asks, test_same_text_guard, test_fact_words):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

@@ -100,7 +100,7 @@ writer ([references/files.md](references/files.md) has the full table):
 | `config/` (settings, search profile, watch list) and `variants/` | `state/`, `upload/`, `runner/out/`, `reports/funnel.csv`, `logs/` |
 | `runner/in/` files, create-only, through `events.py`, `leads.py` and `jobrunner.py request` | `applications.xlsx` in mode L (through `tracker.py apply-events`) |
 | `claude/session.json`, `claude/<date>/morning.json`, `claude/day_<date>/<step>.done` | in a job folder: posting.md, posting.json, fill_plan.json, terms.json, resume_B.*, cover_B.*, tune_log.json, `.runner_files` |
-| in a job folder: `.claimed`, resume.json and resume files (Tier A), notes.md, audit.md, filled.md, questions.json, cover_letter.*, `submitted/` | `applications/_diy/`, `applications/_not_sent/` |
+| in a job folder: `.claimed`, resume.json and resume files (Tier A, with `final.json` from a `--strict` build that passed), notes.md, audit.md, filled.md, questions.json, cover_letter.*, `submitted/` | `applications/_diy/`, `applications/_not_sent/` |
 
 - Before changing `profile.md`, `achievement_library.md`, `answers.md` or a
   config file, copy it to `backups/<name>_<YYYY-MM-DD_HHMM>.<ext>`. Files are
@@ -122,7 +122,7 @@ exact options. Each prints plain lines and uses the exit codes in
 [references/files.md](references/files.md).
 
 You run:
-- `today_view.py` - `card`, `next` (`--short` on an easy day), `progress`, `diy`, `drafts`: the day as printed lines.
+- `today_view.py` - `card`, `next` (both `--short` on an easy day), `progress`, `diy`, `drafts`: the day as printed lines.
 - `tracker.py` - every read and write of `applications.xlsx`, through the transport (below).
 - `events.py` - `emit` queue events (started, handed_over, applied, skipped, later, parked, unparked, blocked, answer_used, usage); `add` (a job from a link into today's list); `overlay`.
 - `caps.py check` - whether one more application to that company is allowed (`CAP ok`, `CAP DEFER ...`).
@@ -185,7 +185,8 @@ say "done"; in mode L the events wait, nothing to do.
        instead (`posting.py` refuses it with `JOB BOARD`, exit 4).
      - Pasted text: save it as `_incoming/pasted.txt` and run `posting.py
        [<link>] --out "<...>/_incoming/posting.md" --text-file
-       "<...>/_incoming/pasted.txt" --company "<employer>" --role "<title>"`.
+       "<...>/_incoming/pasted.txt" --company "<employer>" --role "<title>"
+       --location "<city, state as the text gives it>"`.
      - Any other link: `posting.py <link> --out "<...>/_incoming/posting.md"`.
        Exit 3 with `TRY <link>` and `RERUN <flags>`: fetch that link with
        your own fetch tool, save the raw response in `_incoming/`, and rerun
@@ -246,10 +247,13 @@ say "done"; in mode L the events wait, nothing to do.
    assessment and questions are posted and nothing of the resume is written.
 
 5. **Write the resume.** After the answers or "go", append the answers to
-   `notes.md` and follow [references/writing_rules.md](references/writing_rules.md).
-   *Done when:* the .docx and .pdf are in the job folder, every `FACT`,
-   `PARSE`, `EVIDENCE` and lint line is fixed or carried into Verify, and the
-   tracker says `Resume ready`.
+   `notes.md` under `## Answers`, merge their new facts into the library
+   first (step 6's Block C merge and `library.py ids`, so they can be cited),
+   then follow [references/writing_rules.md](references/writing_rules.md) and
+   build with its strict command. A required cover letter is written and
+   built with the resume. *Done when:* the build ends `VERDICT ok` (a strict
+   failure is fixed, never carried into Verify), the files and `final.json`
+   are in the job folder, and the tracker says `Resume ready`.
 
 6. **Update the library.** Merge Block C into `achievement_library.md` as
    writing_rules.md says, then `library.py ids`. An answer that will recur
@@ -276,9 +280,13 @@ A different link mid-chat starts a new job at step 3.
 
 In the day's fill loop ([references/apply_batch.md](references/apply_batch.md)):
 - `s` submitted; `k` skip this one; `later` move it to tomorrow; `ok`
-  attached, or confirmed (the sensitive line); `done` finished their part.
+  attached, or their part is done (never the sensitive line); `yes` (or
+  `yes, leave salary blank`) confirms the card's sensitive line; `done`
+  finished their part.
 - `stop`; `short` (switch to an easy day); `more` (10 more from the pool);
   `drafts` (the card's free-text drafts in full).
+- `reopen` (only after "did it go through?"): fill it again; its handover
+  reuses the row (daily.md, Interruptions).
 - `sent 1 2` referral asks went out; `ref 7 <url>` a contact's referral link
   for item 7; `log e1 e3` do-yourself items done.
 - `approve <family>` approves a variant (variants.md).

@@ -175,8 +175,11 @@ def test_health_rules():
     assert row["status"] == "active" and row["last_count"] == "0", row  # empty is unknown, never gone
     spec = boards.parse_spec("lever:flaky")
     health = {}
-    for i in range(3):
+    for i in range(3):  # three runs on one morning are one strike
         row = boards.update_health(health, boards.BoardResult(spec, "ERROR", "HTTP 500"), "2026-11-05")
+    assert row["status"] == "active" and row["consecutive_errors"] == "1", row
+    for day in ("2026-11-06", "2026-11-07"):
+        row = boards.update_health(health, boards.BoardResult(spec, "ERROR", "HTTP 500"), day)
     assert row["status"] == "paused" and row["consecutive_errors"] == "3", row
     row = boards.update_health(health, boards.BoardResult(spec, "OK"), "2026-11-09")
     assert row["status"] == "active" and row["consecutive_errors"] == "0", row
@@ -201,7 +204,13 @@ def test_r3_never_listed():
     shutil.copytree(FIX / "root_r3", root)
     f = fetcher()
     lines = []
-    results = boards.poll(root, fetcher=f, emit=lines.append)
+    # Pinned to the day before the second poll below: gone markers count once a
+    # day, so an unpinned clock reading 2026-11-06 made both polls one day.
+    os.environ["JOB_SKILL_NOW"] = "2026-11-05T18:00:00Z"
+    try:
+        results = boards.poll(root, fetcher=f, emit=lines.append)
+    finally:
+        del os.environ["JOB_SKILL_NOW"]
     urls = [u for _, u in f.offline.requests]
     bad = [u for u in urls if netfetch.hard_deny(u) or re.search(
         r"api\.smartrecruiters\.com|/jobboardview|icims\.com/jobs/search|paycomonline\.net|"
@@ -266,6 +275,8 @@ def test_templates_and_presets():
     with open(PRESET / "watchlist.csv", encoding="ascii", newline="") as fh:
         rows = list(csv.DictReader(fh))
     statuses = {"active", "dormant", "lead_only", "gone", "robots_blocked", "paused"}
+    keys = [boards.spec_from_row(r).key for r in rows if r["ats"] and r["board"]]
+    assert len(keys) == len(set(keys)), sorted(k for k in keys if keys.count(k) > 1)  # a merged row never repeats a board
     for r in rows:
         assert r["status"] in statuses and r["added_by"] == "research" and r["ref"], r
         if r["ats"] in boards.LEAD_ONLY_ATS - {"other"}:
@@ -287,18 +298,275 @@ LIVE_PICK = {"greenhouse": 8, "lever": 4, "ashby": 3, "workday": 4, "oracle": 2,
 
 
 def test_search_terms():
-    """Gate title syntax (stem*, a+b, a|b) never reaches a server's search box."""
+    """Gate title syntax (stem*, a+b, a|b) never reaches a server's search box,
+    and a fallback search is one term, never a family's terms joined (Workday
+    ANDs the words of one searchText). usajobs-mode families are left out and
+    priority 1 comes first."""
     import aggregators
-    fam = {"id": "x", "status": "active",
+    fam = {"id": "x", "status": "active", "priority": 2,
            "title_any": ["trainee+cls|clinical lab*", "microbiolog*", "postdoc*", "post doc*", "assay"]}
     assert boards.search_terms(fam["title_any"]) == ["trainee", "cls", "clinical lab", "microbiolog", "postdoc",
                                                      "post doc", "assay"]
-    assert boards.family_searches({"family": [fam]}) == ["trainee cls clinical lab microbiolog"]
+    assert boards.family_searches({"family": [fam]}) == ["trainee", "microbiolog", "postdoc", "post doc", "assay"]
     assert aggregators.family_words(fam, 3) == ["trainee", "cls", "clinical lab"]
-    plain = {"id": "y", "title_any": ["microbiologist", "qc analyst"]}
-    assert boards.family_searches({"family": [plain]}) == ["microbiologist qc analyst"]
-    for text in boards.family_searches({"family": [dict(f, status="active") for f in profile_families()]}):
+    plain = {"id": "y", "priority": 1, "title_any": ["microbiologist", "qc analyst"]}
+    gov = {"id": "z", "mode": "usajobs", "priority": 1, "title_any": ["biologist"]}
+    assert boards.family_searches({"family": [fam, gov, plain]}) == [
+        "microbiologist", "qc analyst", "trainee", "microbiolog", "postdoc", "post doc", "assay"]
+    texts = boards.family_searches({"family": [dict(f, status="active") for f in profile_families()]})
+    assert "postdoctoral" in texts and "postdoctoral postdoc post doc" not in texts, texts[:10]
+    assert "biologist" not in texts  # the preset's usajobs family
+    for text in texts:
         assert not set(text) & set("*+|"), text
+
+
+# ---------- Workday walk (LIVE-01), Oracle walk, empty tenants (LIVE-09) ----------
+
+class WdResp:
+    def __init__(self, d, status=200):
+        self.d, self.status, self.url = d, status, ""
+
+    def check(self):
+        return self
+
+    def json(self):
+        return self.d
+
+
+def wd_row(n, loc="South San Francisco, California, USA", title="Scientist"):
+    return {"externalPath": f"/job/x/Job-{n}_R{n}", "title": f"{title} {n}", "locationsText": loc}
+
+
+class FakeWorkday:
+    """A CXS tenant: total rows overall, `local` of them inside the facet ids
+    the test names. Records each POST's facets and searchText."""
+
+    def __init__(self, total, local, facets, home_ids=()):
+        self.total, self.local, self.facets, self.home_ids = total, local, facets, set(home_ids)
+        self.sent, self.bases = [], {}
+
+    def post_json(self, url, obj, headers=None):
+        self.sent.append((dict(obj["appliedFacets"]), obj["searchText"], obj["offset"]))
+        ids = {i for v in obj["appliedFacets"].values() for i in v}
+        n = self.local if ids else self.total
+        if obj["searchText"]:
+            n = min(n, 30)  # a title search finds a few
+        key = "facet" if ids else obj["searchText"]
+        base = self.bases.setdefault(key, 1000 * len(self.bases))
+        rows = [wd_row(base + i) for i in range(obj["offset"], min(n, obj["offset"] + 20))]
+        return WdResp({"total": n, "jobPostings": rows, "facets": self.facets if obj["offset"] == 0 else []})
+
+    def get(self, *a, **k):
+        raise AssertionError("no detail calls here")
+
+
+BAY = ["San Francisco", "South San Francisco", "Newark", "Dublin", "Richmond", "Brisbane"]
+WD_FACETS = [{"facetParameter": "locations", "values": [
+    {"descriptor": "South San Francisco, California, USA", "id": "ssf", "count": 200},
+    {"descriptor": "Newark, New Jersey, USA", "id": "nj", "count": 5},
+    {"descriptor": "Dublin - IE", "id": "ie", "count": 8},
+    {"descriptor": "Richmond - VA - US", "id": "va", "count": 31},
+    {"descriptor": "Brisbane, Australia", "id": "au", "count": 13},
+    {"descriptor": "Remote, California, USA", "id": "rca", "count": 28},
+    {"descriptor": "Remote, Florida, USA", "id": "rfl", "count": 3},
+    {"descriptor": "Canada - Remote", "id": "rcan", "count": 3}]},
+    {"facetParameter": "jobFamilyGroup", "values": [{"descriptor": "Research", "id": "r", "count": 9}]}]
+
+
+def wd_read(fake, **kw):
+    spec = boards.parse_spec("workday:acme/External@wd1")
+    kw.setdefault("places", BAY)
+    return boards.read_board(spec, fake, details=False, first_seen="2026-11-05", home_states=("CA",), **kw)
+
+
+def test_workday_location_walk():
+    """A big tenant is walked once inside the home-area location facet, with
+    no title search: every local row is listed, past the old 10-page cap,
+    and the homonyms (Newark NJ, Dublin IE, Richmond VA, Brisbane AU) and
+    remote values outside the US or for another state stay out."""
+    fake = FakeWorkday(3226, 250, WD_FACETS)
+    res = wd_read(fake, remote_us=True, fallback=["postdoctoral", "microbiologist"])
+    assert res.status == "OK" and len(res.readings) == 250, res.line()
+    assert res.line() == "BOARD workday:acme OK 250 postings pages=14 stop=total", res.line()
+    assert all(text == "" for _, text, _ in fake.sent), fake.sent  # no searchText at all
+    applied = [f for f, _, _ in fake.sent if f]
+    assert applied and all(f == {"locations": ["ssf", "rca"]} for f in applied), applied
+    fake = FakeWorkday(3226, 250, WD_FACETS)
+    wd_read(fake, remote_us=False)
+    assert {"locations": ["ssf"]} in [f for f, _, _ in fake.sent], fake.sent
+
+
+def test_workday_state_facet_and_no_local():
+    """No city-level value: the home state's own value is walked ('California'
+    on a tenant whose facet is by state). Facets that name only other states
+    and countries: no walk at all (stop=no-local), one POST."""
+    facets = [{"facetParameter": "locationRegionStateProvince", "values": [
+        {"descriptor": "California", "id": "ca", "count": 127}, {"descriptor": "Massachusetts", "id": "ma"}]},
+        {"facetParameter": "locationCountry", "values": [{"descriptor": "United States of America", "id": "us"}]}]
+    fake = FakeWorkday(1436, 127, facets)
+    res = wd_read(fake)
+    assert len(res.readings) == 127 and res.stop == "total", res.line()
+    assert {"locationRegionStateProvince": ["ca"]} in [f for f, _, _ in fake.sent], fake.sent
+    facets = [{"facetParameter": "locations", "values": [
+        {"descriptor": "Boston, Massachusetts, USA", "id": "b"}, {"descriptor": "Dublin - IE", "id": "d"}]}]
+    fake = FakeWorkday(900, 0, facets)
+    res = wd_read(fake)
+    assert res.status == "EMPTY" and res.stop == "no-local" and len(fake.sent) == 1 and res.total == 900, \
+        (res.line(), fake.sent)
+    row = boards.update_health({}, res, "2026-11-05")
+    assert row["status"] == "active" and row["empty_runs"] == "0", row  # nothing local is not a dead site
+
+
+def test_workday_fallback_terms():
+    """A tenant with no location facet is searched one term at a time, each
+    at most 2 pages, under the 10-page cap; terms rotate by day."""
+    fake = FakeWorkday(800, 0, [])
+    terms = ["postdoctoral", "microbiologist", "research associate", "assay", "sterility", "qc"]
+    res = wd_read(fake, fallback=terms)
+    texts = [t for _, t, _ in fake.sent]
+    assert texts[0] == "" and res.pages == 10, (texts, res.line())
+    searched = list(dict.fromkeys(texts[1:]))
+    assert all(t in terms for t in searched) and len(searched) == 5, searched
+    for t in searched:
+        assert texts.count(t) <= 2, texts
+    assert boards.rotate(terms, boards.to_day("2026-11-05")) != boards.rotate(terms, boards.to_day("2026-11-06"))
+    # no location facet but the whole tenant fits the 10-page cap: walked whole, no search
+    fake = FakeWorkday(150, 0, [])
+    res = wd_read(fake, fallback=terms)
+    assert len(res.readings) == 150 and res.stop == "total" and {t for _, t, _ in fake.sent} == {""}, res.line()
+
+
+def test_workday_caller_search():
+    """The resolver's own title search is sent as given (search mode), and
+    its 2-page limit holds."""
+    fake = FakeWorkday(800, 0, [])
+    spec = boards.parse_spec("workday:acme/External@wd1")
+    res = boards.read_board(spec, fake, searches=["QC Microbiologist"], places=BAY, max_pages=2, details=False,
+                            first_seen="2026-11-05")
+    assert [t for _, t, _ in fake.sent] == ["QC Microbiologist", "QC Microbiologist"], fake.sent
+    assert res.pages == 2, res.line()
+
+
+def test_workday_empty_tenant_flagged():
+    """LIVE-09: a tenant that lists 0 jobs even unfiltered costs one POST, and
+    after 3 polls on 3 days it is check_site (polled weekly, like paused)."""
+    fake = FakeWorkday(0, 0, [])
+    res = wd_read(fake, fallback=["postdoctoral", "assay"])
+    assert res.status == "EMPTY" and res.pages == 1 and res.total == 0, res.line()
+    health = {}
+    for day in ("2026-11-05", "2026-11-05", "2026-11-06"):
+        row = boards.update_health(health, res, day)
+    assert row["status"] == "active" and row["empty_runs"] == "2", row  # a same-day rerun counts once
+    row = boards.update_health(health, res, "2026-11-07")
+    assert row["status"] == "check_site", row
+    settings = {"sources": {}, "schedule": {"weekly_day": "monday"}}
+    why = boards.poll_skip(res.spec, health, settings, boards.to_day("2026-11-10"), None)  # a Tuesday
+    assert why == "check_site (polled on monday)", why
+    assert boards.poll_skip(res.spec, health, settings, boards.to_day("2026-11-09"), None) == ""
+    ok = boards.BoardResult(res.spec, "OK")
+    assert boards.update_health(health, ok, "2026-11-09")["status"] == "active"
+
+
+def test_oracle_stale_stop():
+    """An Oracle walk (newest first) stops at a page whose last row is older
+    than 45 days, instead of paging the whole tenant."""
+    tmp = Path(tempfile.mkdtemp())
+    api = ("https://acme.fa.us2.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitions"
+           "?onlyData=true&expand=requisitionList.secondaryLocations&finder=findReqs;siteNumber=CX,limit=200,"
+           "offset={o},sortBy=POSTING_DATES_DESC")
+    index = {}
+    for page, day in enumerate(("2026-11-04", "2026-09-01", "2026-08-01")):
+        rows = [{"Id": f"{page}{i:03d}", "Title": "Scientist", "PrimaryLocation": "Stanford, CA, United States",
+                 "PostedDate": day} for i in range(200)]
+        (tmp / f"o{page}.json").write_text(json.dumps({"items": [{"TotalJobsCount": 600,
+                                                                   "requisitionList": rows}]}), encoding="ascii")
+        index[api.format(o=page * 200)] = f"o{page}.json"
+    (tmp / "index.json").write_text(json.dumps(index), encoding="ascii")
+    spec = boards.parse_spec("oracle:acme/CX@acme.fa.us2.oraclecloud.com")
+    res = boards.read_board(spec, fetcher(tmp, extra_hosts=(spec.host,)), details=False, first_seen="2026-11-05")
+    assert res.line() == "BOARD oracle:acme OK 400 postings pages=2 stop=stale", res.line()
+    shutil.rmtree(tmp)
+
+
+def test_offline_mornings():
+    """PIPE-06: three mornings with no network (every board errors) pause no
+    board and print one WARN offline line; a board that fails on a morning
+    when others answer takes one strike a day."""
+    tmp = Path(tempfile.mkdtemp())
+    root = tmp / "root"
+    shutil.copytree(FIX / "root_r3", root)
+    nonet = tmp / "nonet"
+    nonet.mkdir()
+    (nonet / "index.json").write_text(json.dumps({"https://api.lever.co/robots.txt": {"error": "no network"},
+                                                  "https://boards-api.greenhouse.io/robots.txt": {"error": "x"},
+                                                  "https://homebrew.bamboohr.com/robots.txt": {"error": "x"}}))
+    try:
+        for day in ("2026-11-10", "2026-11-11", "2026-11-12"):
+            os.environ["JOB_SKILL_NOW"] = f"{day}T13:30:00Z"
+            lines = []
+            boards.poll(root, fetcher=fetcher(nonet), emit=lines.append)
+            assert any(ln.startswith("WARN offline: no board answered (3 tried)") for ln in lines), lines
+        with open(root / "state" / "board_health.csv", encoding="utf-8") as fh:
+            rows = list(csv.DictReader(fh))
+        assert rows and all(r["status"] == "active" and r["consecutive_errors"] == "0" for r in rows), rows
+        assert all(r["last_error"].startswith("deny: robots-unreachable") for r in rows), rows
+        os.environ["JOB_SKILL_NOW"] = "2026-11-13T13:30:00Z"
+        lines = []
+        results = boards.poll(root, fetcher=fetcher(), emit=lines.append)
+        assert not any("WARN offline" in ln for ln in lines) and not boards.no_network(results), lines
+        assert "BOARD greenhouse:vaxcyte OK" in "\n".join(lines), lines
+    finally:
+        os.environ.pop("JOB_SKILL_NOW", None)
+    shutil.rmtree(tmp)
+
+
+def test_odd_answers_stay_on_their_board():
+    """One board answering {"jobs": [null]}, a list of numbers, or JSON nested
+    thousands deep is that board's ERROR line; it never stops the poll (one
+    such answer used to stop the whole daily with no queue)."""
+    tmp = Path(tempfile.mkdtemp())
+    deep = "[" * 100000 + "]" * 100000
+    bodies = {"https://boards-api.greenhouse.io/v1/boards/acme/jobs?content=true": '{"jobs": [null]}',
+              "https://api.lever.co/v0/postings/acme?mode=json&skip=0&limit=100": "[1, 2, 3]",
+              "https://api.ashbyhq.com/posting-api/job-board/acme?includeCompensation=true": deep,
+              "https://boards-api.greenhouse.io/v1/boards/good/jobs?content=true": json.dumps({"jobs": [
+                  {"id": 1, "title": 7, "location": None, "absolute_url": None, "content": None},
+                  {"id": 2, "title": "QC Microbiologist", "location": {"name": "Springfield, IL"},
+                   "absolute_url": "https://job-boards.greenhouse.io/good/jobs/2", "content": "<p>Run assays.</p>",
+                   "first_published": "2026-11-04T10:00:00Z"}]})}
+    index = {}
+    for i, (url, body) in enumerate(bodies.items()):
+        (tmp / f"b{i}.json").write_text(body, encoding="ascii")
+        index[url] = f"b{i}.json"
+    (tmp / "index.json").write_text(json.dumps(index), encoding="ascii")
+    for spec in ("greenhouse:acme", "lever:acme", "ashby:acme"):
+        res = boards.read_board(boards.parse_spec(spec), fetcher(tmp), details=False, first_seen="2026-11-05")
+        assert res.status == "ERROR", res.line()
+    res = boards.read_board(boards.parse_spec("greenhouse:good"), fetcher(tmp), details=False,
+                            first_seen="2026-11-05")
+    assert res.status == "OK" and [rd.posting.title for rd in res.readings][-1] == "QC Microbiologist", res.line()
+    shutil.rmtree(tmp)
+
+
+def test_jazzhr_page_without_jsonld():
+    """LIVE-07: a JazzHR job page with no JSON-LD keeps the list's title (not
+    the page title 'JazzHR - Job Listings') and reads the place line."""
+    page = ("<html><head><title>JazzHR - Job Listings</title></head><body><a href=\"/apply/jobs\">Back to Jobs</a>"
+            "<h3>Example Institute</h3><h3>Postdoctoral Researcher - Example lab</h3>"
+            "<h3>Postdocs - Springfield, IL - Full Time</h3><p>The Example lab studies bacterial stress responses. "
+            "Requirements: PhD in microbiology.</p></body></html>")
+    tmp = Path(tempfile.mkdtemp())
+    (tmp / "p.html").write_text(page, encoding="ascii")
+    url = "https://example.applytojob.com/apply/jobs/details/AbC123"
+    (tmp / "index.json").write_text(json.dumps({url: "p.html"}), encoding="ascii")
+    spec = boards.BoardSpec("jazzhr", "example", employer="Example Institute")
+    ctx = boards.Ctx(fetcher(tmp, extra_hosts=("example.applytojob.com",)), spec)
+    it = boards.new_item(spec, url, "jazzhr", "Postdoctoral Researcher - Example lab")
+    boards.detail_page(ctx, it)
+    assert it.p["role"] == "Postdoctoral Researcher - Example lab", it.p["role"]
+    assert it.p["location"] == "Springfield, IL", it.p["location"]
+    assert "bacterial stress" in it.p["description"]
+    shutil.rmtree(tmp)
 
 
 def profile_families():
@@ -331,7 +599,10 @@ def test_live():
 def main():
     for t in (test_every_fixture, test_date_sources, test_workday_paging_cli, test_adp_short_pages,
               test_gone_and_empty, test_health_rules, test_two_stage_keep, test_r3_never_listed,
-              test_flags_and_xml_guard, test_templates_and_presets, test_search_terms):
+              test_flags_and_xml_guard, test_templates_and_presets, test_search_terms, test_workday_location_walk,
+              test_workday_state_facet_and_no_local, test_workday_fallback_terms, test_workday_caller_search,
+              test_workday_empty_tenant_flagged, test_oracle_stale_stop, test_offline_mornings,
+              test_jazzhr_page_without_jsonld, test_odd_answers_stay_on_their_board):
         t()
         print("ok", t.__name__)
     if os.environ.get("JOB_SKILL_LIVE") == "1":

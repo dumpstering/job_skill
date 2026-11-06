@@ -8,7 +8,7 @@ Usage (every subcommand except `statuses` takes --root <JobSearch folder>):
         [--applied YYYY-MM-DD] [--notes N] [--job-key K] [--tier A|B|"By hand"] [--family F]
         [--variant V] [--ats A] [--found-via W] [--posted D] [--req-id R] [--queue-date D]
         [--account none|exists|new] [--referral NAME] [--referral-url U] [--confirmed D]
-        [--proof P] [--block-reason CODE] [--employer-site U]
+        [--proof P] [--block-reason CODE] [--employer-site U] [--force]
     python tracker.py update --root R ID field=value [field=value ...] [--force]
     python tracker.py show --root R [--id ID] [--status S [S ...]] [--active] [--company C]
     python tracker.py due --root R
@@ -53,6 +53,14 @@ Transports (spec 2.6). Reads and writes take --transport auto|events|direct.
             when it sets M; with no settings file, events when the runner's
             snapshot (or a pending tracker event) is there, else direct.
 
+One job, one row: `add` for a job key that already has a row updates that row
+instead when it was never sent (Started through Filled - awaiting submit,
+Blocked, Not pursued; the status moves only forward unless the row was Not
+pursued or Closed) and prints `ADDED <ID> (existing row)` (`ADDED P-<8hex>
+(pending, existing row)`); when the row records a sent application it prints
+`REFUSED <ID> already <status> for job key <key>: ...` and exits 5 (--force
+adds a new row anyway, for a real second application).
+
 `check` labels, strongest first:
     SAME POSTING   same job key or URL
     LIKELY REPOST  same company and requisition ID, or posting text at least
@@ -64,7 +72,13 @@ It also prints IN QUEUE <date> #<n> when the job is in today's queue.
 
 Exit codes: 0 ok, 1 bad input (ERROR ...), 2 openpyxl missing (pip install
 openpyxl), 4 applications.xlsx is open in Excel (LOCKED ...), 5 a backward
-status move was refused (REFUSED ...; add --force to correct a mistake).
+status move, or a second row for a job already sent, was refused (REFUSED
+...; add --force to correct a mistake).
+
+apply-events treats the workbook as locked only when a program holds it
+(applications.xlsx, or Excel's hidden ~$applications.xlsx owner file, cannot
+be opened for writing); an owner file Excel left behind after a crash or a
+forced restart is ignored.
 """
 import argparse
 import contextlib
@@ -841,7 +855,9 @@ def write_book(wb, path, before_replace=None):
         wb.save(tmp)
         if before_replace:
             before_replace()
-        os.replace(tmp, path)
+        # A scanner or the indexer may hold the file for a moment after a write; Excel
+        # holding it open still ends in PermissionError (LOCKED) after the short waits.
+        jobfs._rename(tmp, path)
     except BaseException:
         try:
             os.remove(tmp)
@@ -1008,6 +1024,25 @@ def row_fingerprint(root, row):
     return reqs, sh
 
 
+def referral_urls(store):
+    """job_key -> the referral link stored for that job (`ref <n> <url>`: the
+    Referrals sheet's or the row's Referral URL), http(s) only; the
+    Applications row wins over the Referrals sheet."""
+    out = {}
+    if store is None:
+        return out
+    pairs = []
+    if getattr(store, "referrals", None) is not None:
+        pairs += [(r.get("Job key"), r.get("Referral URL")) for r in store.referrals.rows()]
+    if getattr(store, "apps", None) is not None:
+        pairs += [(r.get("Job key"), r.get("Referral URL")) for r in store.app_rows()]
+    for key, url in pairs:
+        key, url = text(key), text(url)
+        if key and re.fullmatch(r"https?://\S{4,2000}", url, re.I):
+            out[key] = url
+    return out
+
+
 def queue_items(root, day):
     """Items of queue/<day>/queue.json and its addenda, plus jobs from links
     whose added event is not in addendum_user.json yet."""
@@ -1129,9 +1164,53 @@ def add_values(a):
     return vals
 
 
+def same_job_rows(tr, key):
+    """Applications rows with this job key, in sheet order."""
+    return [r for r in tr.app_rows() if key and text(r["Job key"]) == key] if key else []
+
+
+def sent(row):
+    """True when a row records a sent application (Applied and beyond, or
+    Closed with an Applied date)."""
+    st = canon_status(row["Status"])
+    return st in RESPONDED | {"Applied", "No response", "Withdrawn"} or (st == "Closed" and bool(to_date(row["Applied"])))
+
+
+def reuse_row(a, tr, row, vals):
+    """add for a job that already has a row it never sent: that row is updated
+    (one job, one row), the status only forward unless it was dropped."""
+    now = today(a.root)
+    old = canon_status(row["Status"])
+    new = vals["Status"]
+    if not (old in ("Not pursued", "Closed") or (rank_of(new) or 0) >= (rank_of(old) or 0)):
+        new = old
+    changes = {c: v for c, v in vals.items() if c not in ("ID", "Date") and v not in (None, "")}
+    changes.update({"Status": new, "Last update": now})
+    applied = to_date(changes.get("Applied") or row["Applied"])
+    if applied and RANK.get(new, 0) <= 3 and not text(row["Follow-up"]) and \
+            wants_followup(a.root, changes.get("Tier") or row["Tier"], changes.get("Referral") or row["Referral"]):
+        changes["Follow-up"] = applied + timedelta(days=followup_rule(a.root)[1])
+    for col, v in changes.items():
+        if col in APP_COLS and text(row.get(col)) != text(v):
+            tr.apps.put(row["_row"], col, v)
+    tr.save()
+    rid = text(row["ID"])
+    print(f"ADDED {rid} (" + ("pending, " if PID_RE.fullmatch(rid) else "") + "existing row)")
+    return 0
+
+
 def cmd_add(a):
     vals = add_values(a)
     tr = open_tracker(a, create=True, for_write=True)
+    rows = [] if getattr(a, "force", False) else same_job_rows(tr, text(vals["Job key"]))
+    done = [r for r in rows if sent(r)]
+    if done:
+        r = done[-1]
+        print(f"REFUSED {text(r['ID'])} already {canon_status(r['Status'])} for job key {text(r['Job key'])}: "
+              "a second row would count a second application (add --force for a new application)")
+        return 5
+    if rows:
+        return reuse_row(a, tr, rows[-1], vals)
     new_id = tr.new_app_id(getattr(a, "pid", None))
     pending = isinstance(new_id, str)
     if pending:
@@ -1708,6 +1787,28 @@ def update_status(root, **values):
     jobfs.atomic_write_json(path, data)
 
 
+def held_open(path):
+    """True when another program holds path so it cannot be opened for writing
+    (Excel holds an open workbook and its ~$ owner file that way). Opening for
+    r+b changes nothing; a missing file is not held."""
+    try:
+        with open(path, "r+b"):
+            return False
+    except FileNotFoundError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+
+
+def workbook_locked(root):
+    """Excel has applications.xlsx open: the workbook or its owner file is held.
+    An owner file nothing holds is a leftover (Excel crashed, a forced restart)."""
+    root = Path(root)
+    return held_open(root / FILENAME) or held_open(root / LOCK_NAME)
+
+
 def report_locked(root):
     print("LOCKED applications.xlsx is open in another program (Excel?). Events stay pending.")
     path = jobfs.Folder(root).status_json
@@ -1756,15 +1857,15 @@ def cmd_apply_events(a):
     need_openpyxl()
     files = events.pending_files(a.root)
     if not files:
-        # An idle tick: refresh the snapshot only when the user edited the workbook.
-        if not snapshot_current(a.root) and not (Path(a.root) / LOCK_NAME).exists():
+        # An idle tick: refresh the snapshot only when the user edited (and saved) the workbook.
+        if not snapshot_current(a.root) and not workbook_locked(a.root):
             tr = Tracker(a.root)
             tr.load()
             write_snapshot(tr, a.root)
         update_status(a.root, tracker_locked_since=None)
         print("APPLIED 0 PENDING 0 REJECTED 0")
         return 0
-    if (Path(a.root) / LOCK_NAME).exists():
+    if workbook_locked(a.root):
         return report_locked(a.root)
     journal = Journal(a.root)
     applied_ids = journal.ids()
@@ -1940,6 +2041,8 @@ def add_add_options(p):
     p.add_argument("--queue-date", help="YYYY-MM-DD")
     p.add_argument("--account", default="", help=" | ".join(ACCOUNT_STATES))
     p.add_argument("--confirmed", help="YYYY-MM-DD")
+    p.add_argument("--force", action="store_true",
+                   help="a new row even when the job key already has one (a real second application)")
 
 
 def add_subcommands(add):

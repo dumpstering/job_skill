@@ -21,6 +21,8 @@ version = 1
 label = ""                  # "City, ST" from profile.md
 zip = ""
 radius_miles = 40
+states = []                 # US state codes of the places, e.g. ["CA"]; "Newark, NJ" then
+                            # does not count for a Newark in the places
 places = []                 # accepted city names, confirmed once
 second_ring = []            # used only by the widen step "second_ring"
 remote = "us"               # none | us
@@ -48,7 +50,6 @@ undated_policy = "first_seen_after_2_polls"
 # label = ""
 # status = "active"         # active | paused | proposed (proposed joins with the widen step adjacent_families)
 # mode = "industry"         # industry | cv | usajobs
-# variant = "example_family"
 # core_titles = []          # exact title phrases (title match 1.0)
 # adjacent_titles = []      # approved neighbors, title match 0.6
 # title_any = []            # title terms; one hit is enough

@@ -11,11 +11,14 @@ Jordan Q. Avery (tests/fixtures/variant_example's files) on 2026-11-06:
 - config/search_profile.toml has two families (qc_micro, assay_dev), each with
   an approved variant (variants/<family>/v1/approved.json);
 - state/pool.json carries 66 gated postings from earlier days (made-up
-  companies), and state/leads_state.json holds alert leads that were tried
-  once on 2026-11-05 and that no board answers for, so today they are given
-  up (discards.csv gate resolve, reason unresolved).
-The day: 5 board postings pass the gates, the rest of the boards and the
-leads give 141 discards; the queue takes 30 of the 71 eligible postings.
+  companies), and state/leads_state.json holds 92 alert leads that were tried
+  once on 2026-11-05 and that no board answers for. Today they are listed in
+  runner/out/needs_search.json (10 companies, the day's web-search limit) for
+  job-morning to search; a lead that needs a web search is given up only
+  after needs_search.json listed it on 2 different days (contracts-06).
+The day: 4 board postings pass the gates (Gilead's R0055911 was posted
+2026-10-01, so its detail date makes it G5 stale: LIVE-03), the rest of the
+boards give 52 discards; the queue takes 30 of the 70 eligible postings.
 Stdlib only for the checks (the daily itself needs the runner packages).
 Exits non-zero on the first failure and prints PASS at the end.
 """
@@ -104,7 +107,6 @@ id = "qc_micro"
 label = "QC / Microbiology"
 status = "active"
 mode = "industry"
-variant = "qc_micro"
 core_titles = ["QC Microbiologist"]
 adjacent_titles = ["Microbiology Analyst"]
 title_any = ["microbiolog*", "sterility", "laboratory", "lab"]
@@ -118,7 +120,6 @@ id = "assay_dev"
 label = "Scientist / Assay development"
 status = "active"
 mode = "industry"
-variant = "assay_dev"
 core_titles = ["Scientist, Assay Development"]
 title_any = ["scientist"]
 title_none = ["machine learning", "data"]
@@ -300,14 +301,14 @@ def test_day():
         code, lines, err = run_daily(root)
         took = time.time() - t0
         assert code == 0, (code, lines[-15:], err[-2000:])
-        assert lines and lines[-1] == "DAILY ok queue=30 pool_left=41 discards=141 tier_b_built=30 prep_failed=0", \
+        assert lines and lines[-1] == "DAILY ok queue=30 pool_left=40 discards=52 tier_b_built=30 prep_failed=0", \
             (lines[-12:], err[-1500:])
         assert DAILY_RE.match(lines[-1])
         qd = root / "queue" / DAY.isoformat()
         for name in ("queue.json", "today.md", "review.html", "discards.csv"):
             assert (qd / name).exists(), name
         q = json.loads((qd / "queue.json").read_text(encoding="utf-8"))
-        assert q["size"] == 30 == len(q["items"]) and q["pool_left"] == 41, (q["size"], q["pool_left"])
+        assert q["size"] == 30 == len(q["items"]) and q["pool_left"] == 40, (q["size"], q["pool_left"])
         assert q["size"] == min(30, q["size"] + q["pool_left"])
         sys.path.insert(0, str(SCRIPTS))
         import jobqueue
@@ -330,10 +331,17 @@ def test_day():
         with open(root / "reports" / "funnel.csv", encoding="utf-8", newline="") as f:
             rows = list(csv.DictReader(f))
         assert len(rows) == 1 and rows[0]["date"] == DAY.isoformat() and rows[0]["queued"] == "30", rows
-        assert rows[0]["pool"] == "71", rows[0]
-        assert "resolve:92" in rows[0]["discarded_by_gate"], rows[0]
+        assert rows[0]["pool"] == "70", rows[0]
+        # The leads tried once yesterday are offered to today's web search, never discarded yet.
+        assert "resolve" not in rows[0]["discarded_by_gate"], rows[0]
+        needs = json.loads((root / "runner" / "out" / "needs_search.json").read_text(encoding="utf-8"))
+        assert needs["date"] == DAY.isoformat() and len(needs["companies"]) == 10, needs
+        assert sum(c["leads"] for c in needs["companies"]) == 92, needs["companies"]
+        lead_state = json.loads((root / "state" / "leads_state.json").read_text(encoding="utf-8"))["leads"]
+        assert all(ld["status"] == "pending" and ld.get("offered") == [DAY.isoformat()]
+                   for ld in lead_state.values()), "a lead was given up before a web search had it"
         with open(qd / "discards.csv", encoding="utf-8", newline="") as f:
-            assert sum(1 for _ in csv.DictReader(f)) == 141
+            assert sum(1 for _ in csv.DictReader(f)) == 52
         today = (qd / "today.md").read_text(encoding="utf-8")
         assert len(today.splitlines()) <= 80 and "Ready: 30." in today, today[:400]
         html = (qd / "review.html").read_bytes()

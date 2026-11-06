@@ -15,8 +15,12 @@ answers.md or techniques.md that the library lacks), DUPLICATE and NO-ID
 lines, then `LIBRARY ok` or `LIBRARY fail`.
 
 Entries are the `- ` lines under `### ` headings; indented lines continue the
-entry above. "Not held: ..." lines get no ID. Role headings are
-`### Job Title | Company | Mon YYYY - Mon YYYY` (v1.1).
+entry above. "Not held: ..." lines and "Confirmed <Mon YYYY>: ..." lines (a
+quick-check answer the user gave, such as "title unchanged") get no ID. Role
+headings are `### Job Title | Company | Mon YYYY - Mon YYYY` (v1.1).
+
+check reads techniques.md's technique lines and answers.md's answer lines
+only, so the format examples in those files are never DANGLING.
 
 Other scripts import parse(), load() and load_techniques().
 Exit codes: 0 ok, 1 bad input or a failed check.
@@ -37,6 +41,9 @@ HEADING_RE = re.compile(r"^###\s+(.*?)\s*$")
 LAST_ID_RE = re.compile(r"^<!--\s*last-id:\s*L-(\d{4,})\s*-->\s*$")
 CITED_RE = re.compile(r"(?<![A-Za-z0-9-])L-\d{4,}(?![0-9])")
 NOT_HELD = re.compile(r"^not held\b", re.I)
+# "Confirmed Nov 2026: title unchanged ..." records a quick-check answer; it is no achievement.
+CONFIRMED = re.compile(r"^confirmed\b", re.I)
+BANK_LINE = re.compile(r"^[-*]\s+(?:ANS|JOB)-\d+\s*\|")  # answers.md lines (top level)
 
 
 @dataclass
@@ -46,6 +53,7 @@ class Entry:
     heading: str       # the ### heading above it
     line: int          # 1-based line number of the "- " line
     held: bool = True  # False for "Not held: ..." lines
+    note: bool = False  # True for "Confirmed ...: ..." lines (no ID)
 
 
 @dataclass
@@ -93,7 +101,7 @@ def parse(text):
             idm = ID_RE.match(line)
             body = line[idm.end():] if idm else m.group(2)
             current = Entry(idm.group(2) if idm else "", body.strip(), heading, n,
-                            held=not NOT_HELD.match(body.strip()))
+                            held=not NOT_HELD.match(body.strip()), note=bool(CONFIRMED.match(body.strip())))
             lib.entries.append(current)
             continue
         if current is not None and line.strip() and line[:1] in (" ", "\t"):
@@ -190,7 +198,7 @@ def assign(text):
     """(new text, [assigned IDs]). Lines keep their endings; entries that
     already hold an ID, and Not held lines, are left alone."""
     lib = parse(text)
-    todo = {e.line for e in lib.entries if not e.id and e.held and e.text}
+    todo = {e.line for e in lib.entries if not e.id and e.held and not e.note and e.text}
     if not todo:
         return text, []
     nxt = lib.high_water() + 1
@@ -247,6 +255,18 @@ def citing_files(root):
     return found
 
 
+def cited_in(path, text):
+    """The IDs a file cites. techniques.md: its technique lines' evidence;
+    answers.md: its answer lines; anything else (JSON): the whole text. The
+    format examples in the shipped templates are not citations."""
+    name = Path(path).name.lower()
+    if name == "techniques.md":
+        return {i for t in load_techniques(path) for i in t.evidence}
+    if name == "answers.md":
+        return {i for line in text.splitlines() if BANK_LINE.match(line) for i in CITED_RE.findall(line)}
+    return set(CITED_RE.findall(text))
+
+
 def cmd_check(path, root, cites):
     lib = load(path)
     if not path.exists():
@@ -258,7 +278,7 @@ def cmd_check(path, root, cites):
         print(f"DUPLICATE {dup} (lines {first} and {again})")
         problems += 1
     for e in lib.entries:
-        if not e.id and e.held and e.text:
+        if not e.id and e.held and not e.note and e.text:
             print(f'NO-ID line {e.line}: "{e.text[:50]}" (run library.py ids)')
             problems += 1
     files = [Path(c) for c in cites] if cites else (citing_files(root) if root else [])
@@ -270,7 +290,7 @@ def cmd_check(path, root, cites):
             print(f"ERROR cannot read {f}: {e}")
             return 1
         shown = f.relative_to(root) if root and f.is_relative_to(root) else f
-        for cid in sorted(set(CITED_RE.findall(text))):
+        for cid in sorted(cited_in(f, text)):
             refs += 1
             if cid not in ids:
                 print(f"DANGLING {cid} in {shown.as_posix()}")
@@ -282,8 +302,16 @@ def cmd_check(path, root, cites):
     return 0
 
 
+class Parser(argparse.ArgumentParser):
+    """A bad argument is bad input: ERROR and exit 1 (exit 2 is reserved)."""
+
+    def error(self, message):
+        print(f"ERROR {message}")
+        sys.exit(1)
+
+
 def main(argv=None):
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap = Parser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name in ("ids", "check"):
         p = sub.add_parser(name)

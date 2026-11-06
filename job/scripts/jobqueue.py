@@ -12,31 +12,56 @@ writes queue/<date>/queue.json with N = ceil(target x queue_factor) items:
     score = fresh[band] + 30*fit + 20*referral_tier1 + priority(p1=10,p2=5,p3=0)
             + family_w - cost(account: none 0, exists 3, new 8) - 10 if the company
             had an application in the last 30 days
-taking items while caps.caps_verdict allows them (each pick is reserved, so
-"apply to all" never breaks a cap; a DEFER keeps the item in the pool with
-its eligible_on date), at most 3 new-account tenants, 6 account-required
-items and 1 USAJOBS item, and each active family's min_share where the pool
-allows. The top tier_a_per_day items are Tier A (a tier-1 referral, USAJOBS,
-band 0-3 with fit >= 0.7, then the highest fit); until a family's variant is
-approved its items can only be Tier A. The order: batch 1 is no-account Tier B
-items by score, then the account block (new-account tenants grouped by
-tenant), then the rest by score; never the same employer twice in a row and
-at most 3 in a row on one ATS host. Job folders get posting.md, posting.json
-and .runner_files. Folders of jobs that got no tracker row within 30 days
-move to applications/_not_sent/<YYYY-MM>/ (never deleted). When the pool is
-under target, one widen step a day is switched on for the next gates run.
+taking items while caps.caps_verdict allows them (each pick is reserved for
+the day, so "apply to all" never breaks a cap; a DEFER keeps the item in the
+pool, and every build checks it again), at most 3 new-account tenants, 6
+account-required items and 1 USAJOBS item, and each active family's
+min_share where the pool allows. The top tier_a_per_day items are Tier A (a
+tier-1 referral, USAJOBS, band 0-3 with fit >= 0.7, then the highest fit).
+Until a family's variant is approved (or after an approved file changed) at
+most tier_a_per_day of its items are queued, as Tier A; the rest wait for the
+re-approval. They fill only slots nothing else can, queued last as Tier B with
+resume_status prep_failed (the card's re-approval line), and counts.variant_wait
+holds {family: jobs waiting}. The order: an item handed over on an earlier
+day with no `s` first (flag `unsubmitted`: ask whether it went through), then
+batch 1 (no-account Tier B items by score), the account block (new-account
+tenants grouped by tenant), the rest by score, and the prep_failed items
+last; never the same employer twice in a row and at most 3 in a row on one
+ATS host. Job folders get posting.md, posting.json and .runner_files. Folders
+of jobs that got no tracker row within 30 days move to
+applications/_not_sent/<YYYY-MM>/ (never deleted). When fewer than target
+pool items pass the caps with a resume to send (an approved variant, or one
+of the day's Tier A places), one widen step a day is switched on for the next
+gates run.
     QUEUE size=<n> pool_left=<n> new_account_tenants<=3 account_required<=6 usajobs<=1
     MIX tier_a=<n> new_account_tenants=<n> account_required=<n> usajobs=<n> deferred=<n>
+    WAIT_VARIANT <family> <n> jobs        (one per family waiting for a re-approval)
     WIDEN <step>
     WROTE queue/<date>/queue.json
-queue.json is immutable once any event for that date exists (FROZEN), and the
-build waits while claude/session.json has a beat under 20 minutes old (WAIT).
+The build first folds the day's queue events (fold-events), so a session's
+late events count even when no tick ran after them. What comes back, by the
+job's last queue event: applied, and skipped or blocked for good (closed,
+knockout_at_form, unsafe_verification, sso_required) leave the pool; skipped
+by the user (`k`) waits 7 days, and a second `k` on another day drops it;
+blocked account_locked keeps that tenant's items out for 7 days; parked and
+handed_over hold for their own day only, so a parked job (a question, a usage
+limit) is back the next day, never dropped. queue.json is immutable once any
+event for that date exists (FROZEN), and a rebuild of a queue.json that
+exists waits while claude/session.json has a beat under 20 minutes old
+(WAIT); the first build of the day never waits. Items already
+given that day (an addendum or a job from a link before queue.json) keep
+their numbers: the build numbers after them and leaves their jobs out.
 
 addendum appends new items after the highest number already given (late finds
 from --pool, or `more`: the next more_size items from the pool) to
 queue/<date>/addendum_<HHMM>.json; queue.json and upload/ are never touched
 while a session is active. Numbers given to jobs from links (added events)
 count as given, and they are checked again just before the file is written.
+Before today's queue.json exists it writes nothing (late finds are in the
+pool for the build):
+    ADDENDUM none: no list for <date> yet (the daily builds it first)
+    ADDENDUM none: <family> needs a quick re-approval (<n> jobs wait)
+    ADDENDUM none: nothing new passes the caps
 
 stage-uploads copies each item's built resume (resume_B.pdf, or resume.pdf for
 a ready Tier A item) to upload/NN_<Last>_Resume_<Employer12>.pdf (NNc_ for a
@@ -81,8 +106,13 @@ FOLDED_DAYS = 8
 RUNNER_FILES = ".runner_files"
 PRIORITY_POINTS = {1: 10, 2: 5, 3: 0}
 COST = {"none": 0, "exists": 3, "new": 8}
-EXCLUDE_STATES = {"applied", "handed_over", "parked"}
+# A job's last queue event, from state/queue_state.json:
+DAY_ONLY_STATES = {"handed_over", "parked"}      # held out on their own day only (decision: parked comes back)
 PERMANENT_BLOCKS = {"sso_required", "unsafe_verification", "knockout_at_form", "closed"}
+PERMANENT_SKIPS = {"closed", "knockout_at_form", "unsafe_verification"}
+USER_SKIP_HOLD_DAYS = 7      # `k`: back after a week, not tomorrow's top
+USER_SKIP_DROP = 2           # `k` on this many different days: not for this user, out of the pool
+TENANT_LOCK_DAYS = 7         # account_locked: that tenant's items wait a week (apply_batch.md)
 
 # Per ATS: account (none, or one per tenant), attach order (first everywhere
 # until the day-1 supervised test, 5.4), CAPTCHA risk, the user's minutes (1.6) and
@@ -224,20 +254,52 @@ class Context:
         self.store = caps.open_store(root)
         index = caps.load_index(root, today, store=self.store)
         if not include_queued:
-            index = [e for e in index if e["status"] != "Queued"]
+            # A rebuild replaces queue.json: its old picks are not reservations.
+            # Addenda and jobs from links stay, so theirs still are.
+            old = {it.get("job_key") for it in read_json(self.folder.queue_json(today), {}).get("items") or []
+                   if isinstance(it, dict)}
+            index = [e for e in index if not (e["status"] == "Queued" and e["job_key"] in old)]
         self.base_index = list(index)
         self.index = index
         self.rules = caps.load_rules(root, self.store)
         self.sites = self.account_sites()
         self.weights = (read_json(self.folder.weights_json, {}).get("family_w") or {})
         self.referrals = {}
+        self.referral_urls = caps.tracker.referral_urls(self.store)
         self.qstate = read_json(self.folder.queue_state_json, {}).get("items", {})
-        self.acted = {e["job_key"] for e in self.base_index if e["job_key"]}
+        sent = [e for e in self.base_index if e["job_key"] and e["status"] != "Queued"]
+        # A job handed over on an earlier day with no `s` (its row still at
+        # Filled - awaiting submit) comes back to ask whether it went through.
+        self.carry = {e["job_key"] for e in sent if self.handover_open(e)}
+        self.acted = {e["job_key"] for e in sent} - self.carry
         self.recent_companies = {caps.group(self.rules, e["company_norm"]) for e in self.base_index
                                  if e["date"] and caps.in_window(e["date"], today, 30)}
+        self.locked = self.locked_jobs()
         self.variants_on = self.folder.variants.exists()
         self._approved = {}
         self.last = last_name(root)
+
+    def state(self, key):
+        """(state, reason, date) of a job's last queue event, or (None, '', None)."""
+        st = self.qstate.get(key) or {}
+        return st.get("state"), st.get("reason") or "", gates.to_date(st.get("date"))
+
+    def handover_open(self, e):
+        state, _, day = self.state(e["job_key"])
+        if e["status"] == caps.HANDOVER and state in ("handed_over", "started") and day and day < self.today:
+            return all(x["status"] == caps.HANDOVER for x in self.base_index if x["job_key"] == e["job_key"]
+                       and x["status"] != "Queued")
+        return False
+
+    def locked_jobs(self):
+        """job_key -> (tenant or '', first day back) for account_locked blocks of the last 7 days."""
+        out = {}
+        for key, st in self.qstate.items():
+            day = gates.to_date(st.get("date"))
+            if st.get("state") == "blocked" and st.get("reason") == "account_locked" and day \
+                    and self.today < day + timedelta(days=TENANT_LOCK_DAYS):
+                out[key] = (str(st.get("tenant") or ""), day + timedelta(days=TENANT_LOCK_DAYS))
+        return out
 
     def account_sites(self):
         rows = []
@@ -289,9 +351,17 @@ def tenant_of(it):
 # ---------- scoring ----------
 
 def age_now(it, today):
-    """(age_days, band, points) at today, or (None, None, 0) when stale."""
+    """(age_days, band, points) at today, or (None, None, 0) when stale. A
+    posted date wins over a stored 'undated' basis (a pool item from before
+    the detail date was judged), and an undated item first seen more than
+    STALE_DAYS ago is stale: it is at least that old."""
     basis = it.get("date_basis") or ("posted" if it.get("posted") else "undated")
+    if gates.to_date(it.get("posted")):
+        basis = "posted"
     if basis == "undated":
+        seen = gates.to_date(it.get("first_seen"))
+        if seen and (today - seen).days > gates.STALE_DAYS:
+            return (today - seen).days, None, 0
         return None, gates.UNDATED[0], gates.UNDATED[1]
     start = gates.to_date(it.get("posted") if basis == "posted" else it.get("first_seen"))
     if start is None:
@@ -320,23 +390,41 @@ def score(it, ctx):
 
 # ---------- eligibility and assembly ----------
 
+def gone_for_good(st, reason, user_skips):
+    """The job's last queue event takes it out of the pool for good."""
+    return st == "applied" or (st == "blocked" and reason in PERMANENT_BLOCKS) or \
+        (st == "skipped" and reason in PERMANENT_SKIPS) or user_skips >= USER_SKIP_DROP
+
+
 def eligible(pool, ctx, keys_taken=()):
-    """Pool items that may be queued today, and the ones that leave the pool."""
+    """Pool items that may be queued today, and the ones that leave the pool.
+    Caps are not judged here: every build checks them again (a stored
+    deferred_until is only a note), so a slot an untaken item held is free."""
     keep, drop = [], []
     taken = set(keys_taken)
+    # The tenants an account_locked block pauses: recorded at the fold, else the blocked job's own.
+    locked = {t: until for t, until in ctx.locked.values() if t}
     for it in pool:
         key = it.get("job_key", "")
-        st = ctx.qstate.get(key) or {}
+        if key in ctx.locked and not ctx.locked[key][0]:
+            locked[tenant_of(it)] = ctx.locked[key][1]
+    for it in pool:
+        key = it.get("job_key", "")
+        st, reason, day = ctx.state(key)
+        skips = len((ctx.qstate.get(key) or {}).get("user_skips") or [])
         age, band, _ = age_now(it, ctx.today)
-        if band is None or it.get("closed") or st.get("state") == "applied" or \
-                (st.get("state") == "blocked" and st.get("reason") in PERMANENT_BLOCKS) or key in ctx.acted:
+        if band is None or it.get("closed") or gone_for_good(st, reason, skips) or key in ctx.acted:
             drop.append(it)
             continue
-        if key in taken or it.get("parked") or it.get("diy") or st.get("state") in EXCLUDE_STATES:
+        if key in taken or it.get("parked") or it.get("diy"):
             continue
-        until = gates.to_date(it.get("deferred_until"))
-        if until and until > ctx.today:
+        if st in DAY_ONLY_STATES and day == ctx.today:
             continue
+        if st == "skipped" and reason == "user" and day and ctx.today < day + timedelta(days=USER_SKIP_HOLD_DAYS):
+            continue
+        if key in ctx.locked or (profile_of(it.get("ats")).get("account") != "none" and tenant_of(it) in locked):
+            continue  # the locked account's tenant (a shared no-account host is never paused whole)
+        it["_carried"] = key in ctx.carry
         keep.append(it)
     return keep, drop
 
@@ -351,6 +439,7 @@ class Assembly:
         self.tier_a = int(d.get("tier_a_per_day", 4))
         self.picked, self.deferred = [], {}
         self.new_tenants, self.acct, self.usa, self.forced = [], 0, 0, 0
+        self.held, self.take_held = {}, False   # items waiting for their family's variant approval
 
     def admit(self, it):
         ctx = self.ctx
@@ -367,21 +456,24 @@ class Assembly:
             return False
         variant = ctx.approved(it.get("family", ""))
         force_a = ctx.variants_on and not variant
-        if force_a and self.forced >= self.tier_a:
+        held = force_a and self.forced >= self.tier_a
+        if held and not self.take_held:
+            self.held.setdefault(it["job_key"], it)  # waits for the re-approval; may fill a free slot last
             return False
         cn = jobkey.norm_company(it.get("company", ""))
+        unit = caps.hiring_unit(it.get("title", ""), it.get("text") or "", cn) if caps.unit_mode(ctx.rules, cn) else ""
         v = caps.caps_verdict(ctx.index, cn, it.get("family", ""), it["job_key"], set(it.get("req_ids") or []),
                               netfetch.host_of(it.get("apply_url") or it.get("url") or ""), ctx.today, ctx.rules,
-                              simhash=it.get("simhash") or None)
+                              simhash=it.get("simhash") or None, unit=unit)
         if v[0] == "DEFER":
             self.deferred[it["job_key"]] = (it, v)
             return False
         self.deferred.pop(it["job_key"], None)
         ctx.index.append(caps.queue_entry({"company": it.get("company", ""), "family": it.get("family", ""),
                                            "job_key": it["job_key"], "host": tenant, "ats": it.get("ats", "")},
-                                          ctx.today))
-        it["_variant"], it["_force_a"] = variant, force_a
-        self.forced += 1 if force_a else 0
+                                          ctx.today, unit=unit))
+        it["_variant"], it["_force_a"], it["_held"] = variant, force_a and not held, held
+        self.forced += 1 if force_a and not held else 0
         self.usa += 1 if usajobs else 0
         if account != "none":
             self.acct += 1
@@ -390,9 +482,14 @@ class Assembly:
         self.picked.append(it)
         return True
 
-    def run(self, cands):
-        """min_share floors first (by family priority), then everything by score."""
+    def run(self, cands, fill_held=True):
+        """Jobs handed over on an earlier day first, min_share floors (by
+        family priority), then everything by score; then, with slots left,
+        the items waiting for a variant approval (queued as prep_failed)."""
         n = self.size
+        for it in cands:
+            if it.get("_carried") and len(self.picked) < n:
+                self.admit(it)
         fams = [f for f in self.ctx.families.values() if str(f.get("status", "active")) == "active"
                 and float(f.get("min_share") or 0) > 0]
         for fam in sorted(fams, key=lambda f: (int(f.get("priority") or 2), str(f.get("id")))):
@@ -407,7 +504,28 @@ class Assembly:
             if len(self.picked) >= n:
                 break
             self.admit(it)
+        if fill_held:
+            self.take_held = True
+            for it in [c for c in cands if c["job_key"] in self.held]:
+                if len(self.picked) >= n:
+                    break
+                self.admit(it)
+            self.take_held = False
         return self.picked
+
+    def waiting(self, cands):
+        """{family: jobs waiting for its variant's approval}: every eligible job
+        of a family with no usable variant that is not one of the day's Tier A."""
+        ctx = self.ctx
+        if not ctx.variants_on:
+            return {}
+        out = {}
+        tier_a = {p["job_key"] for p in self.picked if p.get("_force_a")}
+        for it in cands:
+            fam = it.get("family") or ""
+            if fam and not ctx.approved(fam) and it["job_key"] not in tier_a:
+                out[fam] = out.get(fam, 0) + 1
+        return dict(sorted(out.items()))
 
 
 def mark_tiers(picked, ctx, tier_a):
@@ -423,7 +541,8 @@ def mark_tiers(picked, ctx, tier_a):
         if it.get("band") == "0-3" and float(it.get("fit") or 0) >= 0.7:
             return 2, "fresh_fit"
         return 3, "fit"
-    ranked = sorted(picked, key=lambda it: (reason(it)[0], -float(it.get("fit") or 0), -it["_score"], it["job_key"]))
+    ranked = sorted((it for it in picked if not it.get("_held")),
+                    key=lambda it: (reason(it)[0], -float(it.get("fit") or 0), -it["_score"], it["job_key"]))
     chosen = {it["job_key"] for it in ranked[:tier_a]}
     for it in picked:
         it["_tier"] = "A" if it["job_key"] in chosen or it.get("_force_a") else "B"
@@ -450,16 +569,23 @@ def take(out, primary, fillers):
 
 
 def sequence(picked, batch_size):
-    """Batch 1 (no-account Tier B by score), the account block (new-account
-    tenants grouped by tenant), then the rest by score."""
+    """Jobs handed over on an earlier day with no `s` (to ask about), batch 1
+    (no-account Tier B by score), the account block (new-account tenants
+    grouped by tenant), the rest by score, and last the items waiting for a
+    variant approval (prep_failed)."""
     for it in picked:
         it["_cn"] = caps.group({}, jobkey.norm_company(it.get("company", "")))
         it["_host"] = netfetch.host_of(it.get("apply_url") or it.get("url") or "")
     by_score = sorted(picked, key=lambda it: (-it["_score"], it["job_key"]))
+    first = [it for it in by_score if it.get("_carried")]
+    last = [it for it in by_score if it.get("_held") and not it.get("_carried")]
+    by_score = [it for it in by_score if it not in first and it not in last]
     batch1 = [it for it in by_score if it["_account"] == "none" and it["_tier"] == "B"]
     block_items = [it for it in by_score if it["_account"] == "new"]
     rest = [it for it in by_score if it not in batch1 and it not in block_items]
     out = []
+    while first:
+        take(out, first, [])
     while len(out) < batch_size and batch1:
         take(out, batch1, rest)
     while len(out) < batch_size and rest:  # fewer than batch_size no-account items
@@ -477,6 +603,8 @@ def sequence(picked, batch_size):
         take(out, block, rest)  # a filler from the rest only when no tenant item fits
     while rest:
         take(out, rest, [])
+    while last:
+        take(out, last, [])
     return out, {"after_n": after, "tenants": tenants}
 
 
@@ -551,9 +679,30 @@ def answers_status(folder):
     return ("needs_you" if needs else "sensitive_confirm" if sens else "complete"), needs, sens
 
 
+def final_files(folder):
+    """(resume, letter) Paths a strict Tier A build passed, from the job
+    folder's final.json (shared decision 1: {"v": 1, "resume", "letter",
+    "built_at", "verdict": "ok"}); None for a name that is not a plain file
+    name in the folder or is missing."""
+    folder = Path(folder)
+    data = read_json(folder / "final.json", {})
+    if data.get("v") != 1 or str(data.get("verdict", "")).lower() != "ok":
+        return None, None
+
+    def one(name):
+        name = name if isinstance(name, str) else ""
+        if not name or "/" in name or "\\" in name or name in (".", "..") or Path(name).name != name:
+            return None
+        p = folder / name
+        return p if p.is_file() else None
+    return one(data.get("resume")), one(data.get("letter"))
+
+
 def resume_status(ctx, it, folder):
     if it["_tier"] == "A":
-        return "tier_a_ready" if (folder / "resume.pdf").exists() else "tier_a_pending"
+        return "tier_a_ready" if final_files(folder)[0] else "tier_a_pending"
+    if it.get("_held"):
+        return "prep_failed"  # its family has no approved variant: an old resume_B.pdf is not sent
     if (folder / "resume_B.pdf").exists():
         return "built"
     if ctx.variants_on and not it.get("_variant"):
@@ -566,11 +715,13 @@ def queue_item(ctx, it, n, folder_rel):
     folder = ctx.root / folder_rel
     status, needs, sens = answers_status(folder)
     account = it["_account"]
+    flags = [f for f in it.get("flags") or [] if f != "unsubmitted"] + (["unsubmitted"] if it.get("_carried") else [])
     return {
         "n": n, "job_key": it["job_key"], "company": it.get("company", ""), "role": it.get("title", ""),
         "location": it.get("location", ""), "ats": it.get("ats", "") or "other",
         "host": netfetch.host_of(it.get("apply_url") or it.get("url") or ""),
-        "apply_url": it.get("apply_url") or it.get("url") or "", "referral_url": it.get("referral_url", ""),
+        "apply_url": it.get("apply_url") or it.get("url") or "",
+        "referral_url": it.get("referral_url") or ctx.referral_urls.get(it["job_key"], ""),
         "folder": folder_rel, "family": it.get("family", ""), "mode": it.get("mode") or "industry",
         "tier": it["_tier"], "tier_reason": it["_tier_reason"], "variant": it.get("_variant", ""),
         "posted": it.get("posted"), "age_days": it.get("age_days"), "band": it.get("band") or "",
@@ -581,7 +732,7 @@ def queue_item(ctx, it, n, folder_rel):
         "resume_status": resume_status(ctx, it, folder), "answers_status": status, "needs": needs,
         "sensitive": sens,
         "referral": ctx.referral(it).get("referral") or {"state": "none", "contact_ref": "", "hold_until": ""},
-        "posting_status": it.get("posting_status") or "read", "flags": list(it.get("flags") or []),
+        "posting_status": it.get("posting_status") or "read", "flags": flags,
     }
 
 
@@ -613,8 +764,33 @@ def check_queue(data):
 
 # ---------- build ----------
 
+def usable_supply(ctx, cands, tier_a):
+    """How many eligible pool items could be sent in this caps window: those
+    the caps allow one after another (today's daily caps aside) and that have a
+    resume to send, an approved variant or one of the day's Tier A places."""
+    rules = dict(ctx.rules, per_company_per_day=0)
+    index = [e for e in ctx.base_index if e["status"] != "Queued"]
+    with_variant, without = 0, 0
+    for it in cands:
+        cn = jobkey.norm_company(it.get("company", ""))
+        unit = caps.hiring_unit(it.get("title", ""), it.get("text") or "", cn) if caps.unit_mode(rules, cn) else ""
+        v = caps.caps_verdict(index, cn, it.get("family", ""), it["job_key"], set(it.get("req_ids") or []),
+                              netfetch.host_of(it.get("apply_url") or it.get("url") or ""), ctx.today, rules,
+                              simhash=it.get("simhash") or None, unit=unit)
+        if v[0] != "ALLOW":
+            continue
+        index.append(caps.queue_entry({"company": it.get("company", ""), "family": it.get("family", ""),
+                                       "job_key": it["job_key"], "host": tenant_of(it), "ats": it.get("ats", "")},
+                                      ctx.today, unit=unit) | {"status": "Applied"})
+        if ctx.approved(it.get("family", "")):
+            with_variant += 1
+        else:
+            without += 1
+    return with_variant + min(tier_a, without)
+
+
 def widen_step(ctx, pool_count, target):
-    """One widen step a day while the pool is under target (3.12)."""
+    """One widen step a day while the usable pool is under target (3.12)."""
     widen = ctx.profile.get("widen") or {}
     if pool_count >= target or not widen.get("enabled", True):
         return None
@@ -701,14 +877,19 @@ def build(root, today=None, pool_path=None, emit=print, prep=None):
     if f.queue_json(today).exists() and events_for(root, today):
         emit(f"FROZEN {today.isoformat()}: events exist for this date; late finds go to an addendum")
         return None
-    if session_active(root):
+    if f.queue_json(today).exists() and session_active(root):
+        # only a rebuild waits: before today's queue exists there are no numbers to protect
         emit("WAIT a session is active (claude/session.json beat under 20 minutes); the build waits")
         return None
+    fold_events(root, today, emit=lambda s: None)  # a session's last events, even with no tick after them
     ctx = Context(root, today)
     pool, data = load_items(root, pool_path)
     target = int(ctx.daily.get("target", 20))
     size = math.ceil(target * float(ctx.daily.get("queue_factor", 1.5)))
-    cands, drop = eligible(pool, ctx)
+    # Numbers and jobs given already today (an addendum or a job from a link
+    # before queue.json) are kept: this list numbers around them.
+    other_ns, other_keys = given_elsewhere(root, today)
+    cands, drop = eligible(pool, ctx, other_keys)
     ctx.load_referrals(cands)
     for it in cands:
         score(it, ctx)
@@ -718,15 +899,23 @@ def build(root, today=None, pool_path=None, emit=print, prep=None):
     mark_tiers(picked, ctx, asm.tier_a)
     ordered, block = sequence(picked, int(ctx.daily.get("batch_size", 10)))
     used, items = set(), []
-    for n, it in enumerate(ordered, 1):
+    n = max(other_ns) if other_ns and not f.queue_json(today).exists() else 0
+    for it in ordered:
+        n += 1
+        while n in other_ns:
+            n += 1
         rel = make_folder(ctx, it, used)
         q = queue_item(ctx, it, n, rel)
         if prep:
             prep(q, root / rel)
         items.append(q)
+    after = block["after_n"]
+    block["after_n"] = items[after - 1]["n"] if 0 < after <= len(items) else (items[0]["n"] - 1 if items else 0)
+    waiting = asm.waiting(cands)
     counts = dict(data.get("counts") or {})
     counts = {"seen": int(counts.get("seen", 0)), "passed": int(counts.get("passed", len(pool))),
-              "discarded": int(counts.get("discarded", 0)), "deferred": len(asm.deferred)}
+              "discarded": int(counts.get("discarded", 0)), "deferred": len(asm.deferred),
+              "variant_wait": waiting}
     pool_left = len(cands) - len(items)
     q = {"v": 1, "date": today.isoformat(), "built_at": jobfs.now_iso(root), "runner_version": jobfs.VERSION,
          "target": target, "size": len(items), "pool_left": pool_left, "items": items,
@@ -740,8 +929,11 @@ def build(root, today=None, pool_path=None, emit=print, prep=None):
          f"account_required<={d.get('account_required_per_day', 6)} usajobs<={d.get('usajobs_per_day', 1)}")
     emit(f"MIX tier_a={sum(1 for i in items if i['tier'] == 'A')} new_account_tenants={len(asm.new_tenants)} "
          f"account_required={asm.acct} usajobs={asm.usa} deferred={len(asm.deferred)}")
-    if len(cands) < target:
-        step = widen_step(ctx, len(cands), target)
+    for fam, k in waiting.items():
+        emit(f"WAIT_VARIANT {fam} {k} jobs")
+    supply = usable_supply(ctx, cands, asm.tier_a) if len(cands) >= target else len(cands)
+    if supply < target:
+        step = widen_step(ctx, supply, target)
         if step:
             emit(f"WIDEN {step}")
     if moved:
@@ -761,12 +953,27 @@ def numbers_used(root, day):
     return top, keys
 
 
+def given_elsewhere(root, day):
+    """(numbers, job keys) the day's addenda and jobs from links hold: all but queue.json."""
+    items = []
+    for p in queue_files(root, day)[1:]:
+        if p.exists():
+            items += [it for it in read_json(p, {}).get("items") or [] if isinstance(it, dict)]
+    keys = {it.get("job_key") for it in items}
+    items += [it for it in events.user_items(root, day) if it["job_key"] not in keys]
+    return {int(it.get("n") or 0) for it in items if it.get("n")}, {it.get("job_key") for it in items}
+
+
 def addendum(root, today=None, pool_path=None, limit=None, emit=print):
     """New numbered items after the highest number already given; queue.json and
     upload/ are left as they are."""
     root = Path(root)
     today = today or jobfs.today(root)
     f = jobfs.Folder(root)
+    if not f.queue_json(today).exists():
+        # Numbers given now would collide with the build's; late finds are in the pool for it.
+        emit(f"ADDENDUM none: no list for {today.isoformat()} yet (the daily builds it first)")
+        return None
     top, keys = numbers_used(root, today)
     ctx = Context(root, today, include_queued=True)
     pool, data = load_items(root, pool_path)
@@ -778,7 +985,7 @@ def addendum(root, today=None, pool_path=None, limit=None, emit=print):
     cands.sort(key=lambda it: (-it["_score"], it["job_key"]))
     asm = Assembly(ctx, limit)
     asm.tier_a = 0  # Tier A prep happens in the morning; late items are Tier B only
-    picked = asm.run(cands)
+    picked = asm.run(cands, fill_held=False)  # `more` is for jobs it can send today
     mark_tiers(picked, ctx, 0)
     ordered, _ = sequence(picked, 0)
     used = set()
@@ -793,7 +1000,12 @@ def addendum(root, today=None, pool_path=None, limit=None, emit=print):
             q["upload"] = f"upload/{plan_upload(q['n'], ctx.last, q.get('company', ''))}"
         top = top_now
     if not items:
-        emit("ADDENDUM none: nothing new passes the caps")
+        waiting = asm.waiting(cands)
+        if waiting:
+            emit("ADDENDUM none: " + "; ".join(f"{fam} needs a quick re-approval ({k} job{'s' if k != 1 else ''} wait"
+                                               f"{'s' if k == 1 else ''})" for fam, k in waiting.items()))
+        else:
+            emit("ADDENDUM none: nothing new passes the caps")
         return None
     hhmm = jobfs.now(root).strftime("%H%M")
     path, k = f.addendum(today, hhmm), 2
@@ -857,11 +1069,13 @@ def sensitive_kind(field):
 
 
 def user_resume(folder):
-    """The tailored resume a job from a link will send: resume.pdf, or the
-    single-job flow's "<Name> Resume.pdf" (the newest); None before one is built."""
+    """The tailored resume a job from a link will send: the one final.json
+    names (a strict build), else the single-job flow's "<Name> Resume.pdf"
+    (the newest); None before one is built."""
     folder = Path(folder)
-    if (folder / "resume.pdf").exists():
-        return folder / "resume.pdf"
+    final = final_files(folder)[0]
+    if final:
+        return final
     built = sorted((p for p in folder.glob("*Resume*.pdf") if p.name != "resume_B.pdf"),
                    key=lambda p: (p.stat().st_mtime, p.name))
     return built[-1] if built else None
@@ -1000,7 +1214,7 @@ def stage_uploads(root, today=None, emit=print):
             planned[base] = it
             planned[re.sub(r"^(\d{2})_", r"\1c_", base).replace("_Resume_", "_Cover_")] = it
     active = session_active(root)
-    moved = 0
+    moved, held = 0, set()
     if not active:
         old_day = manifest.get("date") or ""
         same_day = old_day == today.isoformat()
@@ -1014,7 +1228,12 @@ def stage_uploads(root, today=None, emit=print):
                 continue
             # an earlier day's file (even one with today's name) goes to that day's _done folder
             day = old_day if old_day and not same_day else made.isoformat()
-            move_to_done(root, p, day)
+            try:
+                move_to_done(root, p, day)
+            except PermissionError:  # open in a PDF viewer: it moves on a later run
+                held.add(p.name)
+                emit(f"WARN upload/{p.name} is open in another program; it moves on a later run")
+                continue
             moved += 1
     applied = {it["job_key"] for it in events.overlay(root, today)["items"].values() if it.get("state") == "applied"}
     staged, warn, files = 0, 0, {}
@@ -1024,11 +1243,24 @@ def stage_uploads(root, today=None, emit=print):
         if it.get("job_key") in applied:
             for target in (dest, f.upload / re.sub(r"^(\d{2})_", r"\1c_", name).replace("_Resume_", "_Cover_")):
                 if target.exists():
-                    move_to_done(root, target, today)
+                    try:
+                        move_to_done(root, target, today)
+                    except PermissionError:
+                        emit(f"WARN upload/{target.name} is open in another program; it moves on a later run")
+                        continue
                     moved += 1
             continue
+        if name in held:
+            # an earlier day's file under today's name could not move: never offer it as today's
+            warn += 1
+            emit(f"WARN #{it.get('n'):02d} upload/{name} is an earlier day's file still open; "
+                 "attach from the job folder")
+            continue
+        if it.get("resume_status") == "prep_failed":
+            continue  # waits for its family's variant approval; never an old file
         folder = root / it.get("folder", "")
-        src = folder / ("resume.pdf" if it.get("tier") == "A" and (folder / "resume.pdf").exists() else "resume_B.pdf")
+        final, final_letter = final_files(folder) if it.get("tier") == "A" else (None, None)
+        src = final or folder / "resume_B.pdf"  # a Tier A build that passed --strict, else its Tier B file
         if not dest.exists():
             if not src.exists():
                 if it.get("added_by"):
@@ -1039,7 +1271,9 @@ def stage_uploads(root, today=None, emit=print):
             shutil.copyfile(src, dest)
             staged += 1
         files[name] = it.get("job_key")
-        cover = folder / "cover_B.pdf"
+        cover = final_letter if final else folder / "cover_B.pdf"
+        if cover is None:
+            continue  # a Tier A build with no letter: no Tier B letter goes with its resume
         cname = re.sub(r"^(\d{2})_", r"\1c_", name).replace("_Resume_", "_Cover_")
         if cover.exists() and not (f.upload / cname).exists():
             shutil.copyfile(cover, f.upload / cname)
@@ -1067,28 +1301,46 @@ def write_state(path, data):
     jobfs.atomic_write_json(path, {k: v for k, v in data.items() if k not in ("_rev", "_sha256")})
 
 
+def day_tenant(root, day, job_key, cache):
+    """The account tenant (host) of a job in that day's list, or ''."""
+    if day not in cache:
+        cache[day] = {it.get("job_key"): tenant_of(it) for it in day_items(root, day)}
+    return cache[day].get(job_key, "")
+
+
 def fold_events(root, today=None, emit=print):
     """Fold queue events into state/queue_state.json (per job key: the last state,
-    reason, date, n). Writes nothing when nothing changed."""
+    reason, date, n, the id of that event; the days the user skipped it; the
+    tenant an account_locked block was on). An event older than the one a job's
+    record holds changes nothing, so a file that waits in runner/in/events for
+    days never undoes a later state. Writes nothing when nothing changed."""
     root = Path(root)
     today = today or jobfs.today(root)
     path = jobfs.Folder(root).queue_state_json
     before = load_state(root)
     data = json.loads(json.dumps(before))
     done = set(data["folded"])
-    new = 0
+    new, tenants = 0, {}
     for ev in events.recent(root, today):
         if ev["type"] not in events.QUEUE_TYPES or ev["id"] in done or not ev.get("job_key"):
             continue
-        p = ev.get("payload") or {}
-        it = data["items"].setdefault(ev["job_key"], {"history": []})
-        it.update(state=ev["type"], reason=p.get("reason", ""), date=ev.get("date", ""), n=ev.get("n"),
-                  at=ev.get("at", ""))
-        it["history"] = (it.get("history") or [])[-9:] + [ev["type"]]
         done.add(ev["id"])
+        it = data["items"].setdefault(ev["job_key"], {"history": []})
+        if ev["id"] <= str(it.get("id") or ""):
+            continue  # older than this job's last folded event
+        p = ev.get("payload") or {}
+        it.update(state=ev["type"], reason=p.get("reason", ""), date=ev.get("date", ""), n=ev.get("n"),
+                  at=ev.get("at", ""), id=ev["id"])
+        it["history"] = (it.get("history") or [])[-9:] + [ev["type"]]
+        if ev["type"] == "skipped" and p.get("reason") == "user" and ev.get("date"):
+            it["user_skips"] = sorted(set(it.get("user_skips") or []) | {ev["date"]})[-USER_SKIP_DROP - 3:]
+        if ev["type"] == "blocked" and p.get("reason") == "account_locked":
+            it["tenant"] = day_tenant(root, ev.get("date") or today.isoformat(), ev["job_key"], tenants) or \
+                it.get("tenant", "")
         new += 1
     first = (today - timedelta(days=FOLDED_DAYS)).strftime("%Y%m%d")
-    data["folded"] = sorted(i for i in done if i[:8] >= first)
+    waiting = {events.NAME_RE.match(p.name).group(1) for p in events.pending_files(root) if events.NAME_RE.match(p.name)}
+    data["folded"] = sorted(i for i in done if i[:8] >= first or i in waiting)
     if data != before or not path.exists():
         write_state(path, data)
     emit(f"FOLDED {new} events items={len(data['items'])}")

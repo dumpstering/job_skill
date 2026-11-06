@@ -39,7 +39,10 @@ Format: one `### Job Title | Company | Mon YYYY - Mon YYYY` heading per role.
 def run(*argv):
     buf = io.StringIO()
     with redirect_stdout(buf):
-        code = library.main([str(a) for a in argv])
+        try:
+            code = library.main([str(a) for a in argv])
+        except SystemExit as e:  # a bad argument
+            code = e.code
     return code, buf.getvalue()
 
 
@@ -150,6 +153,37 @@ def test_techniques_and_roles():
     print("ok techniques and role headings")
 
 
+def test_templates_and_confirmed():
+    """SJ-14: the shipped answers.md and techniques.md format lines are no
+    citations. SJ-09: "Confirmed ..." quick-check records get no ID. contracts-15:
+    a bad argument exits 1."""
+    root = make_root()
+    templates = HERE.parent / "job" / "templates"
+    shutil.copy(templates / "answers.md", root / "answers.md")
+    shutil.copy(templates / "techniques.md", root / "techniques.md")
+    assert "L-0031" in (root / "answers.md").read_text(encoding="utf-8") + (root / "techniques.md").read_text(encoding="utf-8")
+    run("ids", "--root", root)
+    code, out = run("check", "--root", root)
+    assert code == 0 and out.startswith("LIBRARY ok") and "DANGLING" not in out, out
+    with open(root / "answers.md", "a", encoding="utf-8") as fh:
+        fh.write("- ANS-001 | Do you have BSL-2 experience? | Yes | yesno | any | no | library:L-0031 | 2026-11-01\n")
+    code, out = run("check", "--root", root)
+    assert code == 1 and "DANGLING L-0031 in answers.md" in out, out
+    path = root / "achievement_library.md"
+    path.write_text(path.read_text(encoding="utf-8").replace(
+        "### Postdoctoral Fellow", "- Confirmed Nov 2026: title unchanged Jan 2016 - Apr 2023.\n\n### Postdoctoral Fellow"),
+        encoding="utf-8")
+    code, out = run("ids", "--root", root)
+    assert out.startswith("IDS unchanged"), out
+    lib = library.load(path)
+    note = [e for e in lib.entries if e.note]
+    assert len(note) == 1 and not note[0].id and note[0].heading.startswith("Scientist II"), note
+    code, out = run("idz", "--root", root)
+    assert code == 1 and out.startswith("ERROR "), out
+    shutil.rmtree(root, ignore_errors=True)
+    print("ok template format lines are no citations; Confirmed lines get no ID")
+
+
 def main():
     root = test_ids_in_file_order()
     test_backup_first(root)
@@ -158,6 +192,7 @@ def main():
     test_crlf_and_bom_kept()
     test_check(root)
     test_techniques_and_roles()
+    test_templates_and_confirmed()
     print("PASS")
 
 

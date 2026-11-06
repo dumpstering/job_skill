@@ -134,25 +134,49 @@ def test_two_runs():
                                                                              "zeta pharma": "lead_only"}, needs
         assert any(ln.startswith("RESOLVE leads=6 groups=5 resolved=3") for ln in lines), lines
 
-        # day 2: cached misses make no request; unresolved leads give up
+        # day 2: cached misses make no request; the lead with no search to wait
+        # for gives up, while the two web-search leads stay listed one more day:
+        # day 1's listing came from a tick after job-morning had read the file.
         f2 = fetcher(root)
         lines = []
         out2 = resolve.Resolver(root, D2, f2, emit=lines.append).run()
         made = probes(f2)
         assert [u for u in made if "betabio" in u] == ["https://betabio.jobs.personio.de/xml?language=en"], made
         assert sum(1 for ln in lines if " CACHED miss" in ln) == 11
-        diy = {d["company"] for d in out2.diy}
-        assert diy == {"Betabio", "Zeta Pharma"}, out2.diy
+        assert out2.diy == [], out2.diy
         assert out2.discarded == [adzuna_lead(root)["lead_id"]], out2.discarded
-        text = (root / "queue" / D2.isoformat() / "diy.md").read_text(encoding="utf-8")
-        assert "- E1 |" in text and "Betabio" in text and "http" not in text, text
+        needs = json.loads((root / "runner" / "out" / "needs_search.json").read_text(encoding="utf-8"))
+        assert needs["date"] == D2.isoformat() and {c["company_norm"] for c in needs["companies"]} == \
+            {"betabio", "zeta pharma"}, needs
         rows = list(csv.DictReader(open(root / "queue" / D2.isoformat() / "discards.csv", encoding="utf-8")))
         assert [(r["company"], r["gate"], r["reason"], r["lane"]) for r in rows] == \
             [("Globex Bio", "resolve", "unresolved", "adzuna")], rows
-        # a third run has nothing pending
+        # day 3: listed on two days and still unknown: LinkedIn leads go to the do-yourself list
+        d3 = date(2026, 11, 14)
+        out3 = resolve.Resolver(root, d3, fetcher(root), emit=lambda s: None).run()
+        assert {d["company"] for d in out3.diy} == {"Betabio", "Zeta Pharma"}, out3.diy
+        text = (root / "queue" / d3.isoformat() / "diy.md").read_text(encoding="utf-8")
+        assert "- E1 |" in text and "Betabio" in text and "http" not in text, text
+        # a fourth run has nothing pending
         lines = []
-        resolve.Resolver(root, date(2026, 11, 14), fetcher(root), emit=lines.append).run()
+        resolve.Resolver(root, date(2026, 11, 15), fetcher(root), emit=lines.append).run()
         assert lines[-1].startswith("RESOLVE leads=0"), lines
+
+
+def test_expired_lead_not_dropped():
+    """A lead still pending 30 days after it was seen gives up like any other
+    (do-yourself or a discards.csv line), never vanishing silently."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = make_root(tmp)
+        old = aggregators.make_lead("adzuna", "Omega Bio", "QC Microbiologist", "Fremont, CA", "2026-09-01",
+                                    leads.salt(root))
+        lines = []
+        out = resolve.Resolver(root, D1, fetcher(root), emit=lines.append).run(extra_leads=[old])
+        assert out.discarded == [old["lead_id"]], (out.discarded, lines)
+        assert any(ln.startswith(f"UNRESOLVED {old['lead_id']} Omega Bio") and ln.endswith("expired")
+                   for ln in lines), lines
+        rows = list(csv.DictReader(open(root / "queue" / D1.isoformat() / "discards.csv", encoding="utf-8")))
+        assert [(r["company"], r["reason"]) for r in rows] == [("Omega Bio", "unresolved")], rows
 
 
 def test_probe_url():
@@ -202,10 +226,28 @@ def test_helpers():
                            '<script src="https://boards.greenhouse.io/embed/job_board/js?for=gamma"></script>')
     assert [(d["ats"], d["board"], d["site"], d["host"]) for d in found] == \
         [("workday", "scu", "scu", "wd1.myworkdaysite.com"), ("greenhouse", "gamma", "", "")], found
+    # An Ashby board name with a space is linked as %20: the spec holds the name
+    # itself (read_ashby quotes it once), and an encoded slash is not a board.
+    found = resolve.detect('<a href="https://jobs.ashbyhq.com/Nautilus%20Biotechnology">Jobs</a> '
+                           '<a href="https://jobs.ashbyhq.com/evil%2F..%2Fx">x</a>')
+    assert [(d["ats"], d["board"]) for d in found] == [("ashby", "Nautilus Biotechnology")], found
+
+
+def test_detect_linear():
+    """A careers page holding a long run of letters (or many unclosed iframe
+    tags) is scanned in linear time: the old detect patterns tried every
+    start position to the end (6 s for 8,000 letters; hours for 2 MB)."""
+    import time
+    for page in ("a" * 400000, "<iframe " * 50000, "workforcenow.adp.com/" * 20000, "a." * 200000):
+        t = time.perf_counter()
+        resolve.detect(page)
+        assert time.perf_counter() - t < 3.0, (page[:20], time.perf_counter() - t)
+    found = resolve.detect('<iframe title="jobs" src="https://acme.wd5.myworkdayjobs.com/en-US/Careers"></iframe>')
+    assert [(d["ats"], d["board"], d["site"]) for d in found] == [("workday", "acme", "Careers")], found
 
 
 def main():
-    for fn in (test_two_runs, test_probe_url, test_helpers):
+    for fn in (test_two_runs, test_expired_lead_not_dropped, test_probe_url, test_helpers, test_detect_linear):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

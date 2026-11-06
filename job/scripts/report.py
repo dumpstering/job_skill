@@ -252,7 +252,8 @@ def queued_count(root, start, end):
 
 
 def board_changes(root, day):
-    """Boards now paused, gone or dormant that no earlier weekly summary listed."""
+    """Boards now paused, gone, dormant or check_site (a Workday site that listed
+    0 jobs on 3 polls) that no earlier weekly summary listed."""
     folder = jobfs.Folder(root)
     earlier = ""
     for p in sorted(folder.reports.glob("week_*.md")) if folder.reports.exists() else []:
@@ -261,7 +262,7 @@ def board_changes(root, day):
     out = []
     for r in read_csv(folder.board_health_csv):
         st, key = (r.get("status") or "").strip(), (r.get("key") or "").strip()
-        if st in ("paused", "gone", "dormant") and key and f"{key}: {st}" not in earlier:
+        if st in ("paused", "gone", "dormant", "check_site") and key and f"{key}: {st}" not in earlier:
             out.append(f"- {key}: {st}")
     return out
 

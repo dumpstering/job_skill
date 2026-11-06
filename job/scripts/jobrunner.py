@@ -23,29 +23,50 @@ staging, the do-yourself files (upload/E<n>_... and applications/_diy/<date>/),
 network import (when network/raw changed) and match, today.md, review.html,
 reports/funnel.csv, family weights on the weekly day, and
 runner/out/status.json. It prints the BOARD, SOURCE, RESOLVE, GATES, QUEUE,
-MIX, STAGED and DIY lines (a failed optional step is a WARN line), then
+MIX, STAGED and DIY lines (a failed optional step, staging and the funnel
+included, is a WARN line), answers the requests waiting (the long ones
+too), then
     DAILY ok queue=<n> pool_left=<n> discards=<n> tier_b_built=<n> prep_failed=<n>
     DAILY ok queue=<n> unchanged          (a second run on the same date)
-    DAILY WAIT a session is active ...    (the next tick runs it after the session)
+    DAILY WAIT a session is active ...    (only a rebuild of a queue that exists waits)
+A daily that has not built today's queue never waits for a session. It keeps
+the PC awake while it runs and stops itself after 2 hours.
 tier_b_built counts items whose resume_B files were built (tuned, or the
 approved base when tuning failed a check); discards counts today's rows in
-queue/<date>/discards.csv (gates and unresolved leads).
+queue/<date>/discards.csv (gates and unresolved leads). A job folder carried
+from an earlier day keeps its resume_B files only while tune_log.json names
+the variant version and approval usable now; otherwise they are rebuilt, or
+moved to <job>/_unapproved/ when the family has no usable variant
+(NO_VARIANT <family>, once per run).
 
-tick (every 15 minutes, 06:00-22:00): applies event files to the tracker
-(tracker.py apply-events) and folds queue events, writes the jobs from links
-(added events) into queue/<date>/addendum_user.json with the numbers the
-session gave them (ADDENDUM addendum_user.json items=...; their job folders
-are the session's, so it never preps them), gives an unparked job a
-fresh fill plan (REPLAN), moves upload files of applied items, answers
-requests in runner/in/requests (REQUEST <id> <op> ok|failed|REJECTED; results
-in runner/out/results/<id>.json), stages late files once no session is
-active, re-reads the next 3 items' postings once a day (LIVENESS, CLOSED;
-runner/out/liveness.json), and runs a daily that waited for a session. With
-nothing to do it prints TICK idle and exits within a second, without opening
-the workbook; otherwise it ends with TICK done <n> steps. While
+tick (every 15 minutes, 06:00-22:00, at most 10 minutes): applies event files
+to the tracker (tracker.py apply-events) and folds queue events, writes the
+jobs from links (added events) into queue/<date>/addendum_user.json with the
+numbers the session gave them (ADDENDUM addendum_user.json items=...; their
+job folders are the session's, so it never preps them), gives an unparked job
+a fresh fill plan (REPLAN), answers the short requests in runner/in/requests
+(REQUEST <id> <op> ok|failed|REJECTED; results in
+runner/out/results/<id>.json), moves upload files of applied items, stages
+late files (an addendum's new numbers; during a session too), and re-reads
+the next 3 items' postings once a day (LIVENESS, CLOSED;
+runner/out/liveness.json; only on a job-site host or the posting's own
+host). It never runs a daily or a long request (resolve_leads, probe_url,
+rebuild_queue) itself: when today has no ok daily after 05:30 (missed,
+failed, or waited for a session that ended), a long request waits, or this
+morning's discovery had no network and one job site's robots.txt answers
+now (status.json discovery_offline; that daily runs discovery again and
+adds its finds as an addendum: REDISCOVER), it starts the JobRunner-Daily
+task (else a detached process) and prints
+    TICK started the daily (<missed|failed|waited|requests|offline>; ...)
+at most 3 times a day 30 minutes apart for a daily, every 10 minutes for
+requests (status.json daily_starts). In mode S it prints the command to run
+instead. With nothing to do it prints TICK idle and exits within a second,
+without opening the workbook; otherwise it ends with TICK done <n> steps. While
 claude/session.json has a beat under 20 minutes old it only appends
-addenda with new numbers: queue.json and upload/ stay as they are, and a
-rebuild_queue request waits.
+addenda with new numbers: queue.json and the files already in upload/ stay
+as they are (only the new numbers' files are added), and a rebuild_queue
+request waits. A file another program holds open (a PDF viewer on upload/,
+Excel on funnel.csv) is a WARN line; it is retried later.
 
 Requests (spec 2.5): resolve_leads, probe_url {url, company, title, location},
 fetch_posting {url | n | job_key}, build {folder, json}, stage_tier_a
@@ -54,11 +75,15 @@ company names, URLs (netfetch policy) and folders inside the root; anything
 else is rejected with ok=false.
 
 selftest prints PASS or FAIL lines for python, packages, tzdata, folder
-write, robots and build, plus the reach checks with --net; exit 1 on any FAIL.
+write, robots and build, plus the reach checks with --net (a site that does
+not answer is a WARN line; FAIL net only when none answers); exit 1 on any FAIL.
 
 The lock: %LOCALAPPDATA%\\JobRunner\\run.lock (state/run.lock in mode S or
-with --offline). A held lock prints LOCKED and exits 8; a lock older than
-2 hours is taken over with a STALE LOCK line.
+with --offline), an OS lock on the open file that the OS frees when its
+holder ends, however it ends. A daily that finds a tick holding it waits up
+to 12 minutes (WAIT ...); anything else prints LOCKED and exits 8. A run that
+was stopped (a time limit, a shutdown) leaves only a STALE LOCK line for the
+next run.
 
 Exit codes: 0 ok (also WAIT and idle), 1 bad input or a FAIL (ERROR ...),
 2 missing package, 8 runner LOCKED.
@@ -88,7 +113,19 @@ import jobfs  # noqa: E402
 
 EXIT_LOCKED = 8
 EXIT_MISSING = 2
-STALE_LOCK_SECONDS = 2 * 3600
+LOCK_WAIT_SECONDS = 12 * 60     # a daily waits this long for a tick (the Tick task's limit is 10 minutes)
+LOCK_GRACE_SECONDS = 5          # anything else waits this long (Windows frees a dead run's lock within moments)
+DAILY_LIMIT_SECONDS = 2 * 3600  # the Daily task's limit; a daily started as a plain process stops itself too
+DAILY_AT = (5, 30)              # the Daily task's start time (install_runner.ps1)
+DAILY_STARTS_MAX = 3            # starts of a missed or failed daily a tick makes per day
+DAILY_RETRY_MINUTES = 30        # ... at least this far apart
+REQUEST_START_MINUTES = 10      # a tick starts the daily for long requests at most this often
+LONG_OPS = {"resolve_leads", "probe_url", "rebuild_queue"}   # answered by the daily, never inside a tick
+# The API host an offline morning's retry probes (robots.txt) for a watch-list
+# row with no host of its own (Workday, Oracle and the rest carry one).
+OFFLINE_PROBE_HOSTS = {"greenhouse": "boards-api.greenhouse.io", "lever": "api.lever.co",
+                       "ashby": "api.ashbyhq.com", "workable": "apply.workable.com", "rippling": "api.rippling.com"}
+DAILY_TASK = "JobRunner-Daily"
 RUNNER_STALE_HOURS = 26
 LIVENESS_HOURS = 24
 LIVENESS_NEXT = 3
@@ -250,7 +287,8 @@ class Run:
     def __init__(self, args, cmd):
         self.args = args
         self.cmd = cmd
-        self.root = Path(args.root)
+        # Absolute, so every path handed to another module (variants, answers) is one path.
+        self.root = Path(args.root).resolve()
         self.folder = jobfs.Folder(self.root)
         self.offline = getattr(args, "offline", None)
         if getattr(args, "date", None):
@@ -258,35 +296,47 @@ class Run:
         self.day = jobfs.today(self.root)
         self.mode = (getattr(args, "mode", None) or "").upper() or self.settings_mode()
         self._fetcher = None
+        self._log_file = None
+        self._tz = None
         self.log_lines = []
         self.errors = []
+        self.new_finds = []   # pool items discover() added this run (an offline morning's rerun queues them)
 
     def settings_mode(self):
         mode = str(jobfs.settings(self.root)["runner"].get("mode", "L")).upper()
         return "S" if mode == "S" else "L"
 
-    # output: print the line (stdout is None under pythonw) and keep it for the log
+    # output: print the line (stdout is None under pythonw) and log it at once
     def out(self, line):
         line = redact(line)
         print(line)
-        self.log_lines.append(line)
+        self.log(line)
 
     def log(self, line):
-        self.log_lines.append(redact(line))
+        """logs/runner_<date>.log, one line as it happens with its own time, so a
+        run stopped by a time limit or a shutdown still leaves its trail."""
+        line = redact(line)
+        self.log_lines.append(line)
+        try:
+            if self._log_file is None:
+                path = self.folder.runner_log(self.day)
+                path.parent.mkdir(parents=True, exist_ok=True)
+                self._log_file = open(path, "a", encoding="utf-8", newline="\n")
+            if self._tz is None:
+                self._tz = jobfs.now(self.root).tzinfo
+            stamp = jobfs.utcnow().astimezone(self._tz).replace(microsecond=0).isoformat()
+            self._log_file.write(f"{stamp} {self.cmd} {line}\n")
+            self._log_file.flush()
+        except (OSError, ValueError, jobfs.ConfigError):
+            pass
 
     def flush_log(self):
-        if not self.log_lines:
-            return
-        path = self.folder.runner_log(self.day)
-        try:
-            path.parent.mkdir(parents=True, exist_ok=True)
-            stamp = jobfs.now_iso(self.root)
-            with open(path, "a", encoding="utf-8", newline="\n") as f:
-                for line in self.log_lines:
-                    f.write(f"{stamp} {self.cmd} {line}\n")
-        except OSError:
-            pass
-        self.log_lines = []
+        if self._log_file is not None:
+            try:
+                self._log_file.close()
+            except OSError:
+                pass
+            self._log_file = None
 
     def fetcher(self):
         """One shared netfetch.Fetcher per run, so politeness spans every call."""
@@ -312,21 +362,42 @@ class Run:
         jobfs.atomic_write_json(self.folder.status_json, data)
 
 
-def take_lock(run):
-    """The runner self-lock (2.7.2), or None after printing LOCKED."""
-    lock = jobfs.RunLock(run.lock_path(), stale_after=STALE_LOCK_SECONDS, cmd=run.cmd)
-    info = lock._holder() if lock.path.exists() else None
-    if lock.path.exists() and lock._is_stale(info):
-        who = info or {}
-        run.out(f"STALE LOCK {lock.path.name} pid={who.get('pid', '?')} cmd={who.get('cmd', '?')} "
-                f"started={who.get('started', '?')}: taken over")
+def lock_wait_seconds():
+    """How long a daily waits for a tick (JOBRUNNER_LOCK_WAIT overrides, for tests)."""
     try:
-        return lock.acquire()
+        return max(0, int(os.environ.get("JOBRUNNER_LOCK_WAIT", LOCK_WAIT_SECONDS)))
+    except ValueError:
+        return LOCK_WAIT_SECONDS
+
+
+def take_lock(run):
+    """The runner self-lock (2.7.2), or None after printing LOCKED. It is an OS
+    lock, freed when its holder ends however it ends. A daily that finds a tick
+    (or a selftest) holding it waits for it; a daily never waits for a daily."""
+    lock = jobfs.RunLock(run.lock_path(), cmd=run.cmd)
+    try:
+        lock.acquire(wait=LOCK_GRACE_SECONDS)
     except jobfs.LockBusy as e:
         who = e.info or {}
-        run.out(f"LOCKED the runner is busy (pid {who.get('pid', '?')}, {who.get('cmd', '?')} "
-                f"since {who.get('started', '?')}); try again later")
-        return None
+        if run.cmd != "daily" or who.get("cmd") == "daily":
+            run.out(f"LOCKED the runner is busy (pid {who.get('pid', '?')}, {who.get('cmd', '?')} "
+                    f"since {who.get('started', '?')}); try again later")
+            return None
+        wait = lock_wait_seconds()
+        run.out(f"WAIT the runner is busy (pid {who.get('pid', '?')}, {who.get('cmd', '?')} since "
+                f"{who.get('started', '?')}); the daily waits up to {wait // 60 or 1} minutes")
+        try:
+            lock.acquire(wait=wait)
+        except jobfs.LockBusy as e2:
+            who = e2.info or {}
+            run.out(f"LOCKED the runner is still busy (pid {who.get('pid', '?')}, {who.get('cmd', '?')}); "
+                    "the next tick starts the daily again")
+            return None
+    if lock.left_by:
+        who = lock.left_by
+        run.out(f"STALE LOCK {lock.path.name} pid={who.get('pid', '?')} cmd={who.get('cmd', '?')} "
+                f"started={who.get('started', '?')}: that run ended without finishing (stopped or shut down)")
+    return lock
 
 
 def session_active(root):
@@ -396,6 +467,55 @@ class Prep:
     def __init__(self, run):
         self.run = run
         self.tally = {"built": 0, "fallback_base": 0, "prep_failed": 0, "claimed": 0, "plans": 0, "kept": 0}
+        self._usable = {}
+
+    def usable(self, family):
+        """(version, approved) of the family's variant usable now (variants.usable),
+        once per run; the first miss logs its UNAPPROVED lines and NO_VARIANT once."""
+        import variants
+        if family not in self._usable:
+            try:
+                v, approved, notes = variants.usable(self.run.root, family)
+            except (OSError, ValueError, variants.Refused) as e:
+                v, approved, notes = None, None, [f"UNAPPROVED {family}: {e}"]
+            if v is None:
+                for line in notes:
+                    self.run.log(line)
+                self.run.log(f"NO_VARIANT {family}: no approved variant; its Tier B items are prep_failed and "
+                             "its Tier A items have no Tier B fallback")
+            self._usable[family] = (v, approved)
+        return self._usable[family]
+
+    def current(self, folder, family):
+        """True when the folder's resume_B.pdf was built from the variant that is
+        usable now, as approved now (version and approved hashes in tune_log.json).
+        A folder carried from an earlier day is rebuilt otherwise (fail closed)."""
+        if not ((folder / "resume_B.pdf").exists() and "resume_B.pdf" in runner_names(folder)):
+            return False
+        log = read_json(folder / "tune_log.json", {})
+        family = family or str(log.get("family") or "")
+        if not family:
+            return False
+        v, approved = self.usable(family)
+        return (v is not None and log.get("family") == family and log.get("version") == v
+                and bool(log.get("approved_sha256")) and log.get("approved_sha256") == (approved or {}).get("sha256"))
+
+    def set_aside(self, folder):
+        """Tier B files left from a variant that is no longer usable never reach
+        upload/ or a handover: they move to <job>/_unapproved/ (never deleted)."""
+        names = runner_names(folder)
+        moved = []
+        for base in ("resume_B", "cover_B"):
+            for ext in (".pdf", ".docx", ".txt"):
+                p = folder / (base + ext)
+                if p.name in names and p.exists():
+                    dest = folder / "_unapproved"
+                    dest.mkdir(exist_ok=True)
+                    os.replace(p, dest / p.name)
+                    moved.append(p.name)
+        if moved:
+            self.run.log(f"SET ASIDE {folder.name}: {', '.join(moved)} to _unapproved/ (built from a variant "
+                         "that is not approved now)")
 
     def item(self, q, folder):
         import answers
@@ -404,16 +524,26 @@ class Prep:
         if (folder / ".claimed").exists():
             self.tally["claimed"] += 1
             return
-        if (folder / "resume_B.pdf").exists() and "resume_B.pdf" in runner_names(folder):
+        family = q.get("family") or None
+        # An item the queue held (resume_status prep_failed: its family had no
+        # usable variant) never becomes built because an old resume_B.pdf sits
+        # in a reused folder: only variants.tier_b's verdict counts for it.
+        held = q.get("resume_status") == "prep_failed"
+        if not held and self.current(folder, family):
             status = "fallback_base" if self.fell_back(folder) else "built"
             self.tally["kept"] += 1
         else:
-            try:
-                status = variants.tier_b(self.run.root, folder, family=q.get("family") or None, emit=self.run.log)
-            except variants.Refused as e:
-                for line in str(e).splitlines():
-                    self.run.log(line)
-                status = "prep_failed"
+            if family and self.usable(family)[0] is None:
+                status = "prep_failed"  # said once per family (NO_VARIANT), not once per item
+            else:
+                try:
+                    status = variants.tier_b(self.run.root, folder, family=family, emit=self.run.log)
+                except variants.Refused as e:
+                    for line in str(e).splitlines():
+                        self.run.log(line)
+                    status = "prep_failed"
+            if status == "prep_failed":
+                self.set_aside(folder)
             self.tally[status] = self.tally.get(status, 0) + 1
         if q.get("tier") == "B" and status in ("built", "fallback_base", "prep_failed"):
             q["resume_status"] = status
@@ -488,12 +618,19 @@ def discover(run):
     f = run.fetcher()
     gate_run = gates.GateRun(run.root, run.day, fetcher=f)
     results = boards.poll(run.root, fetcher=f, keep=gate_run.keep, emit=run.out)
+    offline = boards.no_network(results)
+    if offline:  # the PC had no network yet: say so, never a silent day
+        run.errors.append(f"offline {run.day.isoformat()}: no job board answered this morning")
+    # A tick retries discovery once a job site answers (offline_retry); a run
+    # that reached the boards clears the flag.
+    run.write_status(discovery_offline=run.day.isoformat() if offline else None)
     lanes = aggregators.run(run.root, fetcher=f, keys=load_keys(run), salt=leads.salt(run.root), emit=run.out)
     readings = [rd for res in results for rd in res.readings] + [rd for ln in lanes for rd in ln.postings]
     extra = [ld for ln in lanes for ld in ln.leads]
     out = resolve.Resolver(run.root, run.day, f, emit=run.log).run(readings=readings, extra_leads=extra)
     run.out(next((ln for ln in reversed(run.log_lines) if ln.startswith("RESOLVE ")), "RESOLVE leads=0"))
-    gate_run.process(readings + out.readings)
+    new = gate_run.process(readings + out.readings) or []
+    run.new_finds = [it for it in new if not it.get("parked") and not it.get("diy")]
     counts = gate_run.save()
     if out.discarded:  # unresolved leads are discards too (3.6 step 6, 3.13)
         counts["discarded"] += len(out.discarded)
@@ -657,7 +794,6 @@ def cell(v):
 def write_today_md(run, items, block, counts):
     """queue/<date>/today.md: about 80 lines at most (4.10)."""
     import answers
-    import resolve
     d = run.day
     lines = [f"# {d:%A}, {d:%B} {d.day}", ""]
     import today_view
@@ -666,7 +802,7 @@ def write_today_md(run, items, block, counts):
     lines += [f"Ready: {len(items)}. No account needed for {acct}.", ""]
     try:
         qs = answers.questions(run.root, d)
-        qs["sensitive"] = today_view.sensitive_text(run.root, d)
+        qs["sensitive"] = today_view.sensitive_text(run.root, items)
     except (OSError, ValueError, KeyError):
         qs = {"questions": [], "sensitive": ""}
     if qs["questions"]:
@@ -686,12 +822,14 @@ def write_today_md(run, items, block, counts):
     lines.append("")
     if block.get("tenants"):
         lines += [f"Account block after #{block.get('after_n', 0)}: " + ", ".join(block["tenants"]) + ".", ""]
-    diy = resolve.diy_items(run.root, d)[:int(jobfs.settings(run.root)["daily"].get("easy_apply_list_max", 5))]
+    # The do-yourself rows numbered as staged (jobrunner.stage_diy, today_view.diy_list).
+    diy = diy_rows(run, int(jobfs.settings(run.root)["daily"].get("easy_apply_list_max", 5)))
     if diy:
-        lines += ["<details><summary>Do it yourself</summary>", ""]
-        lines += [f"- E{i} | {cell(x.get('company'))} | {cell(x.get('title'))} | {cell(x.get('location'))}"
-                  for i, x in enumerate(diy, 1)]
-        lines += ["", "</details>", ""]
+        logged = today_view.logged_by_hand(run.root)
+        shown = [f"- E{i} | {cell(c)} | {cell(t)} | {cell(loc)}" for i, (c, t, loc) in enumerate(diy, 1)
+                 if (today_view.norm(c), today_view.norm(t)) not in logged]
+        if shown:
+            lines += ["<details><summary>Do it yourself</summary>", ""] + shown + ["", "</details>", ""]
     gates_n = {}
     for r in discard_rows(run.root, d):
         g = r.get("reason") if r.get("gate") == "resolve" else (r.get("reason") or "").split(":")[0]
@@ -827,7 +965,11 @@ def move_applied(run, day):
         for target in (run.folder.upload / name,
                        run.folder.upload / re.sub(r"^(\d{2})_", r"\1c_", name).replace("_Resume_", "_Cover_")):
             if name and target.exists():
-                jobqueue.move_to_done(run.root, target, day)
+                try:
+                    jobqueue.move_to_done(run.root, target, day)
+                except PermissionError:  # open in a PDF viewer: it moves on a later tick
+                    run.out(f"WARN upload/{target.name} is open in another program; it moves on a later run")
+                    continue
                 moved += 1
     if moved:
         run.out(f"STAGED 0 files, moved {moved} to upload/_done/, session active")
@@ -837,35 +979,61 @@ def move_applied(run, day):
 def stage(run, day):
     import jobqueue
     if session_active(run.root):
-        return move_applied(run, day)
+        moved = move_applied(run, day)
+        # Addendum items (more, late finds) get their upload copies now, so the
+        # employer never receives a file named resume_B.pdf. While a session is
+        # active stage_uploads only copies names that are missing and never
+        # moves a file it did not plan: upload\ order stays as it is (2.7.3).
+        buf = []
+        staged, _, _ = jobqueue.stage_uploads(run.root, day, emit=buf.append)
+        for line in buf:
+            (run.out if (staged and line.startswith("STAGED")) or line.startswith("WARN") else run.log)(line)
+        return staged + moved
     buf = []
     staged, moved, _ = jobqueue.stage_uploads(run.root, day, emit=buf.append)
     for line in buf:
-        (run.out if line.startswith("STAGED") else run.log)(line)
+        (run.out if line.startswith(("STAGED", "WARN upload/")) else run.log)(line)
     if moved and day == run.day:  # stage_uploads moves every name it did not plan, E<n>_ files too
         optional(run, "do-yourself list", stage_diy, run)
     return staged + moved
 
 
 def stage_tier_a(run, item):
-    """Replace upload/NN_* with the item's Tier A resume.pdf; record its sha256."""
+    """Replace upload/NN_* (and NNc_*) with the item's Tier A files named in
+    its final.json (shared decision 1: only a build that passed --strict);
+    record their sha256."""
+    import jobqueue
     folder = run.root / str(item.get("folder", ""))
-    src = folder / "resume.pdf"
-    if not src.exists():
-        raise RequestError(f"no resume.pdf in {item.get('folder')}")
+    built = jobqueue.final_files(folder)
+    if not built[0]:
+        raise RequestError(f"no Tier A build passed its checks in {item.get('folder')} (no final.json)")
     name = Path(item.get("upload", "")).name
     if not name:
         raise RequestError(f"#{item.get('n')} has no upload name")
     run.folder.upload.mkdir(parents=True, exist_ok=True)
-    dest = run.folder.upload / name
-    tmp = dest.with_name(f".{name}.tmp")
-    shutil.copyfile(src, tmp)
-    os.replace(tmp, dest)
-    digest = sha256_file(dest)
     staged = verified(run.folder.runner_out / "staged.json", {})
     files = dict(staged.get("files") or {})
-    files[name] = {"job_key": item.get("job_key"), "n": item.get("n"), "source": f"{item.get('folder')}/resume.pdf",
-                   "sha256": digest, "at": jobfs.now_iso(run.root), "tier": "A"}
+    cover = re.sub(r"^(\d{2})_", r"\1c_", name).replace("_Resume_", "_Cover_")
+    digest = ""
+    for src, upload in zip(built, (name, cover)):
+        if src is None:
+            continue
+        dest = run.folder.upload / upload
+        tmp = dest.with_name(f".{upload}.tmp")
+        shutil.copyfile(src, tmp)
+        os.replace(tmp, dest)
+        sha = sha256_file(dest)
+        digest = digest or sha
+        files[upload] = {"job_key": item.get("job_key"), "n": item.get("n"),
+                         "source": f"{item.get('folder')}/{src.name}", "sha256": sha,
+                         "at": jobfs.now_iso(run.root), "tier": "A"}
+    if built[1] is None and (run.folder.upload / cover).exists():
+        # a Tier A resume with no letter: the Tier B letter staged earlier does not go with it
+        try:
+            jobqueue.move_to_done(run.root, run.folder.upload / cover, run.day)
+            files.pop(cover, None)
+        except PermissionError:
+            pass
     jobfs.atomic_write_json(run.folder.runner_out / "staged.json", {"v": 1, "date": run.day.isoformat(),
                                                                      "files": files})
     return name, digest
@@ -873,14 +1041,10 @@ def stage_tier_a(run, item):
 
 def diy_rows(run, limit):
     """(company, title, location) of the day's do-yourself items: LinkedIn
-    leads given up (resolve.py) and chat-apply postings from the pool."""
-    import gates
-    import resolve
-    rows = [(x.get("company", ""), x.get("title", ""), x.get("location", ""))
-            for x in resolve.diy_items(run.root, run.day)]
-    rows += [(it.get("company", ""), it.get("title", ""), it.get("location", ""))
-             for it in gates.load_pool(run.root).get("items", []) if it.get("diy")]
-    return rows[:limit]
+    leads given up (resolve.py) and chat-apply postings from the pool, in the
+    order and cut the session reads (today_view.diy_rows), so E<n> is one job."""
+    import today_view
+    return today_view.diy_rows(run.root, run.day, limit)
 
 
 def family_for(profile, title):
@@ -942,13 +1106,20 @@ def stage_diy(run):
     """upload/E<n>_<Last>_Resume_<Employer12>.pdf (the family's approved base
     variant) and one answer sheet per do-yourself item (5.8)."""
     import jobqueue
+    import today_view
     settings, profile = jobfs.settings(run.root), jobfs.search_profile(run.root)
     rows = diy_rows(run, int(settings["daily"].get("easy_apply_list_max", 5)))
     if not rows:
         return 0
+    # A job already logged by hand (log e1, /job log) keeps its E number but is
+    # not staged or sheeted again (today_view.diy_list hides it the same way).
+    logged = today_view.logged_by_hand(run.root)
     last = jobqueue.last_name(run.root)
-    cache, staged = {}, 0
+    cache, staged, listed = {}, 0, 0
     for i, (company, title, location) in enumerate(rows, 1):
+        if (today_view.norm(company), today_view.norm(title)) in logged:
+            continue
+        listed += 1
         pdf = base_pdf(run, family_for(profile, title), cache)
         dest = run.folder.upload_file(i, last, company or "Employer", diy=True)
         if pdf and not dest.exists():
@@ -958,28 +1129,40 @@ def stage_diy(run):
         sheet = run.folder.diy_dir(run.day) / f"{jobfs.ascii_name(company or 'Employer', 40)}.md"
         jobfs.atomic_write_text(sheet, diy_sheet(run, company, title, location,
                                                  f"upload\\{dest.name}" if pdf else ""))
-    run.out(f"DIY {len(rows)} item{'s' if len(rows) != 1 else ''}, {staged} file{'s' if staged != 1 else ''} staged")
+    run.out(f"DIY {listed} item{'s' if listed != 1 else ''}, {staged} file{'s' if staged != 1 else ''} staged"
+            + (f" ({len(rows) - listed} logged by hand)" if listed != len(rows) else ""))
     return staged
 
 
 # ---------- daily ----------
 
 def daily(run):
+    """The 05:30 run. A daily that has not built today's queue yet never waits
+    for a session (there are no numbers to protect); only a rebuild of a queue
+    that exists waits. Requests waiting in runner/in/requests are answered at
+    the end, the long ones (resolve_leads, probe_url, rebuild_queue) included."""
     import jobqueue
     status = run.status()
     last = status.get("last_daily") or {}
-    if session_active(run.root):
+    qpath = run.folder.queue_json(run.day)
+    done_today = qpath.exists() and last.get("date") == run.day.isoformat() and bool(last.get("ok"))
+    if qpath.exists() and not done_today and session_active(run.root):
+        answer_requests(run)
         run.write_status(daily_pending=run.day.isoformat())
         run.out("DAILY WAIT a session is active (claude/session.json beat under 20 minutes); "
-                "the next tick runs it after the session")
+                "today's queue is rebuilt after the session")
         return 0
     jobfs.settings(run.root, keep_last_good=True)
     jobfs.search_profile(run.root, keep_last_good=True)
     prep = Prep(run)
-    qpath = run.folder.queue_json(run.day)
-    if qpath.exists() and last.get("date") == run.day.isoformat() and last.get("ok"):
-        work = prep_existing(run, run.day, prep) + stage(run, run.day) + (optional(run, "do-yourself list",
-                                                                                stage_diy, run) or 0)
+    if done_today:
+        work = 0
+        if status.get("discovery_offline") == run.day.isoformat():
+            work += rediscover(run, prep)
+        work += prep_existing(run, run.day, prep) + (optional(run, "uploads", stage, run, run.day) or 0)
+        if not session_active(run.root):  # upload/ waits for the session (2.7.3)
+            work += optional(run, "do-yourself list", stage_diy, run) or 0
+        work += answer_requests(run)
         q = verified(qpath, {})
         if not work:
             run.write_status(daily_pending=None)
@@ -995,14 +1178,17 @@ def daily(run):
     if written is None:
         written = verified(qpath, {})
         if any(ln.startswith("WAIT") for ln in lines):
+            answer_requests(run)
             run.write_status(daily_pending=run.day.isoformat())
-            run.out("DAILY WAIT a session is active; the next tick runs the build after the session")
+            run.out("DAILY WAIT a session is active; the next tick starts the rebuild after the session")
             return 0
         prep_existing(run, run.day, prep)
-    stage(run, run.day)
-    optional(run, "do-yourself list", stage_diy, run)
+    optional(run, "uploads", stage, run, run.day)
+    if not session_active(run.root):
+        optional(run, "do-yourself list", stage_diy, run)
     optional(run, "network match", network_match, run)
     optional(run, "weights", weekly_adapt, run)
+    answer_requests(run)
     sources = {}
     for res in results:
         if res.status == "SKIP":
@@ -1012,17 +1198,45 @@ def daily(run):
     return finish_daily(run, written, prep, counts, sources)
 
 
+def rediscover(run, prep):
+    """This morning's discovery had no network (status discovery_offline): run
+    it again, and add what it finds as an addendum (numbers after the last
+    one; queue.json and the files already in upload/ stay as they are). A
+    rerun that is offline again keeps the flag for a later tick. Returns 1:
+    the day's status is rewritten either way."""
+    import boards
+    _, results, _ = discover(run)
+    if boards.no_network(results):
+        run.out("REDISCOVER offline again: the next tick tries once a job site answers")
+        return 1
+    path = addendum_of(run, run.new_finds, prep)
+    run.out(f"REDISCOVER {len(run.new_finds)} new posting{'s' if len(run.new_finds) != 1 else ''}"
+            + (f", {path.name}" if path else ""))
+    return 1
+
+
+def answer_requests(run):
+    """Every request waiting (a rebuild_queue still waits for the session);
+    returns how many were answered."""
+    done = 0
+    for path in pending_requests(run.folder):
+        if handle_request(run, path):
+            done += 1
+    return done
+
+
 def finish_daily(run, q, prep, counts, sources=None):
     import boards
     items, block = queue_items(run.root, run.day)
-    write_today_md(run, items, block, counts)
+    # The bookkeeping must not stop the run: Excel may hold funnel.csv open.
+    optional(run, "today.md", write_today_md, run, items, block, counts)
     optional(run, "review.html", write_review_html, run, items)
-    upsert_funnel(run, run.day - timedelta(days=1))
-    upsert_funnel(run, run.day, counts)
+    optional(run, "funnel", upsert_funnel, run, run.day - timedelta(days=1))
+    optional(run, "funnel", upsert_funnel, run, run.day, counts)
     discards = len(discard_rows(run.root, run.day))
     failed = sum(1 for it in items if it.get("resume_status") == "prep_failed")
     paused = sorted(k for k, r in boards.load_health(run.root).items()
-                    if r.get("status") in ("paused", "robots_blocked"))
+                    if r.get("status") in ("paused", "robots_blocked", "check_site"))
     settings_cfg, profile_cfg = jobfs.settings(run.root), jobfs.search_profile(run.root)
     errors = [c.error for c in (settings_cfg, profile_cfg) if c.error] + run.errors
     upd = {"last_daily": {"at": jobfs.now_iso(run.root), "date": run.day.isoformat(), "ok": True,
@@ -1085,10 +1299,11 @@ def liveness_due(run):
 
 
 def staging_due(run):
-    """True when an open item's built file is not in upload/ yet and no session
-    is active (late addenda wait for the session to end, 2.7.3)."""
+    """True when an open item's built file is not in upload/ yet. During a
+    session too: a late addendum's files are added under their new names
+    (stage() never moves or reorders files while a session is active, 2.7.3)."""
     items, _ = queue_items(run.root, run.day)
-    if not items or session_active(run.root):
+    if not items:
         return False
     view = events.overlay(run.root, run.day)["items"]
     applied = {k[1] for k, v in view.items() if v.get("state") == "applied"}
@@ -1096,9 +1311,160 @@ def staging_due(run):
         name = Path(str(it.get("upload", ""))).name
         if not name or it.get("job_key") in applied or (run.folder.upload / name).exists():
             continue
+        if it.get("resume_status") == "prep_failed":
+            continue  # waits for its family's re-approval; stage_uploads never copies it
         if (run.root / str(it.get("folder", "")) / "resume_B.pdf").exists():
             return True
     return False
+
+
+def parse_at(text):
+    try:
+        t = datetime.fromisoformat(str(text).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return t if t.tzinfo else t.replace(tzinfo=timezone.utc)
+
+
+def daily_due(run, st=None):
+    """Why today's daily should run now ('missed', 'failed', 'waited'), or ''.
+    The tick starts it (never runs it inline): the PC slept through 05:30, the
+    daily lost the lock or stopped, or it waited for a session that has ended."""
+    st = run.status() if st is None else st
+    today = run.day.isoformat()
+    last = st.get("last_daily") or {}
+    pending = st.get("daily_pending") == today
+    if last.get("date") == today and last.get("ok") and not pending:
+        return ""
+    if not run.folder.search_profile_toml.exists():
+        return ""  # a folder not set up yet has nothing to search
+    local = jobfs.now(run.root)
+    if (local.hour, local.minute) < DAILY_AT:
+        return ""
+    if run.folder.queue_json(run.day).exists() and session_active(run.root):
+        return ""  # a rebuild of today's queue waits for the session
+    return "waited" if pending else ("failed" if last.get("date") == today else "missed")
+
+
+def long_requests(run):
+    """Request files whose op the daily answers (a rebuild_queue waits for the session)."""
+    out = []
+    for p in pending_requests(run.folder):
+        m = REQ_NAME.match(p.name)
+        op = m.group(2) if m else ""
+        if op in LONG_OPS and not (op == "rebuild_queue" and session_active(run.root)):
+            out.append(p)
+    return out
+
+
+def start_reason(run, st=None):
+    """('missed' | 'failed' | 'waited' | 'requests', ok) for a tick: whether to
+    start the daily now. Starts are spaced out, so a daily that keeps failing
+    is not started all day long."""
+    st = run.status() if st is None else st
+    why = daily_due(run, st) or ("requests" if long_requests(run) else "")
+    if not why:
+        return "", False
+    starts = st.get("daily_starts") or {}
+    if starts.get("date") != run.day.isoformat():
+        return why, True
+    at = parse_at(starts.get("at"))
+    gap = (jobfs.utcnow() - at) if at else timedelta(days=1)
+    if why == "requests":
+        return why, gap >= timedelta(minutes=REQUEST_START_MINUTES)
+    return why, int(starts.get("count") or 0) < DAILY_STARTS_MAX and gap >= timedelta(minutes=DAILY_RETRY_MINUTES)
+
+
+def offline_due(run, st=None):
+    """True when this morning's discovery had no network (status
+    discovery_offline is today) and a retry may start: spaced like a failed
+    daily (30 minutes after the last start or probe, 3 starts a day)."""
+    st = run.status() if st is None else st
+    today = run.day.isoformat()
+    if st.get("discovery_offline") != today:
+        return False
+    starts = st.get("daily_starts") or {}
+    probe = st.get("offline_probe") or {}
+    if starts.get("date") == today and int(starts.get("count") or 0) >= DAILY_STARTS_MAX:
+        return False
+    times = [parse_at(x.get("at")) for x in (starts, probe) if x.get("date") == today]
+    times = [t for t in times if t]
+    return not times or jobfs.utcnow() - max(times) >= timedelta(minutes=DAILY_RETRY_MINUTES)
+
+
+def offline_probe_url(run):
+    """robots.txt of the first active watch-list board's API host (one cheap GET)."""
+    import boards
+    for spec in boards.watchlist_rows(run.root):
+        if spec.status != "active":
+            continue
+        host = spec.host or OFFLINE_PROBE_HOSTS.get(spec.ats, "")
+        if host:
+            return f"https://{host}/robots.txt"
+    return SELFTEST_ROBOTS
+
+
+def offline_retry(run):
+    """An offline morning: when a job site answers now, start the daily, which
+    runs discovery again (rediscover). True when it probed."""
+    import netfetch
+    if not offline_due(run):
+        return False
+    url = offline_probe_url(run)
+    try:
+        up = run.fetcher().get(url, accept="text/plain").status < 500
+    except (netfetch.FetchError, OSError):
+        up = False
+    run.write_status(offline_probe={"date": run.day.isoformat(), "at": jobfs.now_iso(run.root), "ok": up})
+    run.log(f"OFFLINE probe {netfetch.host_of(url)}: {'answered' if up else 'no answer'}")
+    if up:
+        start_daily(run, "offline")
+    return True
+
+
+def schtasks_exe():
+    return Path(os.environ.get("SystemRoot") or "C:\\Windows") / "System32" / "schtasks.exe"
+
+
+def start_daily(run, why):
+    """Start today's daily outside this tick: the JobRunner-Daily task (its own
+    2-hour limit), else a detached process that stops itself after 2 hours.
+    In mode S there is no task: the line tells the session to run it."""
+    import subprocess
+    if run.mode == "S":
+        run.out(f"TICK the daily is due ({why}): run  jobrunner.py daily --mode S --root <JobSearch>  now")
+        return "session"
+    how = ""
+    if os.name == "nt" and not run.offline and schtasks_exe().exists():
+        try:
+            r = subprocess.run([str(schtasks_exe()), "/Run", "/TN", DAILY_TASK], capture_output=True,
+                               timeout=60, stdin=subprocess.DEVNULL)
+            how = "task" if r.returncode == 0 else ""
+        except (OSError, subprocess.SubprocessError):
+            how = ""
+    if not how:
+        argv = [sys.executable, "-I", str(Path(__file__).resolve()), "daily", "--root", str(run.root)]
+        for flag, value in (("--offline", run.offline), ("--date", getattr(run.args, "date", None)),
+                            ("--mode", getattr(run.args, "mode", None))):
+            if value:
+                argv += [flag, str(value)]
+        kw = {"stdin": subprocess.DEVNULL, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL,
+              "cwd": str(HERE), "close_fds": True}
+        if os.name == "nt":
+            flags = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+            try:
+                subprocess.Popen(argv, creationflags=flags | 0x01000000, **kw)  # CREATE_BREAKAWAY_FROM_JOB
+            except OSError:  # the task's job object may not allow breakaway
+                subprocess.Popen(argv, creationflags=flags, **kw)
+        else:
+            subprocess.Popen(argv, start_new_session=True, **kw)
+        how = "process"
+    starts = run.status().get("daily_starts") or {}
+    count = int(starts.get("count") or 0) + 1 if starts.get("date") == run.day.isoformat() else 1
+    run.write_status(daily_starts={"date": run.day.isoformat(), "count": count, "at": jobfs.now_iso(run.root),
+                                   "why": why, "how": how})
+    run.out(f"TICK started the daily ({why}; {'the ' + DAILY_TASK + ' task' if how == 'task' else 'a process'})")
+    return how
 
 
 def idle(run):
@@ -1108,7 +1474,8 @@ def idle(run):
         return False
     if pending_requests(f) or snapshot_stale(f):
         return False
-    if run.status().get("daily_pending") and not session_active(run.root):
+    st = run.status()
+    if start_reason(run, st)[1] or offline_due(run, st):
         return False
     fp = raw_fingerprint(f)
     if fp and read_json(f.state / "network_raw.json", {}).get("fingerprint") != fp:
@@ -1142,7 +1509,8 @@ def replan(run, unparked):
             run.log(f"REPLAN skipped #{n}: a job from a link (the session plans it)")
             continue
         if not may_write(folder, "fill_plan.json"):
-            run.log(f"REPLAN skipped #{n}: the folder is claimed (the session plans it in memory)")
+            run.log(f"REPLAN skipped #{n}: the folder is claimed (the session fills it from "
+                    "answers.py plan --dry-run, apply_batch.md step 6)")
             continue
         try:
             answers.plan(run.root, folder, family=it.get("family") or None, write=True)
@@ -1180,6 +1548,28 @@ def user_addendum(run):
     return jobqueue.user_addendum(run.root, run.day, emit=run.out)
 
 
+def liveness_url(run, it, f):
+    """(url, None) for an item's posting the runner may re-read unattended, or
+    (None, why). The URL's host must be one the unattended policy allows (the
+    ATS hosts, the watch-list careers hosts) or the host of the posting's own
+    url (where the board listed it); a board-supplied apply_url on any other
+    host (an ad or tracking link) is never fetched."""
+    import netfetch
+    own = str(read_json(run.root / str(it.get("folder", "")) / "posting.json", {}).get("url") or "")
+    own_host = netfetch.host_of(own) if own else ""
+    for url in (str(it.get("apply_url") or ""), own):
+        host = netfetch.host_of(url) if url else ""
+        if not host:
+            continue
+        if f.policy.reason(url) is None:
+            return url, None
+        if host == own_host:
+            f.policy.allow_host(host)
+            if f.policy.reason(url) is None:
+                return url, None
+    return None, f"skip host {netfetch.host_of(str(it.get('apply_url') or '')) or 'none'}: not a job-site host"
+
+
 def liveness(run, items):
     """Re-read the next items' postings; a closed one leaves the pool."""
     import gates
@@ -1190,11 +1580,14 @@ def liveness(run, items):
     live = data.setdefault("items", {})
     closed = []
     for it in items:
-        url = it.get("apply_url") or ""
         rec = {"checked": jobfs.now_iso(run.root), "n": it.get("n"), "closed": False, "why": ""}
         try:
             f = run.fetcher()
-            f.policy.allow_host(netfetch.host_of(url))
+            url, why = liveness_url(run, it, f)
+            if url is None:
+                rec["why"] = why
+                live[it["job_key"]] = rec
+                continue
             reading = posting.read_posting(url, fetcher=f, root=run.root, lane="liveness",
                                            first_seen=run.day.isoformat(), ats=it.get("ats") or None)
             rec["closed"] = bool(reading.posting.closed)
@@ -1217,41 +1610,54 @@ def liveness(run, items):
 
 
 def tick(run):
+    """Short work only, within the Tick task's 10 minutes: events, short
+    requests, uploads, liveness. A daily that is due and the long requests
+    go to the Daily task (start_daily); the tick never runs them itself."""
     if idle(run):
         run.write_status(last_tick=jobfs.now_iso(run.root))
         run.out("TICK idle")
         return 0
     worked = []
     f = run.folder
-    has_events = f.events.exists() and any(p.suffix == ".json" for p in f.events.iterdir())
-    if has_events or snapshot_stale(f):
-        code, applied = apply_events(run)
-        if code == 2:
-            run.out("MISSING openpyxl: run  pip install openpyxl  and run again")
-        worked.append("events")
-        if has_events:
-            optional(run, "jobs from links", user_addendum, run)
+    try:
+        has_events = f.events.exists() and any(p.suffix == ".json" for p in f.events.iterdir())
+        applied = 0
+        if has_events or snapshot_stale(f):
+            code, applied = optional(run, "events", apply_events, run) or (1, 0)
+            if code == 2:
+                run.out("MISSING openpyxl: run  pip install openpyxl  and run again")
+            worked.append("events")
+            if has_events:
+                optional(run, "jobs from links", user_addendum, run)
+        # Requests come before the bookkeeping, so a file another program holds
+        # open (a PDF viewer, Excel) never keeps "more" from being answered.
+        for path in pending_requests(f):
+            if handle_request(run, path, in_tick=True):
+                worked.append(path.name)
         if applied:
-            stage(run, run.day)
-            upsert_funnel(run, run.day)
-    for path in pending_requests(f):
-        if handle_request(run, path):
-            worked.append(path.name)
-    if optional(run, "network import", network_import, run) is not None:
-        worked.append("network")
-    if staging_due(run):
-        stage(run, run.day)
-        worked.append("uploads")
-    pending = run.status().get("daily_pending")
-    if pending and not session_active(run.root):
-        run.out(f"TICK runs the daily that waited ({pending})")
-        daily(run)
-        worked.append("daily")
-    due = liveness_due(run)
-    if due:
-        liveness(run, due)
-        worked.append("liveness")
-    run.write_status(last_tick=jobfs.now_iso(run.root))
+            optional(run, "uploads", stage, run, run.day)
+            optional(run, "funnel", upsert_funnel, run, run.day)
+        if optional(run, "network import", network_import, run) is not None:
+            worked.append("network")
+        if staging_due(run):
+            optional(run, "uploads", stage, run, run.day)
+            worked.append("uploads")
+        why, ok = start_reason(run)
+        if why and ok:
+            start_daily(run, why)
+            worked.append("daily")
+        elif optional(run, "offline retry", offline_retry, run):
+            worked.append("offline")
+        else:
+            due = liveness_due(run)
+            if due:
+                optional(run, "liveness", liveness, run, due)
+                worked.append("liveness")
+    finally:
+        try:
+            run.write_status(last_tick=jobfs.now_iso(run.root))
+        except OSError:
+            pass
     run.out(f"TICK done {len(worked)} step{'s' if len(worked) != 1 else ''}")
     return 0
 
@@ -1351,8 +1757,9 @@ def finish_request(run, path):
     os.replace(path, dest / path.name)
 
 
-def handle_request(run, path):
-    """Answer one request file; True when it was handled (and moved)."""
+def handle_request(run, path, in_tick=False):
+    """Answer one request file; True when it was handled (and moved). In a
+    tick a long op (LONG_OPS) waits for the daily, which the tick starts."""
     req, why = read_request(run, path)
     m = REQ_NAME.match(path.name)
     req_id, op = (m.group(1), m.group(2)) if m else (path.stem, "unknown")
@@ -1365,6 +1772,9 @@ def handle_request(run, path):
         return True
     if op == "rebuild_queue" and session_active(run.root):
         run.log(f"REQUEST {req_id} rebuild_queue waits for the session to end")
+        return False
+    if in_tick and op in LONG_OPS:
+        run.log(f"REQUEST {req_id} {op} waits for the daily (a long request never runs inside a tick)")
         return False
     lines = []
     start = len(run.log_lines)
@@ -1421,11 +1831,14 @@ def req_fetch_posting(run, args, lines):
     import posting
     url = args.get("url")
     item = None
+    f = run.fetcher()
     if not url:
         item = find_item(run, args)
-        url = item.get("apply_url")
-    f = run.fetcher()
-    f.policy.allow_host(netfetch.host_of(url))
+        url, why = liveness_url(run, item, f)  # the board's apply_url: the same host rule as liveness
+        if url is None:
+            return False, {"deny": why}
+    else:
+        f.policy.allow_host(netfetch.host_of(url))  # a link the session named, checked by check_arg
     try:
         reading = posting.read_posting(url, fetcher=f, root=run.root, lane="liveness",
                                        first_seen=run.day.isoformat(), ats=(item or {}).get("ats") or None)
@@ -1453,7 +1866,11 @@ def req_build(run, args, lines):
         raise RequestError(f"{args['folder']}/{name} not found")
     # A claimed folder is fine here: the session that claimed it asked for the build.
     argv = [str(src), "--out", str(folder), "--base", src.stem, "--strict"]
-    sources = [p for p in (run.folder.library, run.folder.master_resume) if p.exists()]
+    # The sources of writing_rules.md's strict command: profile.md too (the
+    # strict FACT check reads license names, which may be listed only under
+    # "Licenses held") and the job's notes.md (only its ## Answers count).
+    sources = [p for p in (run.folder.library, run.folder.master_resume, run.folder.profile, folder / "notes.md")
+               if p.exists()]
     if sources:
         argv += ["--sources"] + [str(p) for p in sources]
     if run.folder.publications.exists():
@@ -1481,10 +1898,10 @@ def req_more(run, args, lines):
     path = jobqueue.addendum(run.root, run.day, limit=args.get("limit"), emit=buf.append)
     for line in buf:
         run.out(line)
+    lines += buf  # the result says why none came (no list yet, a re-approval, the caps)
     if path:
         prep_addendum(run, path, Prep(run))
-        if not session_active(run.root):
-            stage(run, run.day)
+        stage(run, run.day)  # in a session too: only the new names are added (stage)
     return bool(path), {"addendum": path.name if path else ""}
 
 
@@ -1516,7 +1933,8 @@ def make_request(root, op, args):
     """Claude's side: validate and write one request file, create-only."""
     if op not in OPS:
         raise RequestError(f"unknown op {op}; one of {', '.join(OPS)}")
-    run = argparse.Namespace(root=Path(root), folder=jobfs.Folder(root))
+    root = Path(root).resolve()
+    run = argparse.Namespace(root=root, folder=jobfs.Folder(root))
     clean = {}
     for k, v in (args or {}).items():
         if k not in OPS[op]:
@@ -1536,11 +1954,14 @@ def make_request(root, op, args):
 # ---------- selftest ----------
 
 def selftest(run, net=False):
+    """PASS/FAIL per check. With --net, one job site that does not answer is a
+    WARN line (that site's boards wait; the rest run); only no answer from any
+    site fails the net check. Recruitee is optional: its line is PASS or WARN."""
     checks = []
 
-    def report(name, ok, detail):
-        checks.append((name, ok))
-        run.out(f"{'PASS' if ok else 'FAIL'} {name} {detail}".rstrip())
+    def report(name, ok, detail, blocking=True):
+        checks.append((name, ok, blocking))
+        run.out(f"{'PASS' if ok else ('FAIL' if blocking else 'WARN')} {name} {detail}".rstrip())
 
     v = sys.version_info
     report("python", v >= (3, 11), f"{v.major}.{v.minor}.{v.micro}" + ("" if v >= (3, 11) else " (needs 3.11+; 3.13 is installed by the installer)"))
@@ -1567,26 +1988,38 @@ def selftest(run, net=False):
         report("folder", ok, f"write {run.folder.runner_out}")
     except OSError as e:
         report("folder", False, f"cannot write {run.folder.runner_out}: {e}")
-    report(*robots_check(run, net))
+    report(*robots_check(run, net), blocking=not net)
     report(*build_check(run))
     recruitee = None
     if net:
         f = run.fetcher()
         for name, method, url in SELFTEST_HOSTS:
-            report(*reach(f, f"reach {name}", method, url))
+            report(*reach(f, f"reach {name}", method, url), blocking=False)
         name, ok, detail = reach(f, "reach recruitee", "GET", SELFTEST_RECRUITEE, want="offers")
-        report(name, ok, detail)
+        report(name, ok, detail + ("" if ok else " (optional: Recruitee boards stay off)"), blocking=False)
         recruitee = "PASS" if ok else "FAIL"
-    failed = [n for n, ok in checks if not ok]
-    st = {"at": jobfs.now_iso(run.root), "checks": {n: ("PASS" if ok else "FAIL") for n, ok in checks}}
+    failed = [n for n, ok, blocking in checks if not ok and blocking]
+    st = {"at": jobfs.now_iso(run.root),
+          "checks": {n: ("PASS" if ok else ("FAIL" if blocking else "WARN")) for n, ok, blocking in checks}}
     if net:
-        st["net"] = "FAIL" if any(n.startswith("reach") for n in failed) else "PASS"
+        sites = [ok for n, ok, _ in checks if n == "robots" or (n.startswith("reach ") and n != "reach recruitee")]
+        st["net"] = "PASS" if any(sites) else "FAIL"
+        if not any(sites):
+            failed.append("net")
+            run.out("FAIL net no job site answered (a proxy or firewall may block Python)")
         st["recruitee"] = recruitee
     else:
         st["net"] = run.status().get("selftest", {}).get("net", "not run")
         st["recruitee"] = run.status().get("selftest", {}).get("recruitee")
     try:
-        run.write_status(selftest=st)
+        if run.mode == "S":
+            # The sandbox check (setup.md) has its own key: it never replaces the
+            # PC's result (which turns the Recruitee boards on) or the PC's mode.
+            data = run.status()
+            data["selftest_s"] = st
+            jobfs.atomic_write_json(run.folder.status_json, data)
+        else:
+            run.write_status(selftest=st)
     except OSError:
         pass
     run.out(f"SELFTEST {'PASS' if not failed else 'FAIL ' + ' '.join(failed)}")
@@ -1667,6 +2100,9 @@ def show_status(run):
         print(f"TRACKER LOCKED since {st['tracker_locked_since']}")
     if st.get("daily_pending"):
         print(f"DAILY WAITING {st['daily_pending']}")
+    if st.get("discovery_offline") == run.day.isoformat():
+        print(f"OFFLINE {st['discovery_offline']}: no job board answered; a tick runs discovery again "
+              "once a job site answers")
     sel = st.get("selftest") or {}
     if sel:
         print(f"SELFTEST {sel.get('at', '?')} net={sel.get('net', '-')}")
@@ -1710,7 +2146,35 @@ def resolve_root(args):
     if not args.root or not Path(args.root).is_dir():
         print(f"ERROR --root {args.root or '(none)'} is not a folder")
         return False
+    args.root = str(Path(args.root).resolve())  # a relative --root names one folder for every module
     return True
+
+
+def keep_awake(on):
+    """While a daily runs the PC does not go back to sleep (Windows only)."""
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+        es_continuous, es_system_required = 0x80000000, 0x00000001
+        ctypes.windll.kernel32.SetThreadExecutionState(es_continuous | (es_system_required if on else 0))
+    except (OSError, AttributeError):
+        pass
+
+
+def watchdog(run, seconds):
+    """A daily started as a plain process (no Task Scheduler limit) stops itself."""
+    import threading
+
+    def stop():
+        run.out(f"ERROR daily stopped: it ran over {seconds // 3600} hours")
+        run.flush_log()
+        os._exit(1)  # the OS frees the lock and the keep-awake request
+
+    t = threading.Timer(seconds, stop)
+    t.daemon = True
+    t.start()
+    return t
 
 
 def cmd_request(args):
@@ -1753,6 +2217,10 @@ def main(argv=None):
         return EXIT_LOCKED
     try:
         if args.cmd == "daily":
+            keep_awake(True)
+            watchdog(run, DAILY_LIMIT_SECONDS)
+            # status.json daily_running: the card can say today's list is being built
+            run.write_status(daily_running={"at": jobfs.now_iso(run.root), "pid": os.getpid()})
             return daily(run)
         if args.cmd == "tick":
             return tick(run)
@@ -1778,6 +2246,12 @@ def main(argv=None):
             pass
         return 1
     finally:
+        if args.cmd == "daily":
+            keep_awake(False)
+            try:
+                run.write_status(daily_running=None)
+            except (OSError, ValueError):
+                pass
         lock.release()
         run.flush_log()
 

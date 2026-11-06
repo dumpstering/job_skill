@@ -10,6 +10,7 @@ workbook gains columns after the v1.1 ones plus three sheets, and dates come
 from jobfs.today() in the configured time zone (pinned here so a run that
 crosses midnight cannot flake).
 """
+import contextlib
 import json
 import os
 import shutil
@@ -641,22 +642,48 @@ def test_events_transport():
     assert run(root, "apply-events").strip() == "APPLIED 0 PENDING 0 REJECTED 0"
 
 
+@contextlib.contextmanager
+def held(path):
+    """Hold path open the way Excel holds a workbook and its ~$ owner file:
+    other programs may read it, not write it (Windows share modes)."""
+    import ctypes
+    from ctypes import wintypes
+    k32 = ctypes.windll.kernel32
+    k32.CreateFileW.restype = wintypes.HANDLE
+    k32.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p, wintypes.DWORD,
+                                wintypes.DWORD, wintypes.HANDLE]
+    # GENERIC_READ, FILE_SHARE_READ, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL
+    h = k32.CreateFileW(str(path), 0x80000000, 0x1, None, 3, 0x80, None)
+    assert h not in (None, ctypes.c_void_p(-1).value), f"could not open {path}"
+    try:
+        yield
+    finally:
+        k32.CloseHandle(h)
+
+
 def test_events_locked():
     root = new_root()
     run(root, "add", "--company", "Acme", "--role", "QC Micro", "--transport", "events")
+    if os.name != "nt":
+        print("SKIP held-file lock test (needs Windows share semantics)")
+        return
     lock = root / "~$applications.xlsx"
     lock.write_text("x", encoding="utf-8")
-    out = run(root, "apply-events", code=4)
-    assert out.startswith("LOCKED"), out
-    assert len(list((root / "runner" / "in" / "events").glob("*.json"))) == 1, "event must stay pending"
-    status = json.loads((root / "runner" / "out" / "status.json").read_text(encoding="utf-8"))
-    assert status["tracker_locked_since"], status
-    since = status["tracker_locked_since"]
-    run(root, "apply-events", code=4)
-    status = json.loads((root / "runner" / "out" / "status.json").read_text(encoding="utf-8"))
-    assert status["tracker_locked_since"] == since, "the first lock time is kept"
-    lock.unlink()
+    with held(lock):  # Excel has the workbook open: it holds its owner file
+        out = run(root, "apply-events", code=4)
+        assert out.startswith("LOCKED"), out
+        assert len(list((root / "runner" / "in" / "events").glob("*.json"))) == 1, "event must stay pending"
+        status = json.loads((root / "runner" / "out" / "status.json").read_text(encoding="utf-8"))
+        assert status["tracker_locked_since"], status
+        since = status["tracker_locked_since"]
+        run(root, "apply-events", code=4)
+        status = json.loads((root / "runner" / "out" / "status.json").read_text(encoding="utf-8"))
+        assert status["tracker_locked_since"] == since, "the first lock time is kept"
+    # PIPE-07 / WR-07: Excel crashed and left its owner file behind; nothing holds
+    # it, so it is no lock (it used to block every tick for good).
+    assert lock.exists()
     assert run(root, "apply-events").strip() == "APPLIED 1 PENDING 0 REJECTED 0"
+    lock.unlink()
     assert len(sheet_rows(root / "applications.xlsx")) == 1
     status = json.loads((root / "runner" / "out" / "status.json").read_text(encoding="utf-8"))
     assert status["tracker_locked_since"] is None
@@ -667,6 +694,69 @@ def test_events_locked():
     assert run(root, "apply-events").strip() == "APPLIED 0 PENDING 0 REJECTED 0"
     assert len(sheet_rows(root / "applications.xlsx")) == 1, "re-sent event applied twice"
     assert not list((root / "runner" / "in" / "events").glob("*.json"))
+    # the workbook itself held open (no owner file): still LOCKED, the event waits
+    run(root, "update", "1", "fit=good fit", "--transport", "events")
+    with held(root / "applications.xlsx"):
+        assert run(root, "apply-events", code=4).startswith("LOCKED")
+    assert run(root, "apply-events").strip() == "APPLIED 1 PENDING 0 REJECTED 0"
+    # an idle tick refreshes the snapshot after the user's own edit even with a stale owner file
+    lock.write_text("x", encoding="utf-8")
+    wb = openpyxl.load_workbook(root / "applications.xlsx")
+    wb["Applications"]["E2"] = "Springfield"
+    time.sleep(1.1)
+    wb.save(root / "applications.xlsx")
+    assert run(root, "apply-events").strip() == "APPLIED 0 PENDING 0 REJECTED 0"
+    snap = json.loads((root / "runner" / "out" / "tracker.json").read_text(encoding="utf-8"))
+    assert snap["applications"][0]["Location"] == "Springfield", snap["applications"][0]
+
+
+def test_add_same_job():
+    """contracts-03 / UD-04: one job, one row. A second add for a job key whose
+    row was never sent updates that row (a reopened handover); one already sent
+    is refused unless --force (a real second application)."""
+    root = new_root()
+    key = ["--job-key", "workable:ivybio:B00008C", "--url", "https://apply.workable.com/ivybio/j/B00008C/"]
+    assert run(root, "add", "--company", "Ivy Bio", "--role", "QC Micro", "--status", "Filled - awaiting submit",
+               *key).strip() == "ADDED 1"
+    out = run(root, "add", "--company", "Ivy Bio", "--role", "QC Micro", "--status", "Filled - awaiting submit",
+              "--notes", "reopened", *key)
+    assert out.strip() == "ADDED 1 (existing row)", out
+    rows = sheet_rows(root / "applications.xlsx")
+    assert len(rows) == 1 and rows[0]["Notes"] == "reopened", rows
+    # a row the user dropped (k) comes back to life on the next handover
+    run(root, "update", "1", "status=Not pursued")
+    assert run(root, "add", "--company", "Ivy Bio", "--role", "QC Micro", "--status", "Filled - awaiting submit",
+               *key).strip() == "ADDED 1 (existing row)"
+    assert sheet_rows(root / "applications.xlsx")[0]["Status"] == "Filled - awaiting submit"
+    run(root, "update", "1", "status=Applied")
+    out = run(root, "add", "--company", "Ivy Bio", "--role", "QC Micro", "--status", "Filled - awaiting submit",
+              *key, code=5)
+    assert out.startswith("REFUSED 1 already Applied for job key workable:ivybio:B00008C"), out
+    assert len(sheet_rows(root / "applications.xlsx")) == 1
+    assert run(root, "add", "--company", "Ivy Bio", "--role", "QC Micro", "--force", *key).strip() == "ADDED 2"
+    # the events transport: the second add names the pending row, and the runner keeps one row
+    root = new_root()
+    first = run(root, "add", "--company", "Ivy Bio", "--role", "QC Micro", "--status", "Filled - awaiting submit",
+                "--transport", "events", *key).split()[1]
+    out = run(root, "add", "--company", "Ivy Bio", "--role", "QC Micro", "--status", "Filled - awaiting submit",
+              "--transport", "events", *key)
+    assert out.strip() == f"ADDED {first} (pending, existing row)", out
+    assert run(root, "apply-events").strip() == "APPLIED 2 PENDING 0 REJECTED 0"
+    assert len(sheet_rows(root / "applications.xlsx")) == 1
+    assert run(root, "add", "--company", "Ivy Bio", "--role", "QC Micro", "--transport", "events",
+               *key).strip() == "ADDED 1 (existing row)"
+
+
+def test_referral_urls():
+    """contracts-07: the referral link a job's row or Referrals row holds, by job key."""
+    root = new_root()
+    run(root, "referral-add", "--contact", "Pat Lee", "--company", "Pine Labs", "--job-key", "greenhouse:71",
+        "--status", "Sent", "--referral-url", "https://job-boards.greenhouse.io/pine/jobs/71?gh_src=ref1")
+    run(root, "add", "--company", "Oak Bio", "--role", "R", "--job-key", "lever:x",
+        "--referral-url", "javascript:alert(1)")
+    tr = tracker.Tracker(root)
+    tr.load()
+    assert tracker.referral_urls(tr) == {"greenhouse:71": "https://job-boards.greenhouse.io/pine/jobs/71?gh_src=ref1"}
 
 
 def test_auto_transport():
@@ -771,7 +861,7 @@ def main():
     print("ok locked_file")
     for fn in (test_v11_upgrade, test_upgrade_on_first_write, test_followup_tiers, test_new_sheets,
                test_events_transport, test_events_locked, test_auto_transport, test_check_v12, test_archive,
-               test_5000_rows):
+               test_5000_rows, test_add_same_job, test_referral_urls):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

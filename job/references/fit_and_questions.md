@@ -49,10 +49,12 @@ Then reply with exactly this, and nothing more:
   Positioning changes emphasis and order, never my job titles.
 
 **Questions**
-Before writing any question, check my library, my profile and this job's
+Before writing any question or quick check, check my library (its
+"Confirmed <Mon YYYY>:" lines record quick checks I already answered), my
+profile, `answers.md`, `techniques.md`, `publications.md` and this job's
 `notes.md` (which may hold answers carried over from an earlier application
 of the same job): leave out anything they already answer, and anything listed
-as "Not held".
+as "Not held". A quick check a Confirmed line settles is never asked again.
 
 Up to 6 numbered questions (including the two below), most important first,
 each at most two short sentences plus, where it applies, the tag "Your part,
@@ -120,8 +122,8 @@ plugin):
   day's other questions; the card shows at most 6 in all, ranked by jobs
   waiting, plus one sensitive-answers line.
 - Leave out anything `answers.md`, `techniques.md`, `publications.md`, my
-  library, my profile or `notes.md` already answers. Quick checks stay in
-  `notes.md`; they do not go into the batch.
+  library (Confirmed lines included), my profile or `notes.md` already
+  answers. Quick checks stay in `notes.md`; they do not go into the batch.
 - When my answers arrive: recurring answers go to `answers.md`
   (`answers.py add`, source `user:<date>`), achievements to the library as
   new entries with IDs (`library.py ids`), job-specific ones to the job's
@@ -139,6 +141,7 @@ and join the batch after every job's own questions.
 **Document mode.** Note the mode in `notes.md` and build with it
 ([cv_publications.md](cv_publications.md)):
 - `cv` when the posting asks for a CV or curriculum vitae, the employer is a
-  university, institute or government lab, or the title is a postdoc;
+  university, institute or government lab, or the title is a postdoc (build
+  it as `--base "<Name> CV"`);
 - `usajobs` for a USAJOBS announcement (always Tier A, 2 pages, hard);
 - `industry` otherwise.

@@ -12,14 +12,20 @@ printed.
 
 ## Before opening the browser
 
-1. If the resume was revised after its last audit, or was never audited, run
-   "audit" (writing_rules.md) first. If the audit changed anything, post the
-   result, rebuild, and wait for the user to say "apply" again.
+1. If the resume or the cover letter was revised after its last audit, or
+   was never audited, run "audit" (writing_rules.md) first, the cover letter
+   included. If the audit changed anything, post the result, rebuild, and
+   wait for the user to say "apply" again. The files to attach are the ones
+   `final.json` in the job folder names (`<Name> Resume.pdf`, or `<Name>
+   CV.pdf` in cv mode, and the letter); with no `final.json`, no strict
+   build has passed yet, so build again first.
 2. Gather what you will enter: `profile.md`, `answers.md`, the tailored
    resume (.txt), `notes.md`, and Block B's screening answers. If
    `posting.md` has an "Application questions" section, run `answers.py
    plan --job "<job folder>" --dry-run`: it prints the plan, with the source
-   of every answer it found. Draft an answer to every question it leaves
+   of every answer it found. A `LETTER` line means the form requires a
+   cover letter and none is built: write and build it now
+   (writing_rules.md, Cover letter). Draft an answer to every question it leaves
    open, except contact details, file uploads and the voluntary questions,
    and show the drafts in one numbered list for an ok or an edit, before
    opening the form. Sensitive answers (salary, visa, sponsorship) are

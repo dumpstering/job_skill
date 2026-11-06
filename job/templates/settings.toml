@@ -40,12 +40,15 @@ rounds_size = 5
 sensitive_confirm = "per_job"   # per_job (v1.1 semantics, batched) | daily (owner opt-in)
 screener = false
 mygreenhouse_autofill = false   # oss A27 experiment
-[caps]                      # R7
-per_company_30d = 3
-per_family_per_company_30d = 1
+[caps]                      # R7; no source gives a number except Google's: change these to taste
+per_company_30d = 5         # an Amazon recruiter's "up to five roles you fully meet"
+per_family_per_company_30d = 2
 reject_reapply_days = 90
 ashby_one_open = true       # oss A19
 per_company_per_day = 2     # oss A25
+per_unit_30d = 2            # unit_segments employers: per lab or department the posting names
+per_institution_30d = 15    # and for the whole institution
+unit_segments = ["academic", "institute", "hospital", "government"]
 [[caps.employer]]
 name = "Google"
 match = ["google"]          # parent grouping elsewhere only where watchlist sets parent

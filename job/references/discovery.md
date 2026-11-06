@@ -30,7 +30,7 @@ The runner finds postings on the user's PC (boards, aggregators), Claude adds le
 1. Known board (watch lists, earlier resolutions in `state/company_ats.json`): it matches today's list, or reads that board once. A match is a title at least 85% alike and a compatible location (same city, a `[home]` place, or remote-US). Each match is its own posting.
 2. Unknown company: it probes slug guesses on Greenhouse, Lever, Ashby, Workable, BambooHR, Breezy, JazzHR, Pinpoint, Personio, Teamtailor, Rippling, Recruitee (after its selftest) and Jobvite, in that order. Misses are cached 30 days; an empty board is unknown. A hit joins `state/watchlist_auto.csv`.
 3. Still unknown, or an R3 lead-only employer: listed in `runner/out/needs_search.json`.
-4. Unresolved on 2 different days: LinkedIn leads go to the do-yourself list (`queue/<date>/diy.md`, at most `easy_apply_list_max`, company, title and location only); other leads are discarded with reason `unresolved`.
+4. Unresolved on 2 different days: LinkedIn leads go to the do-yourself list (company, title and location only; `queue/<date>/diy.md` records only that day's new give-ups, and the list the user works from is `today_view.py diy`: leads with status diy, then chat-apply pool items, in the order the runner stages them, at most `easy_apply_list_max`); other leads are discarded with reason `unresolved`. A lead that step 3 lists waits until `needs_search.json` has listed it on 2 different days, so a job-morning (or a batch break) had it to search; a lead still pending 30 days after it was seen gives up the same way (`UNRESOLVED <id> <company> day=<n> expired`), never silently.
 
 ### needs_search.json (job-morning, or the session at a batch break)
 
@@ -48,19 +48,19 @@ The runner then runs `resolve.py probe-url`:
 
 ## The gates (runner; spec 3.8)
 
-Cheapest first; a list record that fails G1-G5 never gets a detail call.
+Cheapest first; a list record that fails G1-G5 never gets a detail call. A list record with no location (Jobvite, JazzHR), "N Locations" or only a country (Workday, ADP, Oracle), no title (Phenom) or no date (Workday) passes G3-G5 as unknown, and G3, G4 and G5 judge it again on the detail record (`GATE G3 judged again on the detail` in its trail).
 
 | Gate | Fails when | Discard reason |
 |---|---|---|
 | G1 host | job-board URL; robots.txt disallows the page (R3 hosts go lead-only) | `host:<domain>`, `robots:<host>` |
 | G2 seen | already pooled, queued, deferred, applied, closed, or the same job by another key | (skipped, no log) |
-| G3 location | not in `[home] places` (plus `second_ring` when widened), not remote-US | `location` |
+| G3 location | no listed place is a `[home]` place (plus `second_ring` when widened) or remote within the US. Each place of a list ('Jersey City, NJ; Millbrae, CA') counts; a place name with another country beside it ('Dublin, Ireland'), or a state not in `[home] states` ('Newark, NJ' when states is `["CA"]`), does not; a remote place outside the US ('TWN - Remote') or in another state ('Remote, Florida, USA') does not | `location` |
 | G4 title | no family title match, a `title_none` term, or an `exclude_title_words` word | `title` |
 | G5 age | over 30 days by its source date, not a repost | `stale` |
 | G6 closed | the board's closed marker | `closed` |
 | G7 knockout | a `[[knockout]]` title or required pattern not held in profile.md `Licenses held:` | `knockout:<id>` |
 | G8 knockout | no sponsorship (or US citizenship) against profile.md | `knockout:sponsorship`, `knockout:citizenship` |
-| G9 title | no `require_any` word in the description | `title` |
+| G9 title | no `require_any` word in the requirements sections (Requirements, Basic and Preferred Qualifications, What you bring); the whole description when they are missing or under 200 characters | `title` |
 | G10 location | remote but not open to the US | `location` |
 | G11 AI text | text addressed to an AI | parked as needs-you (never queued) |
 | G12 apply | no apply URL or a job-board apply URL; chat apply goes to do-yourself | `apply_route` |
@@ -86,11 +86,11 @@ MIX tier_a=4 new_account_tenants=2 account_required=5 usajobs=1 deferred=6
 WIDEN adjacent_families
 ```
 - `score = fresh + 30*fit + 20*referral + priority + family_w - account cost - 10 for a company applied to in 30 days`; `score_parts` holds each term.
-- Caps defer, never discard: a deferred item keeps `deferred_until` in the pool.
-- Order: #1-#10 no-account items, then the account block (`account_block.after_n`, `tenants`), then the rest. Never the same employer twice in a row, at most 3 in a row on one ATS host.
-- Until a family's variant is approved its items can only be Tier A.
+- Caps defer, never discard: a deferred item keeps `deferred_until` in the pool as a note, and every build checks it again (a slot only today's queue held is free tomorrow). Universities, institutes, hospitals and government labs count per lab or department (settings.md).
+- Order: a job handed over on an earlier day with no `s` first (`unsubmitted`), #1-#10 no-account items, then the account block (`account_block.after_n`, `tenants`), then the rest. Never the same employer twice in a row, at most 3 in a row on one ATS host.
+- Until a family's variant is approved its items can only be Tier A, at most `tier_a_per_day`; the rest fill free places last as `prep_failed` (`WAIT_VARIANT <family> <n> jobs`).
 - `FROZEN` means events exist for that date (late finds go to an addendum). `WAIT` means a session is active.
-- `WIDEN <step>`: the pool was under target, so one widen step is now on (state/queue_state.json). Tell the user in the weekly summary, not the card.
+- `WIDEN <step>`: fewer than `target` pool items pass the caps with a resume to send, so one widen step is now on (state/queue_state.json). Tell the user in the weekly summary, not the card.
 
 Other commands (runner):
 - `jobqueue.py addendum` appends new numbered items to `addendum_<HHMM>.json`; `more` is the same with the next `more_size` items from the pool.
@@ -107,4 +107,4 @@ Other commands (runner):
 | `state/leads_state.json`, `company_ats.json`, `probe_cache.csv`, `watchlist_auto.csv` | runner | lead progress, resolved boards, probe misses, new boards |
 | `state/seen/<YYYY-MM>.jsonl`, `trails/<YYYY-MM>.jsonl`, `board_polls.json`, `pool.json` | runner | seen store, gate trails, undated-board polls, the pool |
 | `state/queue_state.json`, `upload_manifest.json` | runner | folded queue events and widen steps; today's upload files |
-| `queue/<date>/queue.json`, `addendum_*.json`, `discards.csv`, `diy.md` | runner | the day's queue, late items, discards, do-yourself list |
+| `queue/<date>/queue.json`, `addendum_*.json`, `discards.csv`, `diy.md` | runner | the day's queue, late items, discards, that day's new do-yourself give-ups |

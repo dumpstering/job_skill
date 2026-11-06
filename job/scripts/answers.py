@@ -29,13 +29,21 @@ plan writes fill_plan.json in the job folder from posting.md's application
 questions (or, for other forms, the profile's contact and eligibility
 fields): every filled value names its answer_source. Criminal-history,
 attestation, consent and ID questions are never filled or stored (the user's part).
-Salary, visa, sponsorship and bank answers marked sensitive are
-sensitive_confirm. An unknown required answer is needs_you, which parks the
-job; the question joins the batch. Never a guess.
+Salary, pay rate, visa and sponsorship questions, any answer that is a pay
+figure, and every stored answer marked sensitive (bank, profile Standard
+answers, a job's JOB-n lines) are sensitive_confirm. A question about
+experience never takes an eligibility or EEO profile value. A yes/no, number
+or choice answer settles only a question with the same content words (one
+added qualifier is a different question). An unknown required answer is
+needs_you, which parks the job; the question joins the batch. Never a guess.
+A required cover letter with none built in the job folder (final.json's
+letter, or cover_B.pdf) prints a LETTER line.
 
 years adds up the dated roles whose library entries techniques.md cites as
 evidence for X (count both end months, overlaps once, gaps out, rounded
-down), only when techniques.md marks X years_ok: yes.
+down), only when techniques.md marks X years_ok: yes. plan uses it only for a
+question about X alone ("at least 5 years of qPCR"), never one that adds a
+setting or a second skill, and records the arithmetic in the field's note.
 
 questions merges the day's unknown required answers, Tier A questions
 (questions.json in a Tier A job folder, at most 2 each) and variant gaps
@@ -45,7 +53,9 @@ also: alias, or token similarity 0.8), ranks them by queued jobs unblocked
 prints the sensitive-answers line.
 
 unpark writes an `unparked` event for each queued job whose needs are now
-answered. migrate copies the v1.1 profile.md Standard answers into the bank.
+answered and whose last state today is parked or none: an applied, later,
+skipped, blocked, started or handed-over job never comes back. migrate copies
+the v1.1 profile.md Standard answers into the bank.
 
 Exit codes: 0 ok, 1 bad input or a refusal (REFUSED).
 """
@@ -80,9 +90,24 @@ NEVER = re.compile(
 PII = re.compile(r"social security|\bssn\b|date of birth|birth ?date|\bdob\b|bank account|bank name|"
                  r"banking (?:details|information)|routing number|account number|driver'?s licen[cs]e|passport|"
                  r"tax id|\bpassword", re.I)
-SENSITIVE = re.compile(r"salary|compensation|\bpay\b|\bwages?\b|\bvisa\b|sponsor|immigration|citizen", re.I)
+SENSITIVE = re.compile(
+    r"salary|compensation|\bpay\b|\bwages?\b|\bvisa\b|sponsor|immigration|citizen|remunerat|earnings|"
+    r"\bhourly\b|\b(?:pay|bill|day|hourly|desired|expected|target|contract) rate\b|\brate (?:expectation|requirement)s?\b|"
+    r"\bbase (?:pay|salary)\b|\bote\b|\bbonus|\bequity\b|\bstock options?\b|\bh-?1b\b|work permit|green card|"
+    r"permanent resident|\bopt\b|\bcpt\b|\btn (?:visa|status)\b", re.I)
+# An answer that is itself a pay figure ("$55 per hour", "105k", "USD 90,000") is sensitive too.
+SENSITIVE_ANSWER = re.compile(r"\$\s?\d|\b\d[\d,.]*\s?k\b|\busd\b|\bper (?:hour|hr|year|annum|month)\b|/\s?(?:hr|hour|yr|year)\b", re.I)
 YEARS_Q = re.compile(r"how many years|years of (?:hands-on |professional |relevant )?(?:experience|exp)|number of years", re.I)
 AT_LEAST = re.compile(r"(?:at least|a minimum of|minimum of)\s+(\d+)\+?\s+years?|\b(\d+)\+\s*years?", re.I)
+# A question about what the user has done is never an eligibility field: "18
+# months of experience" is not "18 or older", "drug testing by LC-MS/MS" is not
+# a drug screen, "worked with trial sponsors" is not visa sponsorship.
+EXPERIENCE_Q = re.compile(
+    r"\bexperienced?\b|\bworked\b|\bhands-on\b|\bfamiliar(?:ity)?\b|\bproficien|\bknowledge of\b|\bhow many\b|"
+    r"\bhave you (?:ever )?(?:used|run|performed|led|managed|conducted|supervised|trained|developed|designed)\b", re.I)
+# The words a computed-years question may hold besides the technique itself.
+YEARS_WORDS = set("how many years year yrs experience exp of with at least minimum do you have hands on "
+                  "professional relevant total number in using performing working a an the".split())
 
 PROFILE_FIELDS = [
     ("first_name", "legal first name"), ("last_name", "legal last name"), ("preferred_name", "preferred first name"),
@@ -112,18 +137,22 @@ PROFILE_RULES = [(re.compile(p, re.I), f) for p, f in [
     (r"^(?:state|province)\b", "state"),
     (r"^country\b", "country"),
     (r"^location\b|current location|where are you (?:located|based)", "location"),
-    (r"sponsor", "sponsorship"),
+    (r"\bsponsorship\b|\b(?:require|need)s?\b[^?]*\bsponsor|\bvisa\b", "sponsorship"),
     (r"authori[sz]ed to work|legally (?:authori[sz]ed|eligible)|eligible to work|right to work|work authori[sz]ation", "authorized"),
-    (r"\b18\b", "adult"),
+    (r"\b(?:18|eighteen)\s*(?:\+|years? (?:of age|old|or older)|or older|or over)|\blegal (?:working )?age\b", "adult"),
     (r"relocat", "relocate"),
     (r"willing to travel|travel up to|\btravel requirement", "travel"),
     (r"start date|available to start|when can you start|notice period|earliest start", "start"),
     (r"salary|compensation|pay expectation|expected pay|desired pay|pay range", "salary"),
-    (r"background check|drug (?:screen|test)", "background"),
+    (r"background (?:check|screen|investigation)|\b(?:pass|undergo|complete|submit to|consent to)\b[^?]*\bdrug (?:screen|test)", "background"),
     (r"gender", "gender"), (r"\brace\b|ethnicity", "race"), (r"hispanic|latin[oax]", "hispanic"),
     (r"veteran", "veteran"), (r"disabilit", "disability"), (r"pronoun", "pronouns"),
 ]]
 EEO_FIELDS = {"gender", "race", "hispanic", "veteran", "disability", "pronouns"}
+# Fields a label names directly; every other profile field (eligibility, EEO)
+# is never matched to a question about experience (EXPERIENCE_Q).
+NAME_FIELDS = {"preferred_name", "first_name", "last_name", "email", "phone", "linkedin", "website",
+               "street", "zip", "city", "state", "country", "location"}
 SENSITIVE_FIELDS = {"salary", "sponsorship"}
 CONTACT_FIELDS = ["first_name", "last_name", "email", "phone", "location", "linkedin", "website"]
 ELIGIBILITY_FIELDS = ["authorized", "sponsorship", "adult", "relocate", "start", "salary", "background"]
@@ -161,6 +190,26 @@ def similarity(a, b):
 
 def same_question(a, b):
     return " ".join(tokens(a)) == " ".join(tokens(b)) or similarity(a, b) >= SIMILAR
+
+
+def stem_set(text):
+    """The question's content words, a plural s dropped ("labs" is "lab")."""
+    return {t[:-1] if len(t) > 3 and t.endswith("s") and not t.endswith("ss") else t for t in tokens(text)}
+
+
+def equivalent(a, b):
+    """The same content words, in any order: a rewording, never an added
+    qualifier ("as the lab supervisor") or a dropped one."""
+    return stem_set(a) == stem_set(b) and bool(stem_set(a))
+
+
+SHORT_ANSWER = re.compile(r"^\s*(?:yes|no)\b|^\s*\$?\d", re.I)
+
+
+def strict_answer(a):
+    """A yes/no, number or choice answer settles only the exact question it was
+    given for: one added word can turn a true "Yes" into a false claim."""
+    return a.kind in ("yesno", "number", "choice") or bool(SHORT_ANSWER.match(a.answer or ""))
 
 
 def question_id(text):
@@ -264,7 +313,9 @@ def check_scope(scope):
 
 def find_answer(label, bank, country="", slots=None):
     """The bank entry for a question: same text, an also: alias, or similarity
-    0.8. slots ({"{company}": "Acme Bio", ...}) fill template questions first."""
+    0.8 for free text. A yes/no, number or choice answer (strict_answer) needs
+    the same content words as one of its forms. slots ({"{company}": "Acme
+    Bio", ...}) fill template questions first."""
     best, best_score = None, 0.0
     for a in bank:
         if not a.answer.strip():
@@ -272,11 +323,17 @@ def find_answer(label, bank, country="", slots=None):
         covers = scope_country(a.scope)
         if covers != "any" and covers != (country or "").upper():
             continue
+        strict = strict_answer(a)
         for form in a.forms():
             for slot, value in (slots or {}).items():
                 if value:
                     form = form.replace(slot, value)
-            score = 1.0 if " ".join(tokens(form)) == " ".join(tokens(label)) else similarity(form, label)
+            if " ".join(tokens(form)) == " ".join(tokens(label)):
+                score = 1.0
+            elif strict:
+                score = 0.99 if equivalent(form, label) and similarity(form, label) > 0 else 0.0
+            else:
+                score = similarity(form, label)
             if score >= SIMILAR and score > best_score:
                 best, best_score = a, score
     return best
@@ -349,6 +406,18 @@ def parse_questions(posting_text):
 
 def letter_required(posting_text):
     return any(q.required and re.search(r"cover letter", q.label, re.I) for q in parse_questions(posting_text))
+
+
+def letter_built(job):
+    """True when the job folder holds a built letter: the one final.json names
+    (a passing strict build), or the runner's cover_B.pdf."""
+    try:
+        name = json.loads((Path(job) / "final.json").read_text(encoding="utf-8")).get("letter")
+        if name and (Path(job) / str(name)).exists():
+            return True
+    except (OSError, ValueError, AttributeError):
+        pass
+    return (Path(job) / "cover_B.pdf").exists()
 
 
 def field_type(qtype):
@@ -448,6 +517,15 @@ def years(root, skill):
             "roles": [f"{t} ({o})" for t, o in roles]}
 
 
+def years_residue(label, tech):
+    """The label's content words that are neither the technique (any form) nor
+    the years phrase: empty when computed years answer the whole question."""
+    known = set(YEARS_WORDS)
+    for form in tech.forms:
+        known |= set(tokens(form))
+    return [t for t in tokens(label) if t not in known and not t.isdigit()]
+
+
 def show_month(i):
     return f"{checks.MONTHS[i % 12][:3].capitalize()} {i // 12}"
 
@@ -490,14 +568,21 @@ class Planner:
             return f
         if f["type"] == "file":
             f["user_part"] = True
+            if required and re.search(r"cover letter", label, re.I) and not letter_built(self.job):
+                f["missing"] = "cover letter"  # printed as LETTER by plan; the form cannot go without it
             return f
         f["sensitive"] = bool(SENSITIVE.search(label))
+        self.matched, self.note = None, ""
         value, source, status = self.resolve(label, list(options), voluntary)
         if value:
             f["answer"], f["answer_source"] = value, source
-            if source.startswith("answers:") and self.entry_sensitive(source):
+            # Every stored answer's own flag counts (bank, Standard answers, a
+            # job's JOB-n lines), and so does a pay figure in the answer.
+            if (self.matched is not None and self.matched.sensitive) or SENSITIVE_ANSWER.search(value):
                 f["sensitive"] = True
             f["status"] = "sensitive_confirm" if f["sensitive"] else status
+            if self.note:
+                f["note"] = self.note  # the arithmetic behind a computed answer, for the Check line
         elif required:
             f["status"] = "needs_you"
             f["qid"] = question_id(label)
@@ -508,11 +593,14 @@ class Planner:
         return any(a.id == aid and a.sensitive for a in self.bank)
 
     def resolve(self, label, options, voluntary):
-        """(answer, answer_source, status) or ("", "", "")."""
+        """(answer, answer_source, status) or ("", "", ""); self.matched is the
+        stored Answer the value came from, if any."""
         for finder in (self.from_job_notes, self.from_years, self.from_profile, self.from_bank):
+            self.matched = None
             got = finder(label, options, voluntary)
             if got and got[0]:
                 return got
+        self.matched = None
         return "", "", ""
 
     def from_job_notes(self, label, options, voluntary):
@@ -520,6 +608,7 @@ class Planner:
         if a:
             value = self.fit(label, a.answer, options)
             if value:
+                self.matched = a
                 return value, a.source if SOURCE_RE.match(a.source or "") else f"user:{a.confirmed}", "ok"
         return None
 
@@ -529,12 +618,19 @@ class Planner:
         tech = next((t for t in self.techniques if checks.term_found(label, t.name, t.aliases)), None)
         if tech is None:
             return None
+        rest = years_residue(label, tech)
+        if rest:
+            # "10 years of qPCR in a GMP-regulated lab", "qPCR and flow cytometry":
+            # the computed span says nothing about the rest, so the user answers.
+            self.log.append(f'"{label[:60]}": computed years cover {tech.name} only, not "{" ".join(rest)}"')
+            return None
         try:
             y = years(self.root, tech.name)
         except Refused as e:
             self.log.append(f'"{label[:60]}": {e}')
             return None
         source = f"computed:years({tech.name})"
+        self.note = years_line(y)
         floor = AT_LEAST.search(label)
         bar = floor and (floor.group(1) or floor.group(2))
         if bar:
@@ -549,6 +645,8 @@ class Planner:
         fid = next((fid for pat, fid in PROFILE_RULES if pat.search(label)), None)
         if fid is None:
             return None
+        if fid not in NAME_FIELDS and EXPERIENCE_Q.search(label):
+            return None  # a question about experience is never an eligibility or EEO field
         value = self.profile.get(fid, "")
         source = f"profile:{fid}"
         if fid in EEO_FIELDS:
@@ -580,6 +678,7 @@ class Planner:
                 return None
         value = self.fit(label, value, options)
         source = "profile:standard_answers" if a.id == "profile" else f"answers:{a.id}"
+        self.matched = a
         return value, source, "ok"
 
     def slots(self):
@@ -855,18 +954,29 @@ def add(root, question, answer, kind="text", scope="any", sensitive=None, source
     if not SOURCE_RE.match(source):
         raise Refused(f"ERROR source {source!r} is not profile:<field>, library:L-0001, computed:years(<term>), "
                       "template:<family> or user:YYYY-MM-DD")
-    sens = bool(SENSITIVE.search(question)) if sensitive is None else sensitive
-    sens = sens or bool(SENSITIVE.search(question))
+    # Pay, visa and the like are always sensitive, whatever --sensitive says:
+    # the question, an also: form or the answer itself ("$105,000") decides.
+    sens = bool(sensitive) or any(SENSITIVE.search(x) for x in [question, *also]) or bool(SENSITIVE_ANSWER.search(answer))
     path = bank_file(root)
     text = path.read_text(encoding="utf-8-sig")
     bank = parse_bank(text)
     mine = [question, *also]
-    hit = next((a for a in bank if any(same_question(x, y) for x in mine for y in a.forms())), None)
+    probe = Answer("new", question, answer, kind)
+
+    def same(a):
+        # A yes/no, number or choice answer updates only the same question;
+        # "... as the lab supervisor" is a new entry, never an overwrite.
+        if strict_answer(probe) or strict_answer(a):
+            return any(" ".join(tokens(x)) == " ".join(tokens(y)) or equivalent(x, y) for x in mine for y in a.forms())
+        return any(same_question(x, y) for x in mine for y in a.forms())
+
+    hit = next((a for a in bank if same(a)), None)
     backup(path, root)
     lines = text.splitlines()
     if hit:
-        new = Answer(hit.id, hit.question, answer, kind, scope, sens, source, today,
-                     list(dict.fromkeys(hit.also + [a for a in also if a])), hit.line)
+        forms = hit.also + [x for x in mine if x and x != hit.question and x not in hit.also]
+        new = Answer(hit.id, hit.question, answer, kind, scope, sens or hit.sensitive, source, today,
+                     list(dict.fromkeys(forms)), hit.line)
         lines[hit.line - 1] = format_line(new)
         verb = "UPDATED"
     else:
@@ -912,21 +1022,6 @@ def migrate(root):
 
 # ---------- unpark ----------
 
-def event_lines(root, day):
-    """Every event file for the day, pending and done, as dicts in name order."""
-    f = jobfs.Folder(root)
-    paths = list(f.events.glob("*.json")) + list(f.events_done(day).glob("*.json"))
-    out = []
-    for p in sorted(paths, key=lambda p: p.name):
-        try:
-            ev = json.loads(p.read_text(encoding="utf-8-sig"))
-        except (OSError, ValueError):
-            continue
-        if isinstance(ev, dict) and str(ev.get("date", "")) == str(day):
-            out.append(ev)
-    return out
-
-
 def session_id(root):
     try:
         return str(json.loads(jobfs.Folder(root).session_json.read_text(encoding="utf-8")).get("task") or "answers.py")
@@ -934,20 +1029,31 @@ def session_id(root):
         return "answers.py"
 
 
-def unpark(root, day, session=None):
-    """Write an unparked event for each queued job whose needs are now answered."""
-    f = jobfs.Folder(root)
+def day_states(root, day):
+    """job_key -> the last queue state today (events.fold over every valid event,
+    pending and done): applied, skipped, later, blocked, handed_over, ..."""
+    import events  # same folder; read only
     state = {}
-    for ev in event_lines(root, day):
-        if ev.get("type") in ("parked", "unparked"):
-            state[ev.get("job_key")] = ev["type"]
+    for it in events.fold(events.recent(root), str(day)).values():
+        state[it.get("job_key")] = it.get("state")
+    return state
+
+
+def unpark(root, day, session=None):
+    """Write an unparked event for each queued job whose needs are now answered.
+    Only a job whose last state today is `parked`, or that has no state yet,
+    comes back: an applied, skipped, later, blocked, started or handed-over job
+    never does."""
+    f = jobfs.Folder(root)
+    state = day_states(root, day)
     done = []
     for it in queue_items(root, day):
         folder = f.root / str(it.get("folder", ""))
         old = read_plan(folder) if it.get("folder") else None
         needs = [fld for fld in (old or {}).get("fields", []) if fld.get("status") == "needs_you"]
-        parked = state.get(it.get("job_key")) == "parked"
-        if state.get(it.get("job_key")) == "unparked" or not (needs or parked):
+        last = state.get(it.get("job_key"))
+        parked = last == "parked"
+        if last not in (None, "parked") or not (needs or parked):
             continue
         try:
             new = plan(root, folder, it.get("family"), write=False)
@@ -968,8 +1074,16 @@ def unpark(root, day, session=None):
 
 # ---------- main ----------
 
+class Parser(argparse.ArgumentParser):
+    """A bad argument is bad input: ERROR and exit 1 (exit 2 is reserved)."""
+
+    def error(self, message):
+        print(f"ERROR {message}")
+        sys.exit(1)
+
+
 def main(argv=None):
-    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap = Parser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name in ("plan", "years", "questions", "add", "list", "unpark", "migrate"):
         p = sub.add_parser(name)
@@ -1017,7 +1131,11 @@ def run(args, root):
             elif fld["status"] == "sensitive_confirm":
                 print(f'SENSITIVE "{fld["label"]}" = "{fld["answer"]}" ({fld["answer_source"]})')
             elif fld["status"] == "check" and fld["answer"]:
-                print(f'CHECK "{fld["label"]}" = "{fld["answer"]}" ({fld["answer_source"]})')
+                print(f'CHECK "{fld["label"]}" = "{fld["answer"]}" ({fld["answer_source"]})'
+                      + (f' {fld["note"]}' if fld.get("note") else ""))
+            if fld.get("missing") == "cover letter":
+                print(f'LETTER "{fld["label"]}" is required and no cover letter is built in this job folder: '
+                      "write cover_letter.json and build it with --strict (writing_rules.md, Cover letter)")
         if args.dry_run:
             print(json.dumps(p, indent=1))
         else:

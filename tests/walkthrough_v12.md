@@ -31,7 +31,7 @@ is `--root <tmp>\JobSearch`.
       ```
       Friday, November 6
       Ready: 30. No account needed for any of them.
-      Sensitive answers today: salary $95,000-$110,000 on all; "no sponsorship needed" on all. Reply ok, or name the ones to leave blank.
+      Sensitive answers today: salary $95,000-$110,000 on all; "no sponsorship needed" on all. Reply yes, or name the ones to leave blank.
       This morning's prep did not run yet, so I'll read the inbox first and show what is urgent; full tailoring for the Tier A jobs comes at the first break.
       Starting #1 now. Say "short" any time for an easy day.
       ```
@@ -49,27 +49,34 @@ is `--root <tmp>\JobSearch`.
       UPLOAD upload/01_Avery_Resume_IvyBio.pdf (Tier B file, sha256 ok)
       RESUME built tier B
       ANSWERS sensitive_confirm sensitive sponsorship,salary
+      SENSITIVE leave blank sponsorship, salary (not confirmed today)
+      ATTACH Attach the file starting with 01 in JobSearch\upload, then type ok.
       HANDOVER #01 Ivy Bio - QC Microbiologist II (Workable)
-      HANDOVER Attach the file starting with 01 in JobSearch\upload.
       HANDOVER Check: sponsorship, salary left blank (not confirmed today).
       HANDOVER Then click Submit and type s.
       ```
-- [ ] **A4b ok.** The user replies `ok` to the sensitive line: write
-      `claude\2026-11-06\sensitive_ok.json` as
+      Workable is attach-first, so the attach is the `ATTACH` line (A7) and
+      the handover names no file.
+- [ ] **A4b yes.** The user replies `yes` to the sensitive line (an `ok`
+      never confirms it): write `claude\2026-11-06\sensitive_ok.json` as
       `{"v": 1, "date": "2026-11-06", "ok": "all", "blank": []}`. `next` again
-      now ends `HANDOVER Check: sponsorship "no", salary "$95,000-$110,000" as confirmed today.`
+      now prints `SENSITIVE enter sponsorship "no", salary "$95,000-$110,000" (confirmed today)`
+      and no `Check:` line, and the card no longer shows the sensitive line.
       `P\today_view.py next R --short` gives `NEXT #02 greenhouse:7100052`
-      (Greenhouse before #1's Workable; sensitive fields settled); without
-      the file it gives `NEXT none`, since every fixture item asks for
-      sponsorship and salary.
+      (Greenhouse before #1's Workable) with or without the file: the
+      profile's salary and sponsorship keep an item in a short day.
+      `P\today_view.py card R --short` without the file prints
+      `Short day: I'll do the quick ones.`, the sensitive line once, and
+      `Starting #2 now. Say "stop" any time.`
 - [ ] **A5 caps.** `P\caps.py check R --company "Ivy Bio" --family qc_micro --job-key workable:ivybio:B00008C` -> `CAP ok`.
 - [ ] **A6 claim and start.** Create `<job folder>\.claimed`;
       `P\events.py emit R --type started --n 1 --job-key workable:ivybio:B00008C --date 2026-11-06 --session walk-1 --json "{}"`
       -> `EVENT 20261106T170000Z_...`.
-- [ ] **A7 fill (MANUAL).** Open the OPEN URL, read the page as text, ask
-      for the attach ("Attach the file starting with 01 in JobSearch\upload,
-      then type ok."), fill from `fill_plan.json`, read back.
-- [ ] **A8 handover.** Print the four HANDOVER lines; save `filled.md`;
+- [ ] **A7 fill (MANUAL).** Open the OPEN URL, read the page as text, say
+      the `ATTACH` line ("Attach the file starting with 01 in
+      JobSearch\upload, then type ok."), fill from `fill_plan.json` with
+      the `SENSITIVE` line's values, read back.
+- [ ] **A8 handover.** Print the HANDOVER lines; save `filled.md`;
       `P\tracker.py add R --company "Ivy Bio" --role "QC Microbiologist II" --url https://apply.workable.com/ivybio/j/B00008C/ --folder "applications/2026-11-06 Ivy Bio - QC Microbiologist II" --job-key workable:ivybio:B00008C --status "Filled - awaiting submit" --source Runner --tier B --family qc_micro --variant qc_micro@v1 --ats workable --found-via watch --queue-date 2026-11-06 --account none`
       -> `ADDED P-3b43e5e5 (pending)` (a tracker event, not an xlsx write);
       then `events.py emit ... --type handed_over`.
@@ -162,13 +169,16 @@ says what now covers it.
    next and progress at once (B5, B11), and the tick writes it into
    `queue/<date>/addendum_user.json`. Mode M has no list (`NO LIST`).
 2. **Sensitive confirmations (closed).** `today_view.py next` reads
-   `claude/<date>/sensitive_ok.json` for the `Check:` line (A4, A4b).
+   `claude/<date>/sensitive_ok.json` for the `SENSITIVE` and `Check:`
+   lines (A4, A4b). Round 2: the line is confirmed with `yes`, never `ok`.
 3. **Draft text location (closed).** The card's draft line ends `(say
    "drafts" for the full text)`, and `today_view.py drafts` prints the full
-   texts from morning.json.
-4. **Short day (closed).** `today_view.py next --short`: no-account items,
-   easiest first, none with an open question, an unsettled sensitive field
-   or no resume; the rest get no event and stay.
+   texts from morning.json. Round 2: a drafted field is not asked again,
+   and `next` names it (`DRAFT`, and a `Check:` item at the handover).
+4. **Short day (closed).** `today_view.py card --short` and `next --short`:
+   no-account items, easiest first, none with an open question, a
+   sensitive field beyond the profile's salary and sponsorship that is not
+   settled today, or no resume; the rest get no event and stay.
 5. **The card with no job finder (closed).** No `runner/out/status.json`,
    or mode M: one line saying to type `/job setup`, never the shortcut.
 6. **Tick and liveness.** A tick without `--offline` re-reads the next items'
