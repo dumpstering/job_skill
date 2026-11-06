@@ -103,8 +103,9 @@ screenshots. Work one page at a time:
 
 An answer the user gives that will recur on other applications goes into
 the bank (backup first): `answers.py add --question "<question>" --answer
-"<answer>" --kind text|yesno|number|choice --scope any|US|CA --sensitive
-yes|no --source user:<date>`. Company-specific answers stay in the job
+"<answer>" --kind text|yesno|number|choice --scope any|US|Canada --sensitive
+yes|no --source user:<date>` (Canada, not CA: `answers.py add` refuses CA,
+which reads as California). Company-specific answers stay in the job
 folder's `notes.md`. Answers about criminal history, and attestations, are
 never stored.
 
@@ -165,8 +166,10 @@ update <ID> status="Filled - awaiting submit"`.
    was found. A Tier A or referral row gets its follow-up date set for you.
    With no confirmation, Applied stands with Confirmed blank; the inbox
    check fills it later.
-4. If the job was an item in today's list (`IN QUEUE`), also emit the
-   `applied` event for that item (apply_batch.md "The replies").
+4. If the job is in today's list (`IN QUEUE <date> #<n>` from `tracker.py
+   check`, or `ADDED #<n>` from `events.py add` at SKILL.md step 3), also
+   emit the `applied` event for item `<n>` (apply_batch.md "The replies"),
+   so today's count and closing line include it.
 
 ## /job log (a job applied for by hand)
 

@@ -20,7 +20,7 @@ Run every command as `python "<skill>/scripts/variants.py" <command> --root "<fo
 | `review.md` | The Verify before sending list, the pool on one page, the audit verdict. |
 | `approved.json` | Written by `approve`: the sha256 of each file above. |
 | `questions.json` | Open variant-gap questions (fit_and_questions.md). |
-| built files | The base build he reads before approving. |
+| built files | The base build the user reads before approving. |
 
 `pool.json`:
 
@@ -44,7 +44,7 @@ Run every command as `python "<skill>/scripts/variants.py" <command> --root "<fo
   the posting term the posting uses most, copied from posting.md; write the
   letter so any of the family's terms reads correctly there.
 
-## Building a variant (setup sitting 2, about 15-20 minutes of his time per family)
+## Building a variant (setup sitting 2, about 15-20 minutes of the user's time per family)
 
 1. `variants.py new --family <id>` scaffolds `v1` from master_resume.md
    (with `--copy`, a new version starts from the newest one). Family ids are

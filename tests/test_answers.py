@@ -1,5 +1,5 @@
 """Test job/scripts/answers.py: fill plans, computed years, the daily question
-batch, the bank (add, migrate) and unparking.
+batch, the bank (add, migrate, list, the any/US/Canada scope) and unparking.
 
 Usage: python tests/test_answers.py
 Prints "ok <name>" per test and PASS last. Exits non-zero on the first failure.
@@ -284,12 +284,58 @@ def test_parse_questions():
     print("ok posting.md questions parse")
 
 
+def test_scope():
+    """Scope is any, US or Canada (any case). CA is refused for a new answer (a
+    California user reads it as the state); a CA already in answers.md still
+    means Canada, and list names that line in a WARN."""
+    root = fresh_root()
+    bank = root / "answers.md"
+    code, out = cli("add", "--root", root, "--question", "Are you legally able to work here?", "--answer", "Yes",
+                    "--scope", "CA")
+    assert code == 1 and out.strip() == ('REFUSED scope "CA" could mean California or Canada: '
+                                         "write --scope US or --scope Canada"), out
+    assert "legally able" not in bank.read_text(encoding="utf-8")
+    code, out = cli("add", "--root", root, "--question", "Do you have a work permit?", "--answer", "No",
+                    "--scope", "GB")
+    assert code == 1 and out.strip() == 'REFUSED scope "GB": write any, US or Canada', out
+    for scope, stored in (("canada", "Canada"), ("us", "US"), ("ANY", "any")):
+        q = f"Question for {stored}?"
+        code, out = cli("add", "--root", root, "--question", q, "--answer", "Yes", "--scope", scope)
+        assert code == 0 and out.startswith("ADDED"), out
+        line = next(ln for ln in bank.read_text(encoding="utf-8").splitlines() if q in ln)
+        assert f"| Yes | text | {stored} | no |" in line, line
+    text = bank.read_text(encoding="utf-8")
+    legacy = "- ANS-090 | Are you eligible to work in Canada? | Yes | yesno | CA | no | user:2026-10-01 | 2026-10-01"
+    bank.write_text(text + legacy + "\n", encoding="utf-8")
+    line_no = len((text + legacy).splitlines())
+    parsed = answers.load_bank(bank)
+    assert answers.find_answer("Are you eligible to work in Canada?", parsed, "CA").id == "ANS-090"
+    assert answers.find_answer("Are you eligible to work in Canada?", parsed, "US") is None
+    assert answers.find_answer("Question for Canada?", parsed, "CA") is not None
+    code, out = cli("list", "--root", root)
+    lines = out.splitlines()
+    assert code == 0 and lines[-1] == f"ANSWERS n={len(parsed)}", out
+    assert "ANS-090 | CA | sensitive no | Are you eligible to work in Canada? = Yes" in lines, out
+    warns = [ln for ln in lines if ln.startswith("WARN")]
+    assert warns == [f'WARN answers.md line {line_no}: scope "CA" is read as Canada; write US or Canada'], warns
+    # v1.1 Standard answers with CA (Canada then) migrate as Canada
+    profile = root / "profile.md"
+    profile.write_text(profile.read_text(encoding="utf-8") + "- Can you work in Toronto? | Yes | CA | no\n",
+                       encoding="utf-8")
+    code, out = cli("migrate", "--root", root)
+    assert code == 0, out
+    line = next(ln for ln in bank.read_text(encoding="utf-8").splitlines() if "Toronto" in ln)
+    assert "| Canada |" in line, line
+    print("ok scope: any, US, Canada; CA refused, a legacy CA read as Canada and named by list")
+
+
 def main():
     root = test_plan()
     test_plan_page_form(root)
     test_years(root)
     test_questions()
     test_bank_add_and_migrate()
+    test_scope()
     test_unpark()
     test_parse_questions()
     print("PASS")

@@ -72,7 +72,7 @@ JSONL lines are `jobfs.Posting` dicts plus `ai_text` and `hidden` lists (G11 rea
 
 | Source | Setting | Output | Request |
 |---|---|---|---|
-| USAJOBS | `sources.usajobs` (on once keyed) | direct postings, lane `usajobs` | GET data.usajobs.gov/api/search?Keyword=&LocationName=&Radius=&DatePosted=3&ResultsPerPage=500, headers Host, User-Agent = his key email, Authorization-Key |
+| USAJOBS | `sources.usajobs` (on once keyed) | direct postings, lane `usajobs` | GET data.usajobs.gov/api/search?Keyword=&LocationName=&Radius=&DatePosted=3&ResultsPerPage=500, headers Host, User-Agent = the user's key email, Authorization-Key |
 | Adzuna | `sources.adzuna` (on once keyed) | leads only | GET api.adzuna.com/v1/api/jobs/us/search/1?what_or=&where=&distance=&max_days_old=3&sort_by=date |
 | Workable search | `sources.workable_search` (off) | postings, lane `workable_search` | GET jobs.workable.com/api/v1/jobs?query=&location= |
 | The Muse | `sources.muse` (off) | leads only, 14 days at most | GET www.themuse.com/api/public/jobs?page=0&descending=true&location= |

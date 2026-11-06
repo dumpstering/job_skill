@@ -1,7 +1,7 @@
 # The job finder (runner): modes, events, requests, heartbeat, selftest
 
-The runner is `jobrunner.py`, the same code as the skill's scripts, run on his
-PC by Task Scheduler. It does all the zero-token work: board and aggregator
+The runner is `jobrunner.py`, the same code as the skill's scripts, run on the
+user's PC by Task Scheduler. It does all the zero-token work: board and aggregator
 reads, lead resolution, gates, the queue, Tier B resumes, fill plans, upload
 staging, the tracker writes. You talk to it only through files in the
 JobSearch folder. You never run code from the folder, never move upload
@@ -11,8 +11,8 @@ files, and never write the runner's files.
 
 | Mode | What runs | When |
 |---|---|---|
-| L | the runner on his PC (installed by `install_runner.cmd`) | default once installed and `selftest` passed |
-| S | the same `jobrunner.py` in your sandbox, `--mode S` | only if `jobrunner.py selftest --net --root R` passed in the sandbox and his PC runner is absent or stale over 36 hours |
+| L | the runner on the user's PC (installed by `install_runner.cmd`) | default once installed and `selftest` passed |
+| S | the same `jobrunner.py` in your sandbox, `--mode S` | only if `jobrunner.py selftest --net --root R` passed in the sandbox and the user's PC runner is absent or stale over 36 hours |
 | W | you fetch board URLs with web fetch (`posting.py --json-file`) | experiment, off (`experiment_mode_w = false`) |
 | M | no runner: the v1.1 flow, tracker writes go straight to the xlsx | before the runner is installed, or when nothing else works |
 
@@ -26,9 +26,10 @@ files, and never write the runner's files.
 | File | What |
 |---|---|
 | `queue/<date>/queue.json`, `addendum_<HHMM>.json` | the day's numbered items (2.5); immutable once an event exists for the date |
-| `queue/<date>/today.md`, `review.html`, `discards.csv`, `diy.md` | his optional reading; the do-yourself list |
+| `queue/<date>/addendum_user.json` | the jobs from links (`added` events, below) with the numbers you gave them; written by the tick, never prepped by it |
+| `queue/<date>/today.md`, `review.html`, `discards.csv`, `diy.md` | the user's optional reading; the do-yourself list |
 | `applications/<job>/posting.md`, `posting.json`, `fill_plan.json`, `resume_B.*`, `terms.json`, `tune_log.json`, `.runner_files` | per job; the runner never writes a file missing from `.runner_files`, and never in a folder holding `.claimed` |
-| `upload/NN_<Last>_Resume_<Employer12>.pdf`, `upload/E<n>_...pdf` | the files he attaches; only the runner moves them |
+| `upload/NN_<Last>_Resume_<Employer12>.pdf`, `upload/E<n>_...pdf` | the files the user attaches; only the runner moves them |
 | `applications/_diy/<date>/<Company>.md` | answer sheet for a do-yourself item (no link) |
 | `runner/out/status.json` | health: `version`, `mode`, `last_daily {at, date, ok, counts}`, `last_tick`, `tracker_locked_since`, `sources`, `boards_paused`, `selftest {at, net, checks, recruitee}`, `min_skill`, `errors`, `daily_pending` |
 | `runner/out/tracker.json` | the tracker snapshot (tracker.py reads it in mode L) |
@@ -55,8 +56,18 @@ Write events only with `events.py emit` (or `events.emit` in Python), never by h
 - `tracker`: an exact tracker.py write; tracker.py itself emits these in mode L (`--transport auto`).
 - `started`, `handed_over`, `applied`, `skipped`, `later`, `parked`, `unparked`, `blocked`: the queue states, with `{reason, question_ids, confirmation, proof}` (reason codes from 5.10, or `user`).
 - `answer_used`, `usage`.
+- `added`: a job from a link joins today's list (spec 5.11, addendum_user).
+  Write it only with `events.py add --folder "<job folder>" --via pasted|add`:
+  it numbers the job after the highest number given today, prints `ADDED
+  #<n> <key> (addendum_user)`, and holds the whole queue item, so
+  `today_view.py`, `tracker.py check` (`IN QUEUE`) and `events.py overlay`
+  (`ADDED #<n> <key> <via>`) see it at once. The runner numbers its own late
+  addenda after these. Mode M has no list: `add` prints `NO LIST` and writes
+  nothing, and the tracker row is the record.
 The tick applies them in name order (`tracker.py apply-events`), moves them to
 `runner/out/events_done/<date>/`, folds queue states into `state/queue_state.json`,
+writes the `added` jobs into `queue/<date>/addendum_user.json` (it never
+writes in their folders, which are yours),
 moves the upload files of applied items to `upload/_done/<date>/` and updates
 `reports/funnel.csv`. A file that will not parse is retried on 3 ticks, then
 moved to `runner/out/events_rejected/` with a `.reason.txt`. `events.py overlay`
@@ -86,8 +97,9 @@ and the runner checks again. The next tick (at most 15 minutes) writes
 ## The card and the next item
 
 - `python scripts/today_view.py card --root R` prints the card (1.2) word for word. Show it as printed.
-- `python scripts/today_view.py next --root R` prints the next item's handover data (`NEXT`, `OPEN`, `UPLOAD`, `ANSWERS`, `HANDOVER` lines). For a Tier A item it compares the staged copy's sha256 with the job's `resume.pdf` and names the job-folder file when they differ.
-- `progress` gives the counts and the closing line; `diy` gives the do-yourself list (no links).
+- `python scripts/today_view.py next --root R` prints the next item's handover data (`NEXT`, `OPEN`, `UPLOAD`, `ANSWERS`, `HANDOVER` lines). For a Tier A item it compares the staged copy's sha256 with the job's `resume.pdf` and names the job-folder file when they differ. Its `Check:` line comes from `claude/<date>/sensitive_ok.json` (apply_batch.md). `next --short` is the easy day: no-account items, easiest ATS first, none with an open question, a sensitive field not settled today, or no resume yet (daily.md).
+- `progress` gives the counts and the closing line; `diy` gives the do-yourself list (no links); `drafts` prints the free-text drafts of `morning.json` in full (the card shows one line each).
+- The day's items are `queue.json`, its addenda and the `added` jobs not yet in `addendum_user.json`, so a job added from a link counts in `card`, `next` and `progress` at once.
 - `claude/<date>/morning.json` (written by job-morning, create-only) feeds the card:
   `{"v":1, "date", "urgent":[{"text"}], "away":[{"text"}], "questions":[{"id","text","jobs":[n...],"all_jobs","saved"}], "waiting":<jobs>, "sensitive":"<line>", "drafts":[{"n","label","text"}], "referral_drafts":[{"n","contact_ref"}], "weekly":["<line>"]}`.
   Without it the card says the morning prep did not run, takes the questions and the sensitive line from the fill plans, and starts with the first ready Tier B item.
@@ -101,14 +113,15 @@ python, packages (openpyxl, python-docx, reportlab, pypdf), tzdata, folder
 the parser), build (a sample resume to PDF). `--net` adds reach checks for
 Greenhouse, Lever, Ashby, one Workday tenant, USAJOBS and Recruitee; a
 Recruitee PASS turns on the Recruitee boards (status.json `selftest.recruitee`).
-On his PC the installer runs it; at setup you also run it in the sandbox:
+On the user's PC the installer runs it; at setup you also run it in the sandbox:
 a PASS there allows mode S as the fallback, a FAIL leaves mode M.
 
 ## Reading status.json for the card
 
-- Mode not L, or `last_daily.at` over 26 hours old: the card's one line about the job finder.
-- `tracker_locked_since` over 2 hours: the card asks him to close the spreadsheet.
-- `version` older than the skill: ask him to double-click the new `install_runner.cmd`; `min_skill` newer than the skill: ask for the new skill zip.
+- No `runner/out/status.json` (nothing installed), or mode M: the card's one line says the job finder is not installed yet (or not switched on) and to type `/job setup` (setup.md sitting 2), never the desktop shortcut.
+- Mode S, or `last_daily.at` over 26 hours old: the card's one line about the job finder.
+- `tracker_locked_since` over 2 hours: the card asks the user to close the spreadsheet.
+- `version` older than the skill: ask the user to double-click the new `install_runner.cmd`; `min_skill` newer than the skill: ask for the new skill zip.
 - `errors`: a config file that stopped parsing (the runner uses `state/last_good/`), or an optional step that failed.
 
 ## Exit codes

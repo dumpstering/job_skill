@@ -169,7 +169,7 @@ def responded(r):
 
 
 def sent_rows(rows):
-    """Rows of applications he sent (an Applied date and a sent status)."""
+    """Rows of applications the user sent (an Applied date and a sent status)."""
     return [r for r in rows if to_date(r.get("Applied")) and status_of(r) not in NOT_SENT]
 
 

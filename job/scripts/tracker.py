@@ -198,7 +198,7 @@ class Parser(argparse.ArgumentParser):
 
 # ---------- values ----------
 
-_ACTING_ON = None  # while an event applies: the day he acted, not the day it reached the PC
+_ACTING_ON = None  # while an event applies: the day the user acted, not the day it reached the PC
 
 
 def today(root=None):
@@ -1009,7 +1009,8 @@ def row_fingerprint(root, row):
 
 
 def queue_items(root, day):
-    """Items of queue/<day>/queue.json and its addenda."""
+    """Items of queue/<day>/queue.json and its addenda, plus jobs from links
+    whose added event is not in addendum_user.json yet."""
     qd = jobfs.Folder(root).queue_dir(day)
     if not qd.exists():
         return []
@@ -1022,7 +1023,8 @@ def queue_items(root, day):
         except jobfs.NotReady:
             continue
         items += [i for i in data.get("items", []) if isinstance(i, dict)]
-    return items
+    keys = {i.get("job_key") for i in items}
+    return items + [i for i in events.user_items(root, day) if i["job_key"] not in keys]
 
 
 # ---------- commands ----------
@@ -1346,7 +1348,7 @@ def account_line(r):
 
 
 def reuse_email(rows):
-    """The login email he uses most (latest use breaks a tie)."""
+    """The login email the user uses most (latest use breaks a tie)."""
     counts = Counter(text(r["Login email"]).lower() for r in rows if text(r["Login email"]))
     if not counts:
         return ""
@@ -1754,7 +1756,7 @@ def cmd_apply_events(a):
     need_openpyxl()
     files = events.pending_files(a.root)
     if not files:
-        # An idle tick: refresh the snapshot only when he edited the workbook.
+        # An idle tick: refresh the snapshot only when the user edited the workbook.
         if not snapshot_current(a.root) and not (Path(a.root) / LOCK_NAME).exists():
             tr = Tracker(a.root)
             tr.load()
@@ -1968,7 +1970,7 @@ def add_subcommands(add):
     p.add_argument("--employer")
     p.add_argument("--ats")
     p.add_argument("--used", action="store_true", help="set Last used to today")
-    p.add_argument("--reuse", action="store_true", help="on no match, print REUSE <the email he uses most>")
+    p.add_argument("--reuse", action="store_true", help="on no match, print REUSE <the email the user uses most>")
     add("inbox-plan", cmd_inbox_plan, "SINCE date, ACTIVE rows to match mail against, LOGGED count.")
     p = add("seen", cmd_seen, "SEEN or NEW for each message ID, against the Email log.")
     p.add_argument("ids", nargs="+", metavar="message-id")

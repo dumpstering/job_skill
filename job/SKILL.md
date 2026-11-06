@@ -122,15 +122,15 @@ exact options. Each prints plain lines and uses the exit codes in
 [references/files.md](references/files.md).
 
 You run:
-- `today_view.py` - `card`, `next`, `progress`, `diy`: the day as printed lines.
+- `today_view.py` - `card`, `next` (`--short` on an easy day), `progress`, `diy`, `drafts`: the day as printed lines.
 - `tracker.py` - every read and write of `applications.xlsx`, through the transport (below).
-- `events.py` - `emit` queue events (started, handed_over, applied, skipped, later, parked, unparked, blocked, answer_used, usage); `overlay`.
+- `events.py` - `emit` queue events (started, handed_over, applied, skipped, later, parked, unparked, blocked, answer_used, usage); `add` (a job from a link into today's list); `overlay`.
 - `caps.py check` - whether one more application to that company is allowed (`CAP ok`, `CAP DEFER ...`).
 - `posting.py` - a posting into `posting.md`.
 - `build_resume.py` - a resume or letter JSON into .docx, .pdf and .txt, with the checks (`--strict`).
 - `library.py` - `ids`, `check`: stable `[L-0001]` IDs in the achievement library.
 - `variants.py` - `new`, `approve`, `check`, `tune`, `diff`, `tier-b`: role-family base resumes.
-- `answers.py` - `plan`, `years`, `questions`, `add`, `unpark`, `migrate`: the screening-answer bank.
+- `answers.py` - `plan`, `years`, `questions`, `add`, `list`, `unpark`, `migrate`: the screening-answer bank.
 - `leads.py validate` - alert-email cards into a lead file.
 - `gates.py explain` - why a posting was or was not queued.
 - `network.py` - `import`, `match`, `asks`: referrals from the user's own export.
@@ -226,9 +226,16 @@ say "done"; in mode L the events wait, nothing to do.
    - `tracker.py add --company --role --location --url --folder
      "applications/<job folder name>" --status Started --tier A --found-via
      pasted --ats <ats> [--posted <date>] [--employer-site <url>]` plus any
-     `--notes`. *Done when:* `posting.md` holds the full duties and
-     requirements, the checks have run, and the job is a row (or a pending
-     P- row).
+     `--notes`.
+   - **Today's list:** `events.py add --folder "<job folder>" --via pasted`
+     puts the job into today's list at once, numbered after the last item
+     (`ADDED #<n> <key> (addendum_user)`; keep `<n>` for step 9), so
+     `today_view.py progress` and the closing line count it. An `IN QUEUE`
+     job prints `IN QUEUE <date> #<n>` (it is item #<n> already). In mode M,
+     or before the runner built today's list, it prints `NO LIST` and writes
+     nothing: the tracker row is the record. *Done when:* `posting.md` holds
+     the full duties and requirements, the checks have run, and the job is a
+     row (or a pending P- row).
 
 4. **Assess fit and ask.** Follow [references/fit_and_questions.md](references/fit_and_questions.md).
    If the title matches a family in `config/search_profile.toml` and
@@ -247,7 +254,7 @@ say "done"; in mode L the events wait, nothing to do.
 6. **Update the library.** Merge Block C into `achievement_library.md` as
    writing_rules.md says, then `library.py ids`. An answer that will recur
    goes into the bank: `answers.py add --question "..." --answer "..."
-   --kind <kind> --scope <scope> --sensitive yes|no --source user:<date>`.
+   --kind <kind> --scope any|US|Canada --sensitive yes|no --source user:<date>`.
    *Done when:* every Block C entry is in the file and the user has been told
    in one line what was added.
 
@@ -260,7 +267,8 @@ say "done"; in mode L the events wait, nothing to do.
    says `Filled - awaiting submit` (or `Answers ready - fill by hand`).
 
 9. **Submitted.** On `s` or "submitted", follow "After the user submits" in
-   apply.md.
+   apply.md; with an `ADDED #<n>` or `IN QUEUE ... #<n>` from step 3 that
+   includes the `applied` event for item `<n>`.
 
 A different link mid-chat starts a new job at step 3.
 
@@ -269,7 +277,8 @@ A different link mid-chat starts a new job at step 3.
 In the day's fill loop ([references/apply_batch.md](references/apply_batch.md)):
 - `s` submitted; `k` skip this one; `later` move it to tomorrow; `ok`
   attached, or confirmed (the sensitive line); `done` finished their part.
-- `stop`; `short` (switch to an easy day); `more` (10 more from the pool).
+- `stop`; `short` (switch to an easy day); `more` (10 more from the pool);
+  `drafts` (the card's free-text drafts in full).
 - `sent 1 2` referral asks went out; `ref 7 <url>` a contact's referral link
   for item 7; `log e1 e3` do-yourself items done.
 - `approve <family>` approves a variant (variants.md).

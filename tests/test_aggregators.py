@@ -4,7 +4,7 @@ settings, The Muse's 14-day cut, and the keys file location.
 
 Usage: python tests/test_aggregators.py
 Fixtures: tests/fixtures/boards (agg_*.json, synthetic: the real APIs need
-his keys). A recording fetcher keeps every request's headers.
+the user's keys). A recording fetcher keeps every request's headers.
 Stdlib only. Exits non-zero on the first failure and prints PASS at the end.
 """
 import json

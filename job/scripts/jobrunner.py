@@ -1,4 +1,4 @@
-"""The job finder that runs on his PC (spec 2.1-2.2, 2.7, 3, 4.3, 7.5, 7.9).
+"""The job finder that runs on the user's PC (spec 2.1-2.2, 2.7, 3, 4.3, 7.5, 7.9).
 
 Usage:
     python jobrunner.py daily         --root R [--mode L|S] [--offline DIR] [--date YYYY-MM-DD]
@@ -32,7 +32,10 @@ approved base when tuning failed a check); discards counts today's rows in
 queue/<date>/discards.csv (gates and unresolved leads).
 
 tick (every 15 minutes, 06:00-22:00): applies event files to the tracker
-(tracker.py apply-events) and folds queue events, gives an unparked job a
+(tracker.py apply-events) and folds queue events, writes the jobs from links
+(added events) into queue/<date>/addendum_user.json with the numbers the
+session gave them (ADDENDUM addendum_user.json items=...; their job folders
+are the session's, so it never preps them), gives an unparked job a
 fresh fill plan (REPLAN), moves upload files of applied items, answers
 requests in runner/in/requests (REQUEST <id> <op> ok|failed|REJECTED; results
 in runner/out/results/<id>.json), stages late files once no session is
@@ -380,19 +383,10 @@ def register(folder, names):
 
 
 def plan_fields(plan):
-    """(answers_status, needs [Q- ids], sensitive [kinds]) from a fill plan."""
-    needs, sens = [], []
-    for f in plan.get("fields") or []:
-        if f.get("status") == "needs_you":
-            needs.append(str(f.get("qid") or f.get("name") or f.get("label") or ""))
-        elif f.get("status") == "sensitive_confirm":
-            src = str(f.get("answer_source") or "")
-            kind = src.split(":", 1)[1] if src.startswith("profile:") else re.sub(r"[^a-z0-9]+", "_",
-                                                                               str(f.get("label", "")).lower())
-            if kind and kind not in sens:
-                sens.append(kind.strip("_"))
-    status = "needs_you" if needs else "sensitive_confirm" if sens else "complete"
-    return status, needs, sens
+    """(answers_status, needs [Q- ids], sensitive [kinds]) from a fill plan
+    (jobqueue.plan_fields, shared with the jobs added from links)."""
+    import jobqueue
+    return jobqueue.plan_fields(plan)
 
 
 class Prep:
@@ -457,8 +451,8 @@ def prep_existing(run, day, prep):
         dirty = False
         for q in data["items"]:
             folder = run.root / str(q.get("folder", ""))
-            if not folder.is_dir():
-                continue
+            if not folder.is_dir() or q.get("added_by"):
+                continue  # a job from a link: its folder is the session's (addendum_user)
             before = json.dumps(q, sort_keys=True)
             missing = not (folder / "resume_B.pdf").exists() or not (folder / "fill_plan.json").exists()
             if missing and not (folder / ".claimed").exists():
@@ -927,7 +921,7 @@ def base_pdf(run, family, cache):
 
 
 def diy_sheet(run, company, title, location, upload):
-    """applications/_diy/<date>/<Company>.md: what he types, from the profile and the bank. No link (R2)."""
+    """applications/_diy/<date>/<Company>.md: what the user types, from the profile and the bank. No link (R2)."""
     import answers
     values, _ = answers.load_profile(run.folder.profile)
     lines = [f"# {company} - {title}", ""]
@@ -1144,6 +1138,9 @@ def replan(run, unparked):
         folder = run.root / str((it or {}).get("folder", ""))
         if not it or not folder.is_dir():
             continue
+        if it.get("added_by"):
+            run.log(f"REPLAN skipped #{n}: a job from a link (the session plans it)")
+            continue
         if not may_write(folder, "fill_plan.json"):
             run.log(f"REPLAN skipped #{n}: the folder is claimed (the session plans it in memory)")
             continue
@@ -1174,6 +1171,13 @@ def apply_events(run):
     if unparked and code == 0:
         optional(run, "re-plan", replan, run, unparked)
     return code, applied
+
+
+def user_addendum(run):
+    """Jobs from /job <link> and /job add <link> (added events) into
+    queue/<date>/addendum_user.json, with the numbers the session gave them."""
+    import jobqueue
+    return jobqueue.user_addendum(run.root, run.day, emit=run.out)
 
 
 def liveness(run, items):
@@ -1225,6 +1229,8 @@ def tick(run):
         if code == 2:
             run.out("MISSING openpyxl: run  pip install openpyxl  and run again")
         worked.append("events")
+        if has_events:
+            optional(run, "jobs from links", user_addendum, run)
         if applied:
             stage(run, run.day)
             upsert_funnel(run, run.day)
@@ -1674,7 +1680,7 @@ def show_status(run):
 # ---------- CLI ----------
 
 def build_parser():
-    ap = Parser(prog="jobrunner", description="The job finder on his PC (spec 2.2).", allow_abbrev=False)
+    ap = Parser(prog="jobrunner", description="The job finder on the user's PC (spec 2.2).", allow_abbrev=False)
     sub = ap.add_subparsers(dest="cmd", required=True, metavar="command")
     for name, hlp in (("daily", "The 05:30 run: discovery, queue, Tier B, staging, reports."),
                       ("tick", "The 15-minute run: events, requests, uploads, liveness."),
@@ -1684,7 +1690,7 @@ def build_parser():
         p = sub.add_parser(name, help=hlp, allow_abbrev=False)
         p.add_argument("--root", help="the JobSearch folder (default: config.toml in %%LOCALAPPDATA%%\\JobRunner)")
         if name != "status":
-            p.add_argument("--mode", choices=["L", "S", "l", "s"], help="L on his PC (default), S in the sandbox")
+            p.add_argument("--mode", choices=["L", "S", "l", "s"], help="L on the user's PC (default), S in the sandbox")
             p.add_argument("--offline", help="a netfetch fixture folder instead of the network (tests)")
             p.add_argument("--date", help="run as of this date (tests)")
         if name == "selftest":
@@ -1759,7 +1765,7 @@ def main(argv=None):
     except (jobfs.ConfigError, ValueError) as e:
         run.out(f"ERROR {e}")
         return 1
-    except Exception as e:  # unattended under pythonw: the log and status.json are all he has
+    except Exception as e:  # unattended under pythonw: the log and status.json are all the user has
         import traceback
         run.out(f"ERROR {args.cmd} stopped: {type(e).__name__}: {str(e)[:200]}")
         for line in traceback.format_exc().splitlines():

@@ -755,7 +755,7 @@ def read_personio(ctx):
 
 
 def read_recruitee(ctx):
-    """Enabled in poll only after the selftest from his PC passes (ats A25)."""
+    """Enabled in poll only after the selftest from the user's PC passes (ats A25)."""
     s = ctx.spec
     r = ctx.get(f"https://{s.board}.recruitee.com/api/offers/")
     if r.status in (404, 410):
@@ -1325,7 +1325,7 @@ def update_health(health, res, today):
 
 
 def recruitee_enabled(root):
-    """Recruitee reads only after the runner selftest passed it from his PC
+    """Recruitee reads only after the runner selftest passed it from the user's PC
     (status.json selftest.recruitee = PASS; ats A25)."""
     try:
         data = jobfs.read_json_verified(jobfs.Folder(root).status_json, retries=0)

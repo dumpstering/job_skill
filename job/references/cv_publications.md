@@ -10,7 +10,7 @@ Pass the mode to every build: `build_resume.py ... --mode industry|cv|usajobs`.
 | Mode | When | Rules |
 |---|---|---|
 | industry (default) | companies | 2 pages at most, hard (`--strict` exits 6 above it; `--max-pages 1` for a one-page family). Sections: Summary, Experience, Techniques, Selected Publications (optional, at most `publications_max`, 3 by default), Education, Certifications. Education goes right after Summary only when writing_rules.md says so. |
-| cv | the family's `mode = "cv"`; a posting that asks for a "CV" or "curriculum vitae"; an employer that is a university, institute or government lab; a postdoc title | No page cap (a warning above 8 pages). The build puts the sections in this order, where present: Education, Research Experience, Professional Experience, Publications (all), Presentations, Patents, Grants and Fellowships, Teaching and Mentoring, Techniques, Awards, Service, Memberships, References (only if he supplies them). Other headings stay after the section before them. |
+| cv | the family's `mode = "cv"`; a posting that asks for a "CV" or "curriculum vitae"; an employer that is a university, institute or government lab; a postdoc title | No page cap (a warning above 8 pages). The build puts the sections in this order, where present: Education, Research Experience, Professional Experience, Publications (all), Presentations, Patents, Grants and Fellowships, Teaching and Mentoring, Techniques, Awards, Service, Memberships, References (only if the user supplies them). Other headings stay after the section before them. |
 | usajobs | USAJOBS announcements; always Tier A, at most 1 a day | 2 pages, hard: a longer resume makes the applicant ineligible. Give each role month and year dates. A CV goes in only when the announcement asks for one as an "other document". Federal fields beyond the page cap (hours per week, grade, supervisor) are UNVERIFIED; where an announcement asks for hours, put them in the role's location, e.g. "Springfield, IL (40 hours per week)". |
 
 Headings the CV order knows by other names: Experience (Professional
@@ -20,19 +20,19 @@ Service, Professional Memberships.
 
 ## publications.md
 
-One line per item, exactly as he cites it:
+One line per item, exactly as the user cites it:
 
 `- P-001 | journal|preprint|conference|patent|thesis | <citation; *italics* allowed> [| ascii: <approved rendering>] [| doi:<doi>]`
 
 - At setup, write each publication, presentation, patent and the thesis as
-  he gives it; he confirms the file. Never correct or reformat a citation
+  the user gives it; they confirm the file. Never correct or reformat a citation
   yourself; ask.
 - Characters the PDF font cannot show (Greek letters and most symbols
   outside Western European text) need an `ascii:` rendering. List them at
   setup, propose a rendering (beta-lactamase for the Greek beta), and add it
-  only after he approves it. The build prints the rendering for those
+  only after the user approves it. The build prints the rendering for those
   citations and the exact citation for all others.
-- `*...*` marks italics: species names, gene names where he italicizes them,
+- `*...*` marks italics: species names, gene names where the user italicizes them,
   journal titles.
 
 ## Citing in resume.json
@@ -45,8 +45,8 @@ One line per item, exactly as he cites it:
   Use one section per heading: Publications, Presentations, Patents.
 - Build with `--publications "<folder>/publications.md"`. The build inserts
   each citation's exact text, renders `*italics*` as italics in the .docx and
-  .pdf (the .txt drops the asterisks), and with `"bold_name": true` bolds his
-  name where it appears as an author ("Avery JQ", "Avery, J. Q.",
+  .pdf (the .txt drops the asterisks), and with `"bold_name": true` bolds the
+  user's name where it appears as an author ("Avery JQ", "Avery, J. Q.",
   "J. Q. Avery", "Jordan Q. Avery").
 - Industry resumes: at most `publications_max` citations, first-author or
   closest to the posting. CVs: all of them.
@@ -63,20 +63,20 @@ One line per item, exactly as he cites it:
 
 `- <technique> | aliases: <a>; <b> | level: hands-on|familiar | years_ok: yes|no | evidence: L-0012, L-0031`
 
-- Review it with him at setup, built from his resume and library.
+- Review it with the user at setup, built from their resume and library.
 - It drives the Techniques section (hands-on only; a level qualifier where
-  he partly meets a requirement), the fit check, KEYWORD terms, and alias
+  the user partly meets a requirement), the fit check, KEYWORD terms, and alias
   swaps. Aliases must name the same thing.
 - Life-science variants title the Skills section "Techniques".
 - `years_ok: yes` lets `answers.py years --skill <X>` answer a form's "how
   many years of X" from the dated roles of the evidence entries (the
   writing_rules counting rule, rounded down). Mark `no` where the evidence
-  does not show the whole span; the form question then goes to him.
+  does not show the whole span; the form question then goes to the user.
 
 ## Licenses
 
 - profile.md `Licenses held:` lists each license or certificate with its
-  year. Postings that require a license he does not hold (the California CLS
+  year. Postings that require a license the user does not hold (the California CLS
   license, the Public Health Microbiologist certificate) never reach the
   queue; "preferred" ones are flagged.
 - A held license prints under Certifications with its year, under the

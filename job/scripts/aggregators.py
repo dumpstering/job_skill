@@ -6,7 +6,7 @@ Usage:
 
 Sources, each behind config/settings.toml [sources]:
 - usajobs (direct postings; on once keyed): GET data.usajobs.gov/api/search
-  with the three headers Host, User-Agent (his key email) and
+  with the three headers Host, User-Agent (the user's key email) and
   Authorization-Key; DatePosted=3, ResultsPerPage=500.
 - adzuna (leads only; on once keyed): what_or per family, where, distance,
   max_days_old=3, sort_by=date. Results become lead lines (company, title,

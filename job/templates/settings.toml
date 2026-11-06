@@ -16,7 +16,7 @@ experiment_mode_w = false
 read_linkedin = true        # company, title, location only (R2)
 read_indeed_family = false  # Indeed, Glassdoor, SimplyHired (R2; alerts A9)
 read_ziprecruiter = false   # links carry auth tokens (alerts A11)
-senders = []                # exact From addresses he confirmed at setup
+senders = []                # exact From addresses you confirmed at setup
 [sources]
 adzuna = false              # true once a key is in keys.toml
 usajobs = false             # true once a key is in keys.toml
@@ -34,7 +34,7 @@ tiers = ["A", "referral"]   # Tier B rows get no follow-up date
 days = 7
 [apply]
 browser = "auto"            # auto | builtin | chrome
-try_chrome_upload = true    # one try per session, then he attaches (platform A9)
+try_chrome_upload = true    # one try per session, then you attach (platform A9)
 fill_mode = "sequential"    # sequential | rounds (experiment, 5.6)
 rounds_size = 5
 sensitive_confirm = "per_job"   # per_job (v1.1 semantics, batched) | daily (owner opt-in)

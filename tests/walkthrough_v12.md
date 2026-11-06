@@ -51,9 +51,17 @@ is `--root <tmp>\JobSearch`.
       ANSWERS sensitive_confirm sensitive sponsorship,salary
       HANDOVER #01 Ivy Bio - QC Microbiologist II (Workable)
       HANDOVER Attach the file starting with 01 in JobSearch\upload.
-      HANDOVER Check: sponsorship, salary as confirmed today (blank if not).
+      HANDOVER Check: sponsorship, salary left blank (not confirmed today).
       HANDOVER Then click Submit and type s.
       ```
+- [ ] **A4b ok.** The user replies `ok` to the sensitive line: write
+      `claude\2026-11-06\sensitive_ok.json` as
+      `{"v": 1, "date": "2026-11-06", "ok": "all", "blank": []}`. `next` again
+      now ends `HANDOVER Check: sponsorship "no", salary "$95,000-$110,000" as confirmed today.`
+      `P\today_view.py next R --short` gives `NEXT #02 greenhouse:7100052`
+      (Greenhouse before #1's Workable; sensitive fields settled); without
+      the file it gives `NEXT none`, since every fixture item asks for
+      sponsorship and salary.
 - [ ] **A5 caps.** `P\caps.py check R --company "Ivy Bio" --family qc_micro --job-key workable:ivybio:B00008C` -> `CAP ok`.
 - [ ] **A6 claim and start.** Create `<job folder>\.claimed`;
       `P\events.py emit R --type started --n 1 --job-key workable:ivybio:B00008C --date 2026-11-06 --session walk-1 --json "{}"`
@@ -96,7 +104,11 @@ Set `JOB_SKILL_NOW=2026-11-06T18:00:00Z`. The fixture is
 - [ ] **B4 caps.** `P\caps.py check R --company "Acme Robotics" --url <link> --posting <...>\posting.md` -> `CAP ok`.
 - [ ] **B5 folder and row.** Move `_incoming` to `applications\2026-11-06 Acme Robotics - Senior IT Support Engineer`;
       `P\tracker.py add R --company "Acme Robotics" --role "Senior IT Support Engineer" --location "Austin, TX" --url <link> --folder "applications/2026-11-06 Acme Robotics - Senior IT Support Engineer" --status Started --tier A --found-via pasted --ats greenhouse --posted 2026-10-01`
-      -> `ADDED P-fc153b11 (pending)`.
+      -> `ADDED P-fc153b11 (pending)`. Then
+      `P\events.py add R --folder "applications/2026-11-06 Acme Robotics - Senior IT Support Engineer" --via pasted`
+      -> `ADDED #31 greenhouse:1234567 (addendum_user)`: `P\today_view.py progress R`
+      now ends `left=30 of 31`, and `P\events.py overlay R` lists
+      `ADDED #31 greenhouse:1234567 pasted` (no tick needed).
 - [ ] **B6 step 4 (MANUAL fit and questions).** `P\tracker.py update R P-fc153b11 "fit=Good Fit"` -> `UPDATED P-fc153b11 Fit:  -> Good Fit`.
       (`fit=Good` is refused: the values are Strong Fit, Good Fit, Stretch, Long Shot.)
 - [ ] **B7 step 5, build.** With `tests\sample_resume.json` as the written resume.json:
@@ -117,7 +129,10 @@ Set `JOB_SKILL_NOW=2026-11-06T18:00:00Z`. The fixture is
       I'll log it." `P\tracker.py update R P-fc153b11 "status=Filled - awaiting submit"`.
 - [ ] **B11 step 9.** `P\tracker.py update R P-fc153b11 status=Applied applied=2026-11-06`
       -> `... Follow-up:  -> 2026-11-13` (Tier A gets the +7 follow-up).
-      After `P\jobrunner.py tick R --offline tests\fixtures\boards`,
+      `P\events.py emit R --type applied --n 31 --job-key greenhouse:1234567 --date 2026-11-06 --session walk-1 --json "{\"confirmation\":\"page\"}"`;
+      `P\today_view.py progress R` -> `PROGRESS applied=2 ... left=29 of 31`, `Today: 2 applications sent.`
+      After `P\jobrunner.py tick R --offline tests\fixtures\boards` (it prints
+      `ADDENDUM addendum_user.json items=31`),
       `tracker.py show R --company "Acme Robotics"` shows row 2, Good Fit, Applied, follow-up 2026-11-13.
 
 ## Part C: the IN QUEUE note
@@ -139,26 +154,23 @@ Set `JOB_SKILL_NOW=2026-11-06T18:00:00Z`. The fixture is
 
 ## Gaps found (the text cannot close these; owners named)
 
-1. **No `addendum_user`.** Spec 5.11 appends a pasted job to today's queue so
-   the day's counts include it. No script does this, so a job applied from
-   `/job <link>` counts in the tracker but not in `today_view.py progress`
-   or the closing line. (WP4/WP7: a `jobqueue.py addendum --user <folder>`
-   or a request op.)
-2. **Sensitive confirmations have no reader.** The text records the user's
-   `ok` in `claude/<date>/sensitive_ok.json`, but `today_view.py next`
-   prints the same "as confirmed today (blank if not)" check line for every
-   item and does not read it. (WP7.)
-3. **Draft text location.** The card says "(full text in today.md)", but
-   `today.md` is the runner's file and Claude's drafts live in
-   `morning.json`. The text says to show the full draft from morning.json
-   when asked. (WP7: change the card wording.)
-4. **Short day has no filter.** `today_view.py next` has no easy-day mode, so
-   daily.md emits `later` for each account or sensitive item to get past it;
-   those items then return tomorrow even if the user leaves short mode.
-   (WP7: `next --short`.)
-5. **The card in mode M** says "Your PC's job finder has not run yet.
-   Double-click 'Run job finder now'" before the runner is installed, when
-   there is no shortcut yet. (WP7.)
+Gaps 1-5 of the first walk were closed in v1.2 hardening round 1; each line
+says what now covers it.
+
+1. **`addendum_user` (closed).** `events.py add --folder <job folder> --via
+   pasted|add` writes an `added` event: the job is in `today_view.py` card,
+   next and progress at once (B5, B11), and the tick writes it into
+   `queue/<date>/addendum_user.json`. Mode M has no list (`NO LIST`).
+2. **Sensitive confirmations (closed).** `today_view.py next` reads
+   `claude/<date>/sensitive_ok.json` for the `Check:` line (A4, A4b).
+3. **Draft text location (closed).** The card's draft line ends `(say
+   "drafts" for the full text)`, and `today_view.py drafts` prints the full
+   texts from morning.json.
+4. **Short day (closed).** `today_view.py next --short`: no-account items,
+   easiest first, none with an open question, an unsettled sensitive field
+   or no resume; the rest get no event and stay.
+5. **The card with no job finder (closed).** No `runner/out/status.json`,
+   or mode M: one line saying to type `/job setup`, never the shortcut.
 6. **Tick and liveness.** A tick without `--offline` re-reads the next items'
    postings live (in this walk it marked fixture items closed against the
    real Greenhouse API). Dry runs must pass `--offline`. Per-item liveness

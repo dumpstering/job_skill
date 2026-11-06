@@ -1,7 +1,7 @@
 # runner: the job finder's Windows installer
 
 The job finder is `job/scripts/jobrunner.py` (with the rest of `job/scripts/`)
-running on his PC under Task Scheduler. This folder holds what installs it.
+running on the user's PC under Task Scheduler. This folder holds what installs it.
 Claude's side of the runner (modes, events, requests, the heartbeat, the card)
 is in [job/references/runner.md](../job/references/runner.md).
 
@@ -25,8 +25,8 @@ The release zip `jobrunner-<version>.zip` (built by `build_zip.py`) holds
 | JobRunner-Daily | daily 05:30 | StartWhenAvailable, WakeToRun, 2 h limit, IgnoreNew | `venv\Scripts\pythonw.exe -I -m jobrunner daily` |
 | JobRunner-Tick | daily 06:00, every 15 minutes for 16 hours (06:00-22:00) | IgnoreNew, 5 min limit | `venv\Scripts\pythonw.exe -I -m jobrunner tick` |
 
-Both run as him, LogonType Interactive (only while he is logged on, no stored
-password), RunLevel Limited. Nothing asks for elevation. `-I` keeps the
+Both run as the user, LogonType Interactive (only while they are logged on, no
+stored password), RunLevel Limited. Nothing asks for elevation. `-I` keeps the
 JobSearch folder, PYTHONPATH and user site-packages off `sys.path`; the app
 folder comes from the `.pth` file.
 

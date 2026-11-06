@@ -9,7 +9,7 @@ Usage:
 Rows are built at export time from the tracker (the runner's snapshot plus
 pending events in mode L, applications.xlsx in mode M):
     - Applications with an Applied date (by-hand logs included),
-    - Referrals asks he sent (activity_type "Referral contact"),
+    - Referrals asks the user sent (activity_type "Referral contact"),
     - Activities (job fairs, workshops, RESEA, interviews),
 joined to the Employers sheet for addresses, websites and phones.
 
@@ -619,7 +619,7 @@ def cmd_employers(a):
             n += 1
             print(f"MISSING {r['employer_name']} | {', '.join(gaps)}")
     if n:
-        print('NEXT ask him once per employer, then: tracker.py employer-set --employer "<name>" '
+        print('NEXT ask the user once per employer, then: tracker.py employer-set --employer "<name>" '
               '--street ... --city ... --state ... --zip ... --phone ... --main-website ... --source user')
     else:
         print("EMPLOYERS ok")

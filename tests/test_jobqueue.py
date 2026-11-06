@@ -1,7 +1,8 @@
 """Check job/scripts/jobqueue.py: the queue build (size, caps, per-day limits,
 Tier A, session order, account block), widen, FROZEN and WAIT, the variant
-rule, addenda during a session, fold-events, upload staging and the
-_not_sent move.
+rule, addenda during a session, fold-events, upload staging (the do-yourself
+files by the folder's date), the _not_sent move, and the jobs from links
+(added events, addendum_user.json).
 
 Usage: python tests/test_jobqueue.py
 Needs openpyxl only if a tracker exists (the fixtures have none). Prints ok
@@ -13,7 +14,7 @@ import re
 import subprocess
 import sys
 import tempfile
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -283,9 +284,120 @@ def test_not_sent():
         assert claimed.exists() and mine.exists() and not old.exists()
 
 
+def link_folder(root, company, url, key, files=()):
+    """A job folder the session made from a link: posting.md (posting.py's head) plus files."""
+    folder = root / "applications" / f"{DAY.isoformat()} {company} - Lab Scientist"
+    folder.mkdir(parents=True)
+    (folder / "posting.md").write_text(f"URL: {url}\nRetrieved: {DAY.isoformat()}\nCompany: {company}\n"
+                                       f"Role: Lab Scientist\nLocation: Springfield, IL\nJob key: {key}\n"
+                                       f"Posted: 2026-11-01\n\n## Description\n\nSynthetic.\n", encoding="ascii")
+    for name, body in files:
+        (folder / name).write_text(body, encoding="ascii")
+    return folder
+
+
+def test_user_addendum():
+    """Jobs from links (added events) keep the numbers the session gave them: a
+    runner addendum numbers after them, also when an add lands while it is being
+    built; user-addendum writes them as full 2.5 items and never writes in
+    their folders; staging copies only the /job add item's Tier B file."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        build(root)
+        pasted = link_folder(root, "Acme Robotics", "https://job-boards.greenhouse.io/acme/jobs/5550001",
+                             "greenhouse:5550001", [("Jordan Avery Resume.pdf", "%PDF-1.4 A\n")])
+        plan = {"form_source": "page", "fields": [
+            {"label": "Desired salary", "name": "salary", "status": "sensitive_confirm", "answer": "$95,000",
+             "answer_source": "profile:salary"}]}
+        added = link_folder(root, "Globex Bio", "https://jobs.lever.co/globex/aaaa-bbbb", "lever:aaaa-bbbb",
+                            [("resume_B.pdf", "%PDF-1.4 B\n"), ("fill_plan.json", json.dumps(plan)),
+                             ("tune_log.json", json.dumps({"status": "tuned", "family": "qc_micro",
+                                                           "variant": "qc_micro@v1"}))])
+        third = link_folder(root, "Initech Labs", "https://job-boards.greenhouse.io/initech/jobs/5550003",
+                            "greenhouse:5550003")
+        assert events.add(root, pasted, "pasted")[0] == "ADDED #31 greenhouse:5550001 (addendum_user)"
+        assert events.add(root, added, "add", family="qc_micro")[0] == "ADDED #32 lever:aaaa-bbbb (addendum_user)"
+        # The runner's late finds number after them, and one already added from a link (the
+        # /job add probe_url that pools it for tomorrow) is not queued twice.
+        late = json.loads((POOL / "new4.json").read_text(encoding="utf-8"))
+        late["items"][0]["job_key"] = "lever:aaaa-bbbb"
+        (root / "late.json").write_text(json.dumps(late), encoding="utf-8")
+        code, lines = cli("addendum", "--root", str(root), "--date", DAY.isoformat(), "--pool", str(root / "late.json"))
+        assert code == 0 and lines[0] == "ADDENDUM addendum_0930.json items=33-35", lines
+        keys = [it["job_key"] for it in json.loads(jobfs.Folder(root).addendum(DAY, "0930").read_text(encoding="utf-8"))["items"]]
+        assert "lever:aaaa-bbbb" not in keys, keys
+        # An add lands between the addendum's count and its write: its items move up after it.
+        orig, calls = jobqueue.numbers_used, []
+
+        def racing(r, d):
+            got = orig(r, d)
+            if not calls:
+                calls.append(events.add(root, third, "pasted")[0])
+            return got
+        jobqueue.numbers_used = racing
+        try:
+            path = jobqueue.addendum(root, DAY, limit=2, emit=lambda s: None)
+        finally:
+            jobqueue.numbers_used = orig
+        assert calls == ["ADDED #36 greenhouse:5550003 (addendum_user)"], calls
+        assert [it["n"] for it in json.loads(path.read_text(encoding="utf-8"))["items"]] == [37, 38]
+        out = []
+        upath = jobqueue.user_addendum(root, DAY, emit=out.append)
+        assert out == ["ADDENDUM addendum_user.json items=31,32,36"], out
+        data = json.loads(upath.read_text(encoding="utf-8"))
+        assert jobqueue.check_queue(data) == [], jobqueue.check_queue(data)
+        byn = {it["n"]: it for it in data["items"]}
+        assert (byn[31]["tier"], byn[31]["resume_status"], byn[31]["added_by"]) == ("A", "tier_a_ready", "pasted")
+        assert (byn[32]["tier"], byn[32]["resume_status"], byn[32]["variant"], byn[32]["sensitive"],
+                byn[32]["answers_status"], byn[32]["account"]) == \
+            ("B", "built", "qc_micro@v1", ["salary"], "sensitive_confirm", "none"), byn[32]
+        assert byn[36]["resume_status"] == "tier_a_pending" and not jobfs.prev_path(upath).exists()
+        assert jobqueue.user_addendum(root, DAY, emit=out.append) is None, "nothing changed: no write"
+        code, lines = cli("user-addendum", "--root", str(root), "--date", DAY.isoformat())
+        assert code == 0 and lines == ["ADDENDUM addendum_user.json unchanged"], lines
+        assert sorted(p.name for p in pasted.iterdir()) == ["Jordan Avery Resume.pdf", "posting.md"]
+        top, keys = jobqueue.numbers_used(root, DAY)
+        assert top == 38 and "greenhouse:5550003" in keys
+        lines = []
+        jobqueue.stage_uploads(root, DAY, emit=lines.append)
+        names = [p.name for p in (root / "upload").iterdir() if p.is_file()]
+        assert any(n.startswith("32_") for n in names) and not any(n.startswith(("31_", "36_")) for n in names), names
+        assert not any(ln.startswith(("WARN #31", "WARN #36")) for ln in lines), lines
+
+
+def test_do_yourself_files_local_date():
+    """stage-uploads keeps today's E<n>_ files by the folder's [time] date, not
+    the PC's, and sends an earlier day's to that day's _done folder."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        noon = datetime(2026, 11, 6, 12, 0, tzinfo=timezone.utc)
+        pc_day = datetime.fromtimestamp(noon.timestamp()).date()
+        # A zone whose date at that moment differs from the PC's, whatever the PC's zone is.
+        zone, local_day = (("Pacific/Kiritimati", date(2026, 11, 7)) if pc_day == date(2026, 11, 6)
+                           else ("Pacific/Pago_Pago", date(2026, 11, 6)))
+        (root / "config").mkdir()
+        (root / "config" / "settings.toml").write_text(f'[time]\ntimezone = "{zone}"\n', encoding="ascii")
+        up = root / "upload"
+        up.mkdir()
+        today_e, old_e = up / "E1_Avery_Resume_HooliHealth.pdf", up / "E2_Avery_Resume_Initech.pdf"
+        for p, t in ((today_e, noon), (old_e, noon - timedelta(days=1))):
+            p.write_bytes(b"%PDF-1.4 E\n")
+            os.utime(p, (t.timestamp(), t.timestamp()))
+        saved = os.environ["JOB_SKILL_NOW"]
+        os.environ["JOB_SKILL_NOW"] = noon.isoformat()
+        try:
+            assert jobfs.today(root) == local_day
+            jobqueue.stage_uploads(root, emit=lambda s: None)
+        finally:
+            os.environ["JOB_SKILL_NOW"] = saved
+        assert today_e.exists(), f"today's E1 moved (folder date {local_day}, PC date {pc_day})"
+        assert (up / "_done" / (local_day - timedelta(days=1)).isoformat() / old_e.name).exists()
+
+
 def main():
     for fn in (test_build_71, test_small_pool_widens, test_frozen_and_wait, test_addendum_during_session,
-               test_fold_events_idempotent, test_upload_staging, test_referral, test_variant_rule, test_not_sent):
+               test_fold_events_idempotent, test_upload_staging, test_referral, test_variant_rule, test_not_sent,
+               test_user_addendum, test_do_yourself_files_local_date):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

@@ -35,12 +35,14 @@ Every `events.py emit` gets `--n <n> --job-key <key> --date <date> --session
 "confirmation": "page|email|none", "proof": "..."}` (only the keys that
 apply).
 
-1. **Next.** `today_view.py next` prints `NEXT #07 <job key>`, `COMPANY`,
+1. **Next.** `today_view.py next` (`next --short` on a short day, daily.md)
+   prints `NEXT #07 <job key>`, `COMPANY`,
    `ROLE`, `ATS <ats> (attach first|last, account none|exists|new)`, `OPEN
    <url>`, `FOLDER`, `UPLOAD <file> (<what>)`, `RESUME`, `ANSWERS`, maybe
    `STATE`, and the `HANDOVER` lines. `SKIP #NN closed` lines are items the
    runner found closed. `NEXT none`: the list is done; give the closing line
-   from `today_view.py progress` and offer "more".
+   from `today_view.py progress` and offer "more". Jobs added from a link
+   today (`events.py add`) are in the list at once, after the runner's items.
 2. **Caps.** `caps.py check --company "<Company>" --family <family>
    --job-key <key>`. `CAP DEFER ...`: emit `skipped` (reason
    `deferred_cap`) and go to the next item; it returns when allowed.
@@ -68,14 +70,18 @@ apply).
    type-ahead suggestions; pick dropdown options by their text, never by
    position; read back every field, and recheck fields the resume parser
    overwrote. A field not in the plan is matched by meaning to `answers.md`
-   and `profile.md`. `sensitive_confirm` fields are entered only for jobs
-   the user confirmed today (`claude/<date>/sensitive_ok.json`, below);
-   otherwise left blank and named in the handover. An unknown required
+   and `profile.md`. `sensitive_confirm` fields follow the `HANDOVER Check:`
+   line, which `next` builds from `claude/<date>/sensitive_ok.json` (below):
+   the values it names "as confirmed today" are entered; "left blank" ones
+   are not. A required free-text field with a morning draft takes that
+   draft (`today_view.py drafts --n <n>`), as the user left it. An unknown required
    field: emit `parked` (reason `unknown_required`, its question id), leave
    the tab as it is, and go to the next item; the question joins the next
    batch.
 7. **Handover.** Print the `HANDOVER` lines exactly (at most 5 lines; add
    one `Check:` item when the page needs one, such as Lever's consent box).
+   If the user answered the sensitive line during this item, run `next`
+   again first, so its `Check:` line is current.
    Save `filled.md` in the job folder. `tracker.py add --company --role
    --location --url <apply url> --folder "<folder>" --job-key <key>
    --status "Filled - awaiting submit" --source Runner --tier <A|B>
@@ -83,8 +89,10 @@ apply).
    --queue-date <date> --account <none|exists|new>`, taking tier, family,
    variant, posted and account from the item in `queue/<date>/queue.json`
    and the lane from its `posting.json` (mode L prints `ADDED P-<8hex>
-   (pending)`; keep that ID). Emit `handed_over`. Rewrite
-   `claude/session.json` (`beat`, `current_n`).
+   (pending)`; keep that ID). A job added with `/job add <link>` takes
+   `--source Skill --found-via pasted` (its folder has no `posting.json`).
+   A pasted `/job <link>` job already has its row: `tracker.py update`.
+   Emit `handed_over`. Rewrite `claude/session.json` (`beat`, `current_n`).
 8. **Wait for the reply** (next section).
 
 ## The replies
@@ -108,16 +116,23 @@ apply).
 - `ok`: the file is attached (step 5), or the sensitive line is confirmed.
 - `done`: the user finished their part (a sign-in, a code, a CAPTCHA); go on
   with the same page.
-- `stop`: give the closing line and end. `short`: daily.md short-day rules
-  from the next item. `more`: `jobrunner.py request more` (or, in mode M,
-  say there is no job finder yet); the new items arrive as an addendum.
+- `stop`: give the closing line and end. `short`: from the next item, run
+  `today_view.py next --short` (daily.md short-day rules). `more`:
+  `jobrunner.py request more` (or, in mode M, say there is no job finder
+  yet); the new items arrive as an addendum.
+- `drafts`: `today_view.py drafts` prints the card's free-text drafts in
+  full; show them as printed.
 
 **Sensitive confirmations.** When the user answers the card's sensitive
 line, write `claude/<date>/sensitive_ok.json` as `{"v": 1, "date":
 "<date>", "ok": [3, 7, 12], "blank": [5]}` (`"ok": "all"` for all), and
 rewrite it whole when they change it. A new task reads it, so a batch break
 never asks twice. `[apply] sensitive_confirm = "daily"` means one ok covers
-the day.
+the day. `today_view.py next` reads it for each item's `HANDOVER Check:`
+line: `salary "$95,000-$110,000", sponsorship "No" as confirmed today` for a
+job in `ok`; `left blank, as you asked` for one in `blank`; `left blank (not
+confirmed today)` for the rest. A file with another day's `date` counts as
+none.
 
 ## Account block (after #10; never on a short day)
 

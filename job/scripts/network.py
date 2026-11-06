@@ -1,4 +1,4 @@
-"""The referral network: his own contact exports, matched to jobs (spec 6.3, R11).
+"""The referral network: the user's own contact exports, matched to jobs (spec 6.3, R11).
 
 Usage:
     python network.py import --root R [--raw DIR]
@@ -6,7 +6,7 @@ Usage:
     python network.py match --root R --company C
     python network.py asks --root R --date YYYY-MM-DD
 
-import reads the files he dropped in network/raw (loose, or inside the LinkedIn
+import reads the files the user dropped in network/raw (loose, or inside the LinkedIn
 export zip) and writes network/network.csv:
     id, first, last, company_raw, company_norm, position, connected_on, email,
     source (linkedin|google|rec), strength (rec|emailed|connection)
@@ -27,7 +27,7 @@ addenda), or with one company (--company, the single-job flow):
              "@ <Company>" in a staffing-agency Position
     maybe    tier 2 alias (one name holds the other as whole words) or tier 3
              parent/subsidiary (watchlist parent column, Employers sheet);
-             shown for his confirmation only
+             shown for the user's confirmation only
     never    Self-employed, Stealth, Freelance, Retired, Student, Open to work,
              Confidential, blank
 At most 2 names per job, ranked rec > emailed > connection. --date writes
@@ -42,7 +42,7 @@ for another job, never one person twice, never the same text to two people at
 one company. Each draft (50-80 words: exact title, link, req ID, a two-line
 pitch from the job's fact-checked resume JSON, a yes/no ask) runs through
 checks.fact_check; one that cites a number missing from the sources is dropped
-with its FACT line. He sends every ask himself.
+with its FACT line. The user sends every ask.
     ASK 1 #3 Acme Bio | Jane Doe (N-0004) | LinkedIn message | 61 words
     TEXT Hi Jane, ...
     DROP #5 Globex | Sam Lee (N-0007): a number is not in your sources
@@ -669,7 +669,7 @@ def my_first_name(root):
 
 
 def applied_on(store, job_key):
-    """The date he applied to this job, when the tracker says so."""
+    """The date the user applied to this job, when the tracker says so."""
     if store is None or not job_key:
         return ""
     for r in store.app_rows():
@@ -821,7 +821,7 @@ def build_parser():
     p.add_argument("--n", type=int, help="print the names for this one item")
     p.add_argument("--company")
     p.set_defaults(func=cmd_match)
-    p = sub.add_parser("asks", help="Draft the day's referral asks (he sends them himself).")
+    p = sub.add_parser("asks", help="Draft the day's referral asks (the user sends them).")
     p.add_argument("--root", required=True)
     p.add_argument("--date", required=True)
     p.set_defaults(func=cmd_asks)

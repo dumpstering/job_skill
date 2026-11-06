@@ -33,7 +33,7 @@ Write it once a week: after it is written, create the marker
    word for word, phrased as an experiment. A yes changes one thing (an
    adjacent family, a variant revision, a wider ring, a looser filter, a lane
    off), backup first.
-4. Other offers in the file, answered only when he raises them:
+4. Other offers in the file, answered only when the user raises them:
    - "mark no response": rows applied 30 or more days ago with no reply get
      `tracker.py update <ID> status="No response"`;
    - "archive", offered when the tracker passes 5000 rows:

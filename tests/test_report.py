@@ -233,7 +233,7 @@ def test_references():
             if "alert" in low and re.search(r"\blinks?\b", low):
                 assert re.search(r"\b(never|not|no)\b", low), f"{path.name}: {p}"
     prep = re.sub(r"\s+", " ", (REFS / "interview_prep.md").read_text(encoding="ascii"))
-    assert "only after his \"yes\" for this event" in prep, prep
+    assert "only after the user's \"yes\" for this event" in prep, prep
     for path in WP6_FILES:
         path.read_bytes().decode("ascii")
 

@@ -248,12 +248,89 @@ def test_emit_and_overlay():
     assert out.strip() == "ERROR event over 64 KB", out
 
 
+POSTING_MD = """URL: https://job-boards.greenhouse.io/acme/jobs/1234567
+Retrieved: {day}
+Company: Acme Robotics
+Role: Senior Lab Scientist
+Location: Springfield, IL
+Job key: greenhouse:1234567
+Posted: 2026-10-01
+Source: greenhouse-api
+
+## Description
+
+Synthetic posting text.
+"""
+
+
+def job_folder(root, name, text=POSTING_MD):
+    folder = Path(root) / "applications" / name
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "posting.md").write_text(text.format(day=TODAY), encoding="ascii")
+    return folder
+
+
+def test_add_from_link():
+    """events.py add: a job from a link joins today's list at once, numbered
+    after the highest; the overlay and tracker.py check see it before any tick."""
+    root = new_root()
+    f = jobfs.Folder(root)
+    f.config.mkdir(parents=True)
+    f.settings_toml.write_text('[runner]\nmode = "L"\n', encoding="ascii")
+    folder = job_folder(root, f"{TODAY} Acme Robotics - Senior Lab Scientist")
+    rel = folder.relative_to(root).as_posix()
+    out = run(EVENTS, "add", "--root", root, "--folder", rel, "--via", "pasted").strip()
+    assert out == f"NO LIST {TODAY} (no list built yet): the tracker row is the record", out
+    items = [{"n": n, "job_key": f"lever:item-{n}", "company": f"Co {n}", "role": "Scientist",
+              "folder": f"applications/{TODAY} Co {n} - Scientist"} for n in (1, 2, 3)]
+    items.append({"n": 7, "job_key": "lever:item-7", "company": "Co 7", "role": "Scientist", "folder": ""})
+    jobfs.atomic_write_json(f.queue_json(TODAY), {"v": 1, "date": TODAY, "items": items[:3]})
+    jobfs.atomic_write_json(f.addendum(TODAY, "0930"), {"v": 1, "date": TODAY, "items": items[3:]})
+    out = run(EVENTS, "add", "--root", root, "--folder", str(folder), "--via", "pasted", "--session", "s-1").strip()
+    assert out == "ADDED #8 greenhouse:1234567 (addendum_user)", out
+    ev = json.loads(next(f.events.glob("*_added.json")).read_text(encoding="utf-8"))
+    assert ev["n"] == 8 and ev["session"] == "s-1" and ev["payload"]["via"] == "pasted", ev
+    it = ev["payload"]["item"]
+    assert (it["company"], it["role"], it["ats"], it["account"], it["tier"], it["folder"]) == \
+        ("Acme Robotics", "Senior Lab Scientist", "greenhouse", "none", "A", rel), it
+    assert run(EVENTS, "add", "--root", root, "--folder", rel, "--via", "add").strip() == f"IN QUEUE {TODAY} #8"
+    out = lines(run(EVENTS, "overlay", "--root", root))
+    assert "ADDED #8 greenhouse:1234567 pasted" in out, out
+    out = lines(run(TRACKER, "check", "--root", root, "--company", "Acme Robotics", "--title", "Senior Lab Scientist",
+                    "--url", "https://job-boards.greenhouse.io/acme/jobs/1234567"))
+    assert f"IN QUEUE {TODAY} #8" in out, out
+    # a second link gets the next number; the runner's apply moves both, the overlay still has them
+    other = job_folder(root, f"{TODAY} Globex - Analyst", POSTING_MD.replace("1234567", "7654321"))
+    out = run(EVENTS, "add", "--root", root, "--folder", other.relative_to(root).as_posix(), "--via", "add").strip()
+    assert out == "ADDED #9 greenhouse:7654321 (addendum_user)", out
+    assert run(TRACKER, "apply-events", "--root", root).strip() == "APPLIED 2 PENDING 0 REJECTED 0"
+    assert [i["n"] for i in events.user_items(root)] == [8, 9]
+    # refusals: mode M has no list; a folder outside applications/; a bad payload by hand
+    for args, why in ((["--folder", "config", "--via", "add"], "ERROR --folder config is not a job folder"),
+                      (["--folder", rel, "--via", "maybe"], "ERROR argument --via"),
+                      (["--folder", "../elsewhere", "--via", "add"], "ERROR --folder ../elsewhere is outside")):
+        out = run(EVENTS, "add", "--root", root, *args, code=1)
+        assert out.startswith(why), (args, out)
+    out = run(EVENTS, "emit", "--root", root, "--type", "added", "--n", "10", "--job-key", "x:1", "--json",
+              json.dumps({"via": "pasted", "item": {"folder": "state"}}), code=1)
+    assert out.startswith("ERROR payload.item.folder must be a job folder"), out
+    board = job_folder(root, f"{TODAY} Board Co - Analyst", POSTING_MD.replace(
+        "https://job-boards.greenhouse.io/acme/jobs/1234567", "https://www.linkedin.com/jobs/view/1234").replace(
+        "Job key: greenhouse:1234567\n", ""))
+    out = run(EVENTS, "add", "--root", root, "--folder", board.relative_to(root).as_posix(), "--via", "add", code=1)
+    assert out.startswith("ERROR posting.md's URL is a job board"), out
+    f.settings_toml.write_text('[runner]\nmode = "M"\n', encoding="ascii")
+    third = job_folder(root, f"{TODAY} Initech - Tech", POSTING_MD.replace("1234567", "1111111"))
+    out = run(EVENTS, "add", "--root", root, "--folder", third.relative_to(root).as_posix(), "--via", "pasted")
+    assert out.strip() == f"NO LIST {TODAY} (mode M): the tracker row is the record", out
+
+
 def main():
     b = test_parity()
     print("ok parity")
     test_overlay_reads_done(b)
     print("ok overlay_reads_done")
-    for fn in (test_rejections, test_emit_and_overlay):
+    for fn in (test_rejections, test_emit_and_overlay, test_add_from_link):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

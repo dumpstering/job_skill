@@ -1,7 +1,8 @@
 """Check job/scripts/today_view.py: the 1.2 card word for word, its zero-count
 and time-sensitive rules, the catch-up note, the wording check, next (resume
-at the first item without a final event; the Tier A sha256 check), progress
-and the do-yourself list.
+at the first item without a final event; the Tier A sha256 check; the Check
+line from sensitive_ok.json; --short), progress, the do-yourself list, a job
+from a link counted at once, the no-runner line and the drafts.
 
 Usage: python tests/test_today_view.py
 Every root is synthetic and built in a temp folder (a hand-made queue.json,
@@ -251,6 +252,159 @@ def test_notes_and_diy():
     print("ok one-line notes and the do-yourself list")
 
 
+def run_args(root, *args):
+    r = subprocess.run([sys.executable, str(SCRIPT), *args[:1], "--root", str(root), *args[1:]], capture_output=True,
+                       text=True, encoding="utf-8", env=dict(os.environ, JOB_SKILL_NOW=NOW))
+    assert r.returncode == 0, (args, r.stdout, r.stderr)
+    return r.stdout.rstrip("\n").splitlines()
+
+
+def write_queue(root, items):
+    f = jobfs.Folder(root)
+    q = json.loads(f.queue_json(DAY).read_text(encoding="utf-8"))
+    q["items"], q["size"] = items, len(items)
+    jobfs.atomic_write_json(f.queue_json(DAY), q)
+
+
+def test_job_from_link():
+    """A pasted /job <link> (events.py add) is #31 at once: the card, next and
+    progress count it before any tick, with the single-job flow's resume."""
+    root = make_root("link", morning=QUIET_MORNING, workday=False)
+    folder = root / "applications" / f"{DAY} Acme Robotics - Lab Scientist"
+    folder.mkdir(parents=True)
+    (folder / "posting.md").write_text("URL: https://job-boards.greenhouse.io/acme/jobs/1234567\nCompany: Acme Robotics\n"
+                                       "Role: Lab Scientist\nLocation: Springfield, IL\nJob key: greenhouse:1234567\n\n"
+                                       "## Description\n\nSynthetic.\n", encoding="ascii")
+    line, _ = events.add(root, folder, "pasted")
+    assert line == "ADDED #25 greenhouse:1234567 (addendum_user)", line
+    assert "Ready: 25. No account needed for any of them." in card(root).splitlines()
+    assert run("progress", root)[0].splitlines() == ["PROGRESS applied=0 handed_over=0 skipped=0 later=0 parked=0 "
+                                                     "blocked=0 left=25 of 25"]
+    for n in range(1, 25):
+        events.emit(root, "skipped", {"reason": "user", "question_ids": [], "confirmation": "none"},
+                    job_key=f"greenhouse:{9000 + n}", n=n, day=DAY)
+    out = run_args(root, "next")
+    assert out[0] == "NEXT #25 greenhouse:1234567" and "UPLOAD none (no built resume yet)" in out, out
+    (folder / "Jordan Avery Resume.pdf").write_bytes(b"%PDF-1.4 A\n")
+    out = run_args(root, "next")
+    assert (f"UPLOAD applications/{DAY} Acme Robotics - Lab Scientist/Jordan Avery Resume.pdf "
+            "(the resume written for this job, in its folder)") in out, out
+    assert "RESUME tier_a_ready tier A" in out, out
+    events.emit(root, "applied", {"reason": "", "question_ids": [], "confirmation": "page", "proof": ""},
+                job_key="greenhouse:1234567", n=25, day=DAY)
+    out = run_args(root, "progress")
+    assert out == ["PROGRESS applied=1 handed_over=0 skipped=24 later=0 parked=0 blocked=0 left=0 of 25",
+                   "Today: 1 application sent."], out
+    print("ok a job from a link joins the list at once and counts in progress")
+
+
+def test_sensitive_check():
+    """next's Check line reads claude/<date>/sensitive_ok.json: the confirmed
+    values, or left blank (not confirmed, or the user asked)."""
+    root = make_root("sensitive", morning=QUIET_MORNING, workday=False)
+    items = [item(n, COMPANIES[n - 1]) for n in (1, 2)]
+    items[0]["sensitive"], items[0]["answers_status"] = ["salary", "sponsorship"], "sensitive_confirm"
+    write_queue(root, items)
+    plan = {"form_source": "greenhouse_api", "fields": [
+        {"label": "Desired salary", "status": "sensitive_confirm", "answer": "$95,000-$110,000",
+         "answer_source": "profile:salary"},
+        {"label": "Will you require sponsorship?", "status": "sensitive_confirm", "answer": "No",
+         "answer_source": "profile:sponsorship"}]}
+    (root / items[0]["folder"] / "fill_plan.json").write_text(json.dumps(plan), encoding="ascii")
+    ok_file = jobfs.Folder(root).claude / DAY / "sensitive_ok.json"
+    ok_file.parent.mkdir(parents=True, exist_ok=True)
+
+    def check():
+        return next(ln for ln in run_args(root, "next") if ln.startswith("HANDOVER Check:"))
+    assert check() == "HANDOVER Check: salary, sponsorship left blank (not confirmed today).", check()
+    ok_file.write_text(json.dumps({"v": 1, "date": DAY, "ok": [1], "blank": []}), encoding="ascii")
+    assert check() == 'HANDOVER Check: salary "$95,000-$110,000", sponsorship "No" as confirmed today.', check()
+    ok_file.write_text(json.dumps({"v": 1, "date": DAY, "ok": "all", "blank": [1]}), encoding="ascii")
+    assert check() == "HANDOVER Check: salary, sponsorship left blank, as you asked.", check()
+    ok_file.write_text(json.dumps({"v": 1, "date": "2026-11-11", "ok": "all", "blank": []}), encoding="ascii")
+    assert check().endswith("left blank (not confirmed today)."), "yesterday's ok does not count"
+    print("ok the Check line follows sensitive_ok.json")
+
+
+def test_short_day():
+    """next --short: no-account items only, easiest ATS first, an item in
+    progress before them; items with a question, a sensitive field or no
+    resume yet are passed over and stay for a normal day."""
+    root = make_root("short", morning=QUIET_MORNING, workday=False)
+    plan = [(1, "workday", "new"), (2, "workable", "none"), (3, "greenhouse", "none"), (4, "lever", "none"),
+            (5, "ashby", "none"), (6, "greenhouse", "none"), (7, "breezy", "none")]
+    items = []
+    for n, ats, account in plan:
+        it = item(n, COMPANIES[n - 1], account=account)
+        it["ats"] = ats
+        items.append(it)
+    items[2]["sensitive"] = ["salary"]
+    items[4]["needs"], items[4]["answers_status"] = ["Q-1"], "needs_you"
+    (root / items[6]["upload"]).unlink()
+    (root / items[6]["folder"] / "resume_B.pdf").unlink()
+    write_queue(root, items)
+
+    def first():
+        return run_args(root, "next", "--short")[0]
+    assert first() == "NEXT #06 greenhouse:9006", first()
+    events.emit(root, "applied", {"confirmation": "page"}, job_key="greenhouse:9006", n=6, day=DAY)
+    assert first() == "NEXT #04 greenhouse:9004", first()
+    events.emit(root, "started", {}, job_key="greenhouse:9002", n=2, day=DAY)
+    assert first() == "NEXT #02 greenhouse:9002", "an item in progress comes first"
+    for n in (2, 4):
+        events.emit(root, "applied", {"confirmation": "page"}, job_key=f"greenhouse:{9000 + n}", n=n, day=DAY)
+    assert run_args(root, "next", "--short") == ["NEXT none"]
+    assert run_args(root, "next")[0] == "NEXT #01 greenhouse:9001", "the passed-over items stay, with no event"
+    # A sensitive field the user settled today (ok or blank) needs no question: #3 comes back.
+    ok_file = jobfs.Folder(root).claude / DAY / "sensitive_ok.json"
+    ok_file.write_text(json.dumps({"v": 1, "date": DAY, "ok": [], "blank": [3]}), encoding="ascii")
+    assert first() == "NEXT #03 greenhouse:9003", first()
+    print("ok next --short: easiest no-account items first; the rest stay")
+
+
+def test_no_runner_card():
+    """No runner/out/status.json, or mode M: one line on installing the job
+    finder (/job setup), never the desktop shortcut."""
+    root = make_root("no_runner", morning=QUIET_MORNING, applied_yesterday=0, contacted=0, workday=False)
+    f = jobfs.Folder(root)
+    f.status_json.unlink()
+    lines = card(root).splitlines()
+    assert today_view_mod().NOT_INSTALLED in lines and not any("Double-click" in ln for ln in lines), lines
+    f.settings_toml.write_text('[runner]\nmode = "M"\n', encoding="ascii")
+    f.queue_json(DAY).unlink()
+    lines = card(root).splitlines()
+    assert lines[1:] == [today_view_mod().NOT_INSTALLED, "No list today yet. Paste a job link with /job <link>."], lines
+    jobfs.atomic_write_json(f.status_json, {"version": "1.2.0", "mode": "L", "min_skill": "1.2.0",
+                                            "last_daily": {"at": "2026-11-12T05:41:07-08:00", "ok": True}})
+    lines = card(root).splitlines()
+    assert today_view_mod().NOT_SWITCHED_ON in lines and not any("Double-click" in ln for ln in lines), lines
+    print("ok no job finder installed: the /job setup line")
+
+
+def test_drafts():
+    """The card's draft line points to `today_view.py drafts`, which prints the
+    full texts from morning.json."""
+    text = ("I have run GMP sterility and endotoxin testing for four years, and the {role} role asks for exactly "
+            "that.\nThe second paragraph of the draft.")
+    morning = dict(QUIET_MORNING, drafts=[{"n": 7, "label": "Why this role", "text": text},
+                                          {"n": 9, "label": "Cover note", "text": "Short note."}])
+    root = make_root("drafts", morning=morning, workday=False)
+    lines = card(root).splitlines()
+    want = f"Draft for #7 (Why this role): {' '.join(text.split())[:90]} (say \"drafts\" for the full text)"
+    assert want in lines and not any("today.md" in ln for ln in lines), lines
+    assert run_args(root, "drafts") == ["DRAFT #7 (Why this role)"] + text.splitlines() + \
+        ["", "DRAFT #9 (Cover note)", "Short note."]
+    assert run_args(root, "drafts", "--n", "9") == ["DRAFT #9 (Cover note)", "Short note."]
+    assert run_args(make_root("no_drafts", morning=QUIET_MORNING), "drafts") == ["DRAFTS none"]
+    print("ok drafts: the card points to them, drafts prints them in full")
+
+
+def today_view_mod():
+    sys.path.insert(0, str(SCRIPTS))
+    import today_view
+    return today_view
+
+
 def test_wording():
     for text in CARDS:
         assert report.check_wording(text) == [], report.check_wording(text)
@@ -261,7 +415,8 @@ def test_wording():
 def main():
     try:
         for t in (test_spec_card, test_zero_lines, test_missing_morning, test_resume_and_next, test_tier_a_sha,
-                  test_notes_and_diy, test_wording):
+                  test_notes_and_diy, test_job_from_link, test_sensitive_check, test_short_day, test_no_runner_card,
+                  test_drafts, test_wording):
             t()
     finally:
         shutil.rmtree(TMP, ignore_errors=True)

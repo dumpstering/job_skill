@@ -1,7 +1,7 @@
 # Preset: life-science title families, license knockouts and San Francisco
 # Bay Area places (research run 2, with the verifier's fixes applied).
-# Setup copies this file to config/search_profile.toml when his field and
-# region match, then fills [home] label and zip from profile.md. Nothing in
+# Setup copies this file to config/search_profile.toml when the user's field
+# and region match, then fills [home] label and zip from profile.md. Nothing in
 # it is personal: the places are regional.
 #
 # Term syntax (see templates/search_profile.toml): whole words; "stem*";

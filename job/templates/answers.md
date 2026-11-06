@@ -14,7 +14,9 @@ with "- ANS-"):
     - ANS-001 | <question> | <answer> | <kind> | <scope> | <sensitive> | <source> | <last confirmed> | also: <other wording>; <other wording>
 
 - kind: text, yesno, number or choice.
-- scope: any, or the country it applies to (US, CA, ...).
+- scope: any, US or Canada (the country it applies to). Write Canada, not
+  CA, which reads as California; an older line that says CA is still read
+  as Canada.
 - sensitive: yes for salary, visa or immigration status, and anything you
   want confirmed before it is used; each job's sensitive answers are listed
   in the morning card for your ok.

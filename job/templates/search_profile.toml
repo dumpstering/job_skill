@@ -1,7 +1,7 @@
 # config/search_profile.toml: what the runner looks for (spec 2.5, 3.8).
 # The keys are fixed; setup fills the values from profile.md, or copies a
 # preset from templates/presets/ (for example lifesci_bayarea/families.toml)
-# that matches his field and region. Edit in Notepad any time: a file that
+# that matches your field and region. Edit in Notepad any time: a file that
 # stops parsing makes the runner keep using the last good copy.
 #
 # Title terms (title_any, title_none, require_any, exclude_title_words) match
@@ -31,7 +31,7 @@ exclude_title_words = ["Director", "Vice President", "VP", "Intern", "Internship
 employment_types = ["full-time", "contract", "temporary"]
 undated_policy = "first_seen_after_2_polls"
 
-# One table per license, certificate or other requirement he cannot meet.
+# One table per license, certificate or other requirement you cannot meet.
 # A knockout is "held" (and skipped) when profile.md "Licenses held:" lists
 # its id or name. Patterns are Python regular expressions: at most 200
 # characters, no nested quantifiers.
@@ -42,7 +42,7 @@ undated_policy = "first_seen_after_2_polls"
 # preferred_patterns = ['(?i)example practitioner licen[cs]e preferred']
 # title_patterns = ['(?i)\bexample practitioner\b']
 
-# One table per title family he applies to.
+# One table per title family you apply to.
 # [[family]]
 # id = "example_family"     # ASCII; used in variants\, tracker Family, metrics
 # label = ""

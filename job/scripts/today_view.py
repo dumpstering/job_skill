@@ -2,12 +2,18 @@
 
 Usage:
     python today_view.py card     --root R [--date YYYY-MM-DD]
-    python today_view.py next     --root R [--date YYYY-MM-DD]
+    python today_view.py next     --root R [--date YYYY-MM-DD] [--short]
     python today_view.py progress --root R [--date YYYY-MM-DD]
     python today_view.py diy      --root R [--date YYYY-MM-DD]
+    python today_view.py drafts   --root R [--date YYYY-MM-DD] [--n N]
 
-card prints the 1.2 card word for word from queue/<date>/queue.json and its
-addenda, claude/<date>/morning.json (questions, sensitive line, drafts,
+The day's items are queue/<date>/queue.json, its addenda, and the jobs from
+links (/job <link>, /job add <link>) whose added event the runner has not
+written into addendum_user.json yet (events.user_items), so a job added a
+minute ago is in card, next and progress at once.
+
+card prints the 1.2 card word for word from those items,
+claude/<date>/morning.json (questions, sensitive line, drafts,
 referral drafts, urgent and "while you were away" lists), the events overlay
 and runner/out/status.json:
     Thursday, November 12
@@ -20,16 +26,19 @@ and runner/out/status.json:
     3 people you could ask about a job: drafts after #10.
     Starting #1 now. Say "short" any time for an easy day.
 A line whose count is zero never prints; "Needs you" prints only when
-something is time-sensitive. One-line notes join when they apply: the PC job
-finder not running (mode not L, or no daily for 26 hours), the workbook open
-for 2 hours, a variant needing re-approval, a refused tracker change,
-follow-ups ready, a posting set aside for text addressed to an AI. With no
-morning.json the card says this morning's prep did not run and starts with
-the first ready item. The card is checked with report.check_wording; a
-banned word (from data) goes to stderr as WARN.
+something is time-sensitive. A free-text draft gets one line with the start
+of its text and (say "drafts" for the full text). One-line notes join when
+they apply: no job finder installed (no runner/out/status.json, or mode M:
+the line says to type /job setup, setup.md sitting 2), the PC job finder not
+running (mode S, or no daily for 26 hours), the workbook open for 2 hours, a
+variant needing re-approval, a refused tracker change, follow-ups ready, a
+posting set aside for text addressed to an AI. With no morning.json the card
+says this morning's prep did not run and starts with the first ready item.
+The card is checked with report.check_wording; a banned word (from data)
+goes to stderr as WARN.
 
 next prints the handover data of the first item with no final event
-(applied, skipped, later, blocked; handed over items wait for his s):
+(applied, skipped, later, blocked; handed over items wait for the user's s):
     NEXT #02 <job key>
     COMPANY / ROLE / ATS <ats> (attach first|last) / OPEN <url> / FOLDER <path>
     UPLOAD <path> (<what>; sha256 ok|differs)
@@ -37,6 +46,18 @@ next prints the handover data of the first item with no final event
     HANDOVER lines (5.7)
 A Tier A item whose upload copy is not its resume.pdf (by sha256) names the
 file in the job folder instead. NEXT none when the day's items are done.
+The handover's Check line reads claude/<date>/sensitive_ok.json ({v, date,
+ok: [n...] or "all", blank: [n...]}): the values from the fill plan when the
+job was confirmed today, else "left blank". --short (an easy day, spec 1.3)
+takes only no-account items, easiest ATS first (Greenhouse, Lever, Ashby,
+Workable, BambooHR, Breezy, Teamtailor, Rippling, Pinpoint, then the rest),
+an item already started or handed over before them, and passes over items
+with an open question, a sensitive field that sensitive_ok.json does not
+settle today (ok or blank), or no resume yet; those get no event and stay
+for a normal day.
+
+drafts prints the free-text drafts of claude/<date>/morning.json in full
+(DRAFT #<n> (<label>), then the text), or DRAFTS none.
 
 progress prints PROGRESS applied=<n> handed_over=<n> skipped=<n> later=<n>
 parked=<n> blocked=<n> left=<n> of <n>, then the closing line
@@ -74,6 +95,12 @@ ATS_NAMES = {"workday": "Workday", "oracle": "Oracle", "icims": "iCIMS", "succes
 LAST_ATTACH = {"last"}
 CATCH_UP_NOTE = ("This morning's prep did not run yet, so I'll read the inbox first and show what is urgent; "
                  "full tailoring for the Tier A jobs comes at the first break.")
+# No runner/out/status.json (any mode), or mode M with one (installed, not switched on): setup.md sitting 2.
+NOT_INSTALLED = ("The job finder is not installed on your PC yet: type /job setup and I'll walk you through it "
+                 "(about 10 minutes).")
+NOT_SWITCHED_ON = ("The job finder on your PC is installed but not switched on yet: type /job setup and I'll "
+                   "finish it (about 2 minutes).")
+DRAFT_POINTER = '(say "drafts" for the full text)'
 
 
 class Parser(argparse.ArgumentParser):
@@ -102,7 +129,8 @@ def verified(path, default):
 
 
 def queue(root, day):
-    """(items in number order, account_block) from queue.json and its addenda."""
+    """(items in number order, account_block) from queue.json, its addenda and
+    the jobs from links not yet in addendum_user.json (added events)."""
     qd = jobfs.Folder(root).queue_dir(day)
     items, block = [], {}
     paths = [qd / "queue.json"] + (sorted(x for x in qd.glob("addendum_*.json") if not x.name.endswith(".prev.json")) if qd.exists() else [])
@@ -113,6 +141,13 @@ def queue(root, day):
         items += [it for it in data.get("items") or [] if isinstance(it, dict)]
         if p.name == "queue.json":
             block = data.get("account_block") or {}
+    keys = {it.get("job_key") for it in items}
+    items += [it for it in events.user_items(root, day) if it["job_key"] not in keys]
+    if any(it.get("added_by") for it in items):
+        import jobqueue  # their resume and plan are the session's, built around the add: read them again
+        for it in items:
+            if it.get("added_by"):
+                jobqueue.refresh_user_item(root, it)
     return sorted(items, key=lambda it: int(it.get("n") or 0)), block
 
 
@@ -315,8 +350,23 @@ def draft_lines(m):
     for d in (m or {}).get("drafts") or []:
         if isinstance(d, dict) and d.get("text"):
             label = clean(d.get("label") or "answer", 60)
-            out.append(f"Draft for #{d.get('n', '?')} ({label}): {clean(d['text'], 90)} (full text in today.md)")
+            out.append(f"Draft for #{d.get('n', '?')} ({label}): {clean(d['text'], 90)} {DRAFT_POINTER}")
     return out[:6]
+
+
+def drafts(root, day, n=None):
+    """The free-text drafts of morning.json in full: DRAFT #<n> (<label>), the text."""
+    out = []
+    for d in (morning(root, day) or {}).get("drafts") or []:
+        if not isinstance(d, dict) or not str(d.get("text") or "").strip():
+            continue
+        if n is not None and str(d.get("n")) != str(n):
+            continue
+        if out:
+            out.append("")
+        out.append(f"DRAFT #{d.get('n', '?')} ({clean(d.get('label') or 'answer', 60)})")
+        out += [ln.rstrip() for ln in str(d["text"]).strip().splitlines()]
+    return out or ["DRAFTS none"]
 
 
 def version_tuple(v):
@@ -324,6 +374,11 @@ def version_tuple(v):
         return tuple(int(x) for x in str(v).split("."))
     except ValueError:
         return (0,)
+
+
+def no_runner(status, settings):
+    """True when no job finder runs: no runner/out/status.json, or mode M."""
+    return not status or str(settings["runner"].get("mode", "L")).upper() == "M"
 
 
 def runner_lines(root, day, status, settings):
@@ -336,8 +391,10 @@ def runner_lines(root, day, status, settings):
     except ValueError:
         when = None
     stale = when is None or (jobfs.now(root) - when) > timedelta(hours=RUNNER_STALE_HOURS)
-    if mode == "M" and not status:
-        out.append("No job finder runs on your PC yet; paste a job link with /job <link> any time.")
+    if not status:
+        out.append(NOT_INSTALLED)
+    elif mode == "M":
+        out.append(NOT_SWITCHED_ON)
     elif mode != "L" or stale:
         if when is not None:
             out.append(f"Your PC's job finder last ran {when:%a %H:%M}. "
@@ -431,6 +488,8 @@ def card(root, day):
         lines.append(f"Starting #{int(nxt['n'])} now. Say \"short\" any time for an easy day.")
     elif items:
         lines.append("Today's list is done. Say \"more\" for up to 10 more from the pool.")
+    elif no_runner(status, settings):
+        lines.append("No list today yet. Paste a job link with /job <link>.")
     else:
         lines.append("No list today yet. Paste a job link with /job <link>, or say \"more\" after the job finder runs.")
     return lines
@@ -455,10 +514,16 @@ def sha256_of(path):
 
 
 def upload_line(root, it):
-    """(path text, note) for the file he attaches; a Tier A copy is checked by sha256."""
+    """(path text, note) for the file the user attaches; a Tier A copy is checked by sha256."""
     f = jobfs.Folder(root)
     up = root / str(it.get("upload", ""))
     folder = root / str(it.get("folder", ""))
+    if it.get("added_by") and not (folder / "resume_B.pdf").exists():
+        import jobqueue  # a job from a link with no Tier B file: the resume written for it, in its folder
+        built = jobqueue.user_resume(folder)
+        if built is None:
+            return "", "no built resume yet"
+        return f"{it.get('folder')}/{built.name}", "the resume written for this job, in its folder"
     tier_a = folder / "resume.pdf"
     if it.get("tier") == "A" and tier_a.exists():
         want = sha256_of(tier_a)
@@ -479,7 +544,57 @@ def upload_line(root, it):
     return "", "no built resume yet"
 
 
-def handover(it, upload, settings):
+def sensitive_ok(root, day):
+    """(ok, blank) from claude/<date>/sensitive_ok.json: ok is "all" or a set of
+    item numbers, blank a set; empty when the file is missing or another day's."""
+    data = read_json(jobfs.Folder(root).claude / jobfs.iso_date(day) / "sensitive_ok.json", {})
+    if str(data.get("date", "")) != jobfs.iso_date(day):
+        return set(), set()
+
+    def numbers(v):
+        out = set()
+        for x in v if isinstance(v, list) else []:
+            if isinstance(x, int) and not isinstance(x, bool):
+                out.add(x)
+            elif isinstance(x, str) and x.strip().lstrip("#").isdigit():
+                out.add(int(x.strip().lstrip("#")))
+        return out
+    ok = data.get("ok")
+    return ("all" if str(ok).lower() == "all" else numbers(ok)), numbers(data.get("blank"))
+
+
+def sensitive_values(root, it):
+    """{kind: answer} from the item's fill plan, for its sensitive_confirm fields."""
+    path = root / str(it.get("folder", "")) / "fill_plan.json"
+    plan = verified(path, {}) if path.exists() else {}
+    fields = [f for f in plan.get("fields") or [] if isinstance(f, dict) and f.get("status") == "sensitive_confirm"]
+    if not fields:
+        return {}
+    import jobqueue  # the kinds the runner records (salary, sponsorship, ...)
+    out = {}
+    for f in fields:
+        out.setdefault(jobqueue.sensitive_kind(f), str(f.get("answer") or ""))
+    return out
+
+
+def check_line(root, it, confirmed):
+    """The handover's Check text for the sensitive fields: the values when the
+    user confirmed this job today, else left blank (5.7)."""
+    kinds = [str(s) for s in it.get("sensitive") or [] if str(s)]
+    if not kinds:
+        return ""
+    ok, blank = confirmed
+    n = int(it.get("n") or 0)
+    if n in blank:
+        return f"{', '.join(kinds)} left blank, as you asked"
+    if ok == "all" or n in ok:
+        values = sensitive_values(root, it)
+        return ", ".join(f'{k} "{clean(values[k], 60)}"' if values.get(k) else k for k in kinds) + \
+            " as confirmed today"
+    return f"{', '.join(kinds)} left blank (not confirmed today)"
+
+
+def handover(it, upload, settings, check=""):
     """The 5.7 handover block (at most 5 lines; it stops before Submit)."""
     n = int(it.get("n") or 0)
     ats = ATS_NAMES.get(str(it.get("ats", "")).lower(), str(it.get("ats", "")).title() or "site")
@@ -488,25 +603,44 @@ def handover(it, upload, settings):
         lines.append(f"Attach the file starting with {n:02d} in JobSearch\\upload.")
     elif upload:
         lines.append(f"Attach {upload.replace('/', chr(92))} (in the JobSearch folder).")
-    checks = []
-    if it.get("sensitive"):
-        checks.append(", ".join(str(s) for s in it["sensitive"]) + " as confirmed today (blank if not)")
-    if checks:
-        lines.append("Check: " + "; ".join(checks) + ".")
+    if check:
+        lines.append(f"Check: {check}.")
     lines.append("Then click Submit and type s.")
     return lines[:5]
 
 
-def next_item(root, day):
+def short_order(root, cands, confirmed):
+    """The easy day (spec 1.3): an item already started or handed over first,
+    then no-account items by ATS effort; items with an open question, a
+    sensitive field today's sensitive_ok.json does not settle, or no resume
+    yet are passed over (no event: they stay)."""
+    import jobqueue  # ATS_PROFILES effort: Greenhouse 1 ... Pinpoint 9, the rest after
+    ok, blank = confirmed
+    keep = []
+    for it, st in cands:
+        n = int(it.get("n") or 0)
+        settled = ok == "all" or n in ok or n in blank
+        if st not in ("started", "handed_over"):
+            if it.get("account") != "none" or it.get("needs") or it.get("answers_status") == "needs_you" \
+                    or (it.get("sensitive") and not settled) or not upload_line(root, it)[0]:
+                continue
+        keep.append((0 if st in ("started", "handed_over") else 1,
+                     jobqueue.profile_of(it.get("ats")).get("effort", 99), int(it.get("n") or 0), it, st))
+    return [(it, st) for *_, it, st in sorted(keep, key=lambda k: k[:3])]
+
+
+def next_item(root, day, short=False):
     settings = jobfs.settings(root)
     items, _ = queue(root, day)
     by_n, by_key, _ = states(root, day)
     live = read_json(jobfs.Folder(root).runner_out / "liveness.json", {}).get("items", {})
+    cands = [(it, state_of(it, by_n, by_key)) for it in items]
+    cands = [(it, st) for it, st in cands if st not in FINAL and st != "parked"]
+    confirmed = sensitive_ok(root, day)
+    if short:
+        cands = short_order(root, cands, confirmed)
     out = []
-    for it in items:
-        st = state_of(it, by_n, by_key)
-        if st in FINAL or st == "parked":
-            continue
+    for it, st in cands:
         rec = live.get(it.get("job_key")) or {}
         if rec.get("closed"):
             out.append(f"SKIP #{int(it['n']):02d} closed (checked {rec.get('checked', '?')})")
@@ -527,7 +661,8 @@ def next_item(root, day):
         out.append(ans)
         if st in ("started", "handed_over"):
             out.append(f"STATE {st}")
-        out += ["HANDOVER " + ln for ln in handover(it, upload, settings)]
+        check = check_line(root, it, confirmed)
+        out += ["HANDOVER " + ln for ln in handover(it, upload, settings, check)]
         return out
     out.append("NEXT none")
     return out
@@ -596,10 +731,17 @@ def build_parser():
                 allow_abbrev=False)
     sub = ap.add_subparsers(dest="cmd", required=True, metavar="command")
     for name, hlp in (("card", "Print the day's card."), ("next", "Print the next item's handover data."),
-                      ("progress", "Counts so far and the closing line."), ("diy", "The do-yourself list.")):
+                      ("progress", "Counts so far and the closing line."), ("diy", "The do-yourself list."),
+                      ("drafts", "The card's free-text drafts in full.")):
         p = sub.add_parser(name, help=hlp, allow_abbrev=False)
         p.add_argument("--root", required=True)
         p.add_argument("--date")
+        if name == "next":
+            p.add_argument("--short", action="store_true",
+                           help="an easy day: no-account items, easiest first; none with an open question, "
+                                "a sensitive field not settled today or no resume")
+        if name == "drafts":
+            p.add_argument("--n", type=int, help="only this item's draft")
         p.set_defaults(cmd=name)
     return ap
 
@@ -627,9 +769,11 @@ def main(argv=None):
             for word, n, line in wording_warnings(text):
                 print(f"WARN wording: '{word}' in card line {n}", file=sys.stderr)
         elif args.cmd == "next":
-            lines = next_item(root, day)
+            lines = next_item(root, day, short=args.short)
         elif args.cmd == "progress":
             lines = progress(root, day)
+        elif args.cmd == "drafts":
+            lines = drafts(root, day, args.n)
         else:
             lines = diy_list(root, day)
     except (jobfs.ConfigError, OSError) as e:

@@ -18,13 +18,13 @@ is Claude (a session or a scheduled task).
 | `config/settings.toml`, `search_profile.toml`, `watchlist.csv`, `boards.csv` | you (`/job settings`, `/job watch`, setup), or the user in Notepad | the switches, families and places, watched boards, job boards |
 | `config/lead_salt.txt` | `leads.py` (first use) | the local salt for lead ids |
 | `variants/<family>/current.txt`, `variants/<family>/v<N>/` | you (`variants.py`) | role-family base resumes; a rework is a new `v<N+1>` |
-| `runner/in/events/<ts>_<8hex>_<type>.json` | you, create-only, through `events.py emit` or `tracker.py` | queue events and tracker writes |
+| `runner/in/events/<ts>_<8hex>_<type>.json` | you, create-only, through `events.py emit`, `events.py add` or `tracker.py` | queue events, jobs from links joining today's list (`added`), tracker writes |
 | `runner/in/leads/<date>_<HHMM>_<source>.jsonl` | you, create-only, through `leads.py validate` | alert cards (company, title, location) |
 | `runner/in/requests/<ts>_<8hex>_<op>.json` | you, create-only, through `jobrunner.py request` | work for the runner |
 | `claude/session.json` | you (the session) | `{task, started, beat, current_n}`, rewritten after every item |
 | `claude/day_<date>/<step>.done` | you, create-only | empty markers: morning, inbox, intake, tier_a, weekly |
 | `claude/<date>/morning.json` | you, create-only | the card's questions, drafts, referral drafts, urgent and away lists |
-| `claude/<date>/sensitive_ok.json` | you (the session) | `{v, date, ok, blank}`: the jobs whose sensitive answers were confirmed today |
+| `claude/<date>/sensitive_ok.json` | you (the session) | `{v, date, ok, blank}`: the jobs whose sensitive answers were confirmed today; `today_view.py next` builds each handover `Check:` line from it |
 | `reports/week_<date>.md`, `reports/usage.csv` | you (`report.py`) | the weekly summary; usage readings |
 | `worksearch/<STATE>_<from>_<to>.csv/.xlsx/.md` | you (`worksearch.py`, create-only; `_v2` for a re-export) | the work-search record |
 | `network/raw/` | the user (drops exports) | LinkedIn and Google exports, never opened by you |
@@ -37,6 +37,7 @@ is Claude (a session or a scheduled task).
 | `applications.xlsx` | the tracker (mode L: only `tracker.py apply-events` writes it; mode M: `tracker.py` directly) |
 | `applications_archive_<year>.xlsx` | rows moved by `tracker.py archive --before <date>` |
 | `queue/<date>/queue.json`, `addendum_<HHMM>.json` | the day's numbered items; frozen once that day has events |
+| `queue/<date>/addendum_user.json` | the jobs from links (`added` events), with the numbers `events.py add` gave them |
 | `queue/<date>/today.md`, `review.html`, `discards.csv`, `diy.md` | optional reading; every discard with its gate; the do-yourself list |
 | `state/` | `seen/<YYYY-MM>.jsonl`, `trails/<YYYY-MM>.jsonl`, `pool.json`, `company_ats.json`, `probe_cache.csv`, `robots_cache.json`, `board_health.csv`, `board_polls.json`, `watchlist_auto.csv`, `queue_state.json`, `weights.json`, `leads_state.json`, `upload_manifest.json`, `tracker_events.jsonl`, `event_retries.json`, `network_raw.json`, `diy_base/`, `last_good/`; `run.lock` in mode S |
 | `runner/out/status.json`, `tracker.json`, `needs_search.json`, `staged.json`, `liveness.json` | health, the tracker snapshot, companies to search, staged Tier A files, re-read postings |
@@ -56,7 +57,10 @@ is Claude (a session or a scheduled task).
 | `.claimed`, `resume.json` and the Tier A resume files, `notes.md`, `audit.md`, `filled.md`, `questions.json`, `cover_letter.*`, `submitted/` | you (a job-tailor sub-agent writes only inside its one folder) |
 
 A job from a pasted link (SKILL.md steps 1-9) has no `.runner_files`; every
-file in it is yours.
+file in it is yours. So is a `/job add <link>` folder: its Tier B files and
+fill plan come from your own `variants.py tier-b` and `answers.py plan`
+runs. When either joins today's list (`addendum_user.json`) the runner
+reads it there but never writes in the folder.
 
 ## Rules
 

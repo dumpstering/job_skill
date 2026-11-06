@@ -1,6 +1,6 @@
 """Check job/scripts/jobrunner.py: the lock, the tick (session rules, leads into
-an addendum, the idle exit, requests), the code-execution boundary and the
-selftest.
+an addendum, a pasted job into addendum_user.json, the idle exit, requests),
+the code-execution boundary and the selftest.
 
 Usage: python tests/test_runner.py
 It runs one offline daily on a temp copy of tests/fixtures/folder (about 15 s)
@@ -347,6 +347,34 @@ def test_events_and_replan():
     print("ok events: applied file moved, unparked job re-planned, funnel updated")
 
 
+def test_tick_user_addendum():
+    """A pasted job (events.py add) is #31 at once; the tick writes it into
+    addendum_user.json with that number and writes nothing in its folder."""
+    root = copy_day("user_add")
+    folder = root / "applications" / f"{DAY} Acme Robotics - Lab Scientist"
+    folder.mkdir(parents=True)
+    (folder / "posting.md").write_text("URL: https://job-boards.greenhouse.io/acme/jobs/1234567\nCompany: Acme Robotics\n"
+                                       "Role: Lab Scientist\nLocation: Springfield, IL\nJob key: greenhouse:1234567\n\n"
+                                       "## Description\n\nSynthetic.\n", encoding="ascii")
+    sys.path.insert(0, str(SCRIPTS))
+    import events
+    line, ev = events.add(root, folder, "pasted", day=DAY)
+    assert line == "ADDED #31 greenhouse:1234567 (addendum_user)", line
+    p = jobfs.Folder(root).event(ev["id"], "added")
+    old = time.time() - 60
+    os.utime(p, (old, old))
+    code, lines, err = run("tick", root)
+    assert code == 0 and "ADDENDUM addendum_user.json items=31" in lines, (lines, err[-1500:])
+    data = json.loads((jobfs.Folder(root).queue_dir(DAY) / "addendum_user.json").read_text(encoding="utf-8"))
+    assert [(it["n"], it["job_key"], it["added_by"]) for it in data["items"]] == [(31, "greenhouse:1234567", "pasted")]
+    assert sorted(x.name for x in folder.iterdir()) == ["posting.md"], "the runner wrote in the session's folder"
+    assert not list(jobfs.Folder(root).events.glob("*.json"))
+    r = subprocess.run([sys.executable, str(SCRIPTS / "today_view.py"), "progress", "--root", str(root)],
+                       capture_output=True, text=True, env=env())
+    assert r.stdout.splitlines()[0].endswith("left=31 of 31"), r.stdout
+    print("ok tick writes a pasted job into addendum_user.json as #31")
+
+
 def test_diy_staging():
     root = copy_day("diy")
     f = jobfs.Folder(root)
@@ -540,7 +568,8 @@ def test_live_install():
 def main():
     tests = [test_request_cli, test_selftest, test_installer_dry_run, test_cmd_hash_mismatch, test_live_install,
              test_locked, test_stale_lock, test_idle_tick, test_stage_tier_a, test_rejected_requests,
-             test_tick_session_addendum, test_events_and_replan, test_diy_staging, test_no_import_from_root]
+             test_tick_session_addendum, test_events_and_replan, test_tick_user_addendum, test_diy_staging,
+             test_no_import_from_root]
     try:
         for t in tests:
             t()

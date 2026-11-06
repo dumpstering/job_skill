@@ -3,7 +3,7 @@
 For the job in this chat, or the application the user names (find it with
 `tracker.py show --company "<Company>"`). With none named, list the rows at
 `Screen` or `Interview` (`tracker.py show --status Screen Interview`) and ask
-which. An Interview or Screen email already reached his phone (inbox.md,
+which. An Interview or Screen email already reached the user's phone (inbox.md,
 Immediate) and tops the card with an offer of `/job prep`.
 
 Work from what the employer has: the files in the job folder's `submitted/`
@@ -30,10 +30,10 @@ what was sent, saying so.
 
 Save it as `interview_prep.md` in the job folder and post it.
 
-## Calendar event (only on his yes)
+## Calendar event (only on the user's yes)
 
 When the row's Next step (or the email) gives a date and time:
-1. Show the event first, in his time zone (`[time] timezone` in
+1. Show the event first, in the user's time zone (`[time] timezone` in
    `config\settings.toml`):
    ```
    Interview: Acme Bio, QC Microbiologist II
@@ -41,13 +41,13 @@ When the row's Next step (or the email) gives a date and time:
    Where: video call (details in the email from the recruiter)
    ```
 2. Ask: "Add this to your calendar?" Create it through the Calendar connector
-   only after his "yes" for this event. One yes covers one event; never
+   only after the user's "yes" for this event. One yes covers one event; never
    create, change or delete any other event, and never invite anyone.
 3. With no Calendar connector, or if creating it fails, post the text above
-   for him to add himself. The calendar's write support is not settled, so a
+   for the user to add themselves. The calendar's write support is not settled, so a
    failure is said in one line, never retried in a loop.
-4. A time zone the email names that differs from his is converted, and both
+4. A time zone the email names that differs from the user's is converted, and both
    are shown ("10:00 Eastern = 07:00 your time").
 
-An Assessment with a due date stays in every card until he says it is done
+An Assessment with a due date stays in every card until the user says it is done
 (`tracker.py update <ID> next_step=` clears it).

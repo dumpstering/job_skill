@@ -2,7 +2,10 @@
 
 Do only the parts SKILL.md step 2 (or `/job setup`) sent you here for. The
 user's time is about 25 minutes on day 1 and 20 on day 2; volume starts on
-day 2. Commands are shortened (SKILL.md "Scripts"); each takes `--root
+day 2. The card sends the user here with `/job setup` when no job finder
+runs: with sitting 1 done, start at Sitting 2 step 1 (no
+`runner/out/status.json`: install it) or step 2 (it is installed but mode
+is still M: switch it on). Commands are shortened (SKILL.md "Scripts"); each takes `--root
 "<folder>"`. If a Python package is missing, `pip install` it and carry on.
 
 ## Sitting 1 (day 1, about 25 minutes)

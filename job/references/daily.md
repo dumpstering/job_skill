@@ -14,20 +14,23 @@ prints `OVERLAY <date>`).
 ## /job (the normal day)
 
 1. **Folder and mode.** Find the folder (SKILL.md step 1). Read `[runner]
-   mode` from `config/settings.toml`. With no queue for today and mode M (no
-   runner yet), say in one line that the job finder is not installed yet
-   (setup.md sitting 2) and offer `/job <link>`; stop.
+   mode` from `config/settings.toml`.
 2. **Session file.** Write `claude/session.json`:
    `{"task": "<a new id for this session>", "started": "<UTC ISO time>",
    "beat": "<UTC ISO time>", "current_n": 0}` (times from `date -u
    +%Y-%m-%dT%H:%M:%SZ`). Rewrite `beat` and `current_n` after every item.
    While the beat is under 20 minutes old the runner never renumbers the
    list or touches `upload/` order; late finds come as addenda. Pass the same
-   id as `--session` on every `events.py emit`.
+   id as `--session` on every `events.py emit` and `events.py add`.
 3. **The card.** Run `today_view.py card` and show its lines exactly as
    printed, nothing added. It already holds the urgent mail, the questions
-   (at most 6), the sensitive-answers line, the drafts and the referral
-   line, and it ends `Starting #1 now.`
+   (at most 6), the sensitive-answers line, one line per free-text draft
+   (its start, then `(say "drafts" for the full text)`) and the referral
+   line, and it ends `Starting #1 now.` With no job finder installed (mode
+   M, or no `runner/out/status.json`) its one line says to type `/job setup`
+   (setup.md sitting 2). With no list today its last line starts `No list
+   today yet. Paste a job link with /job <link>`: show it and wait for a
+   link.
 4. **Catch-up, when job-morning did not run** (no
    `claude/day_<date>/morning.done`; the card then says the morning prep did
    not run). Before #1, run the inbox check ([inbox.md](inbox.md)) and alert
@@ -50,19 +53,27 @@ prints `OVERLAY <date>`).
      what is left.
    - `ok` on the sensitive line confirms those values for the jobs listed;
      a job named in "leave blank" gets the field left empty as the user's
-     part (handover check line).
+     part. Record the reply in `claude/<date>/sensitive_ok.json`
+     ([apply_batch.md](apply_batch.md) "Sensitive confirmations"); each
+     item's handover `Check:` line comes from it.
    - `skip` on a question: the jobs waiting on it stay parked today.
+   - `drafts`: run `today_view.py drafts` and show its lines as printed
+     (`DRAFT #<n> (<label>)`, then the full text; `--n <n>` for one). An
+     edit the user makes replaces that draft for that job's field.
 
 ## /job short (an easy day)
 
 Say "Short day: I'll do the quick ones." and nothing else about it.
-- Take only items with `ATS ... account none` from `today_view.py next`,
-  easiest first: Greenhouse, Lever, Ashby, Workable, BambooHR, Breezy,
-  Teamtailor, Rippling, Pinpoint (`jobqueue.ATS_PROFILES` effort order).
-  When `next` gives an item with an account, a sensitive field or an open
-  question, emit `later` (reason `user`) for it and run `next` again.
+- Run `today_view.py next --short` wherever the loop says `next`. It gives
+  only items with no account to make, easiest first: Greenhouse, Lever,
+  Ashby, Workable, BambooHR, Breezy, Teamtailor, Rippling, Pinpoint, then
+  the other no-account sites (an item already started or handed over comes
+  before them). It passes over items with an open question, a sensitive
+  field the user has not settled today (`sensitive_ok.json`), or no resume
+  yet; emit nothing for those. They stay in today's list for a normal day
+  and in the pool while they are fresh.
 - No questions, no sensitive line, no referral drafts, no account block, no
-  usage readings. Skipped items stay in the pool while they are fresh.
+  usage readings.
 - `stop` ends it at once. The closing line comes from `today_view.py
   progress` ("Today: 8 applications sent."), never with a comparison.
 - Even lower: `/job inbox` alone (about 2 minutes).
@@ -113,15 +124,37 @@ aged out are dropped. Never mention how many days passed.
 
 ## /job add <link> (one posting into today's list)
 
-- Mode L or S: `jobrunner.py request probe_url --json '{"url": "<link>",
-  "company": "<Company>", "title": "<Role>", "location": "<Location>"}'`
-  (prints `REQUEST <id> probe_url`). Within 15 minutes the runner reads it,
-  gates it and appends it to today's list as an addendum with a new number.
-  Read `runner/out/results/<id>.json`: `DENY job-board ...` means a job board
-  link (ats/linkedin.md); a discard means a gate stopped it, and `gates.py
-  explain --job-key <key>` says which.
-- Mode M, or the user wants it now: run the single-job flow (SKILL.md steps
-  1-9).
+The posting joins today's list at once, with the next number, and is filled
+in its turn like the runner's items.
+1. SKILL.md step 3 up to the job folder: `posting.py` into `_incoming/`,
+   `tracker.py check` and `caps.py check`, then the job folder. A LinkedIn
+   or Indeed link follows ats/linkedin.md. `IN QUEUE <date> #<n>`: say "It
+   is already #<n> today." and stop.
+2. Its resume and answers, as the runner makes them (zero tokens), with the
+   family whose titles match (SKILL.md step 4): `variants.py tier-b --item
+   "<job folder>" --family <family>`, then `answers.py plan --job "<job
+   folder>" --family <family>`. With no family, no approved variant
+   (`PREP_FAILED`) or a package that will not install, go on without them.
+3. `events.py add --folder "<job folder>" --via add --family <family>`
+   prints `ADDED #<n> <key> (addendum_user)`; say "Added as #<n>." in one
+   line. `today_view.py next` and `progress` include it at once; the next
+   tick copies it into `queue/<date>/addendum_user.json`. No tracker row
+   yet: it gets one at its handover, like every item.
+4. So that it can come back tomorrow if today runs out (`later`, or the day
+   ends first), also send `jobrunner.py request probe_url --json '{"url":
+   "<link>", "company": "<Company>", "title": "<Role>", "location":
+   "<Location>"}'`. The runner reads and gates it into its pool; it adds no
+   second item today, since that job key is taken.
+5. When its turn comes with `UPLOAD none (no built resume yet)` (step 2 gave
+   no Tier B file), write its resume first by SKILL.md steps 4-7 in that
+   folder, then fill it.
+- `NO LIST <date>` (mode M, or before the runner built today's list): run
+  the single-job flow now (SKILL.md steps 1-9) instead.
+- A careers page rather than one posting: only the `probe_url` request. The
+  runner reads it within 15 minutes, gates what it finds and appends an
+  addendum (`runner/out/results/<id>.json`; `DENY job-board ...` is a job
+  board link, ats/linkedin.md; `gates.py explain --job-key <key>` names the
+  gate that stopped one).
 
 ## /job status
 

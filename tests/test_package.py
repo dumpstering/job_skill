@@ -304,14 +304,14 @@ def test_setup_guide():
         "usage check": r"Settings > Usage",
         "short days": r"/job short",
         "rejections weekly": r"Rejections come weekly",
-        "Submit is his": r"Submit is always yours",
+        "Submit is the user's": r"Submit is always yours",
         "network egress": r"Allow network\s+egress",
         "never a Project": r"Project",
     }
     for what, pat in need.items():
         assert re.search(pat, text), what
     print("ok SETUP_GUIDE.md: plugin path (UNVERIFIED), runner, Trusted folders, browser, alerts, export, "
-          "usage, short days, weekly rejections, Submit is his; ASCII")
+          "usage, short days, weekly rejections, Submit is the user's; ASCII")
 
 
 # ---------- build_zip.py ----------

@@ -5,6 +5,7 @@ Usage:
     python jobqueue.py addendum      --root R [--date YYYY-MM-DD] [--pool new.json] [--limit N]
     python jobqueue.py stage-uploads --root R [--date YYYY-MM-DD]
     python jobqueue.py fold-events   --root R [--date YYYY-MM-DD]
+    python jobqueue.py user-addendum --root R [--date YYYY-MM-DD]
 
 build scores the pool (state/pool.json, or --pool), walks it by score and
 writes queue/<date>/queue.json with N = ceil(target x queue_factor) items:
@@ -34,15 +35,24 @@ build waits while claude/session.json has a beat under 20 minutes old (WAIT).
 addendum appends new items after the highest number already given (late finds
 from --pool, or `more`: the next more_size items from the pool) to
 queue/<date>/addendum_<HHMM>.json; queue.json and upload/ are never touched
-while a session is active.
+while a session is active. Numbers given to jobs from links (added events)
+count as given, and they are checked again just before the file is written.
 
 stage-uploads copies each item's built resume (resume_B.pdf, or resume.pdf for
 a ready Tier A item) to upload/NN_<Last>_Resume_<Employer12>.pdf (NNc_ for a
 cover letter), moves files of applied items and earlier days' leftovers to
-upload/_done/<date>/, and deletes nothing.
+upload/_done/<date>/, and deletes nothing. File times are read in the
+folder's [time] timezone.
 
 fold-events folds queue events (started ... blocked) into state/queue_state.json;
 running it twice gives the same bytes.
+
+user-addendum writes queue/<date>/addendum_user.json from the day's added
+events (jobs from /job <link> and /job add <link>, spec 5.11), keeping the
+numbers the session gave them; it never writes in their job folders, which
+are the session's. It writes only when an item changed:
+    ADDENDUM addendum_user.json items=31,32
+    ADDENDUM addendum_user.json unchanged      (the CLI, when nothing changed)
 Stdlib only (plus openpyxl when the tracker is read directly, mode M).
 
 Exit codes: 0 ok (also FROZEN and WAIT), 1 bad input (ERROR ...).
@@ -75,7 +85,7 @@ EXCLUDE_STATES = {"applied", "handed_over", "parked"}
 PERMANENT_BLOCKS = {"sso_required", "unsafe_verification", "knockout_at_form", "closed"}
 
 # Per ATS: account (none, or one per tenant), attach order (first everywhere
-# until the day-1 supervised test, 5.4), CAPTCHA risk, his minutes (1.6) and
+# until the day-1 supervised test, 5.4), CAPTCHA risk, the user's minutes (1.6) and
 # the short-day effort rank (1.3; lower is easier).
 ATS_PROFILES = {
     "greenhouse": {"account": "none", "attach": "first", "captcha_risk": "low", "est_user_min": 1.2, "effort": 1},
@@ -182,6 +192,21 @@ def queue_files(root, day):
 def events_for(root, day):
     day = jobfs.iso_date(day)
     return [ev for ev in events.recent(root) if ev.get("date") == day]
+
+
+def day_items(root, day):
+    """Every item of the day in number order: queue.json, its addenda, and the
+    jobs from links whose added event the runner has not written into
+    addendum_user.json yet."""
+    items, keys = [], set()
+    for p in queue_files(root, day):
+        if p.exists():
+            for it in read_json(p, {}).get("items") or []:
+                if isinstance(it, dict):
+                    items.append(it)
+                    keys.add(it.get("job_key"))
+    items += [it for it in events.user_items(root, day) if it["job_key"] not in keys]
+    return sorted(items, key=lambda it: int(it.get("n") or 0))
 
 
 # ---------- the context of one build ----------
@@ -728,13 +753,11 @@ def build(root, today=None, pool_path=None, emit=print, prep=None):
 # ---------- addendum and more ----------
 
 def numbers_used(root, day):
+    """(highest number given today, job keys given), jobs from links included."""
     top, keys = 0, set()
-    for p in queue_files(root, day):
-        if p.exists():
-            data = read_json(p, {})
-            for it in data.get("items") or []:
-                top = max(top, int(it.get("n") or 0))
-                keys.add(it.get("job_key"))
+    for it in day_items(root, day):
+        top = max(top, int(it.get("n") or 0))
+        keys.add(it.get("job_key"))
     return top, keys
 
 
@@ -760,6 +783,15 @@ def addendum(root, today=None, pool_path=None, limit=None, emit=print):
     ordered, _ = sequence(picked, 0)
     used = set()
     items = [queue_item(ctx, it, top + i, make_folder(ctx, it, used)) for i, it in enumerate(ordered, 1)]
+    # A job from a link may have taken a number meanwhile (an added event):
+    # these items are not written yet, so they move up after it.
+    top_now, keys_now = numbers_used(root, today)
+    if top_now != top:
+        items = [q for q in items if q["job_key"] not in keys_now]
+        for i, q in enumerate(items, 1):
+            q["n"] = top_now + i
+            q["upload"] = f"upload/{plan_upload(q['n'], ctx.last, q.get('company', ''))}"
+        top = top_now
     if not items:
         emit("ADDENDUM none: nothing new passes the caps")
         return None
@@ -779,6 +811,156 @@ def addendum(root, today=None, pool_path=None, limit=None, emit=print):
     emit(f"ADDENDUM {path.name} items={top + 1}-{top + len(items)}")
     if session_active(root):
         emit("SESSION active: upload/ left as it is")
+    return path
+
+
+# ---------- jobs from links (addendum_user, spec 5.11) ----------
+
+def posting_head(folder):
+    """The `Key: value` lines at the top of a job folder's posting.md."""
+    head = {}
+    try:
+        text = (Path(folder) / "posting.md").read_text(encoding="utf-8-sig")
+    except OSError:
+        return head
+    for line in text.splitlines():
+        if not line.strip() or line.startswith("#"):
+            break
+        k, sep, v = line.partition(":")
+        if sep and k.strip() and k.strip() not in head:
+            head[k.strip()] = v.strip()
+    return head
+
+
+def plan_fields(plan):
+    """(answers_status, needs [Q- ids], sensitive [kinds]) from a fill plan, as
+    the runner records them for its own items."""
+    needs, sens = [], []
+    for f in plan.get("fields") or []:
+        if f.get("status") == "needs_you":
+            needs.append(str(f.get("qid") or f.get("name") or f.get("label") or ""))
+        elif f.get("status") == "sensitive_confirm":
+            kind = sensitive_kind(f)
+            if kind and kind not in sens:
+                sens.append(kind)
+    status = "needs_you" if needs else "sensitive_confirm" if sens else "complete"
+    return status, needs, sens
+
+
+def sensitive_kind(field):
+    """salary, sponsorship, ...: the profile field a sensitive answer came from,
+    else its label as a word."""
+    src = str(field.get("answer_source") or "")
+    kind = src.split(":", 1)[1] if src.startswith("profile:") else re.sub(r"[^a-z0-9]+", "_",
+                                                                          str(field.get("label", "")).lower())
+    return kind.strip("_")
+
+
+def user_resume(folder):
+    """The tailored resume a job from a link will send: resume.pdf, or the
+    single-job flow's "<Name> Resume.pdf" (the newest); None before one is built."""
+    folder = Path(folder)
+    if (folder / "resume.pdf").exists():
+        return folder / "resume.pdf"
+    built = sorted((p for p in folder.glob("*Resume*.pdf") if p.name != "resume_B.pdf"),
+                   key=lambda p: (p.stat().st_mtime, p.name))
+    return built[-1] if built else None
+
+
+def account_for(root, ats, url, store=None):
+    """none, exists or new for one ATS host, from the tracker's Accounts sheet."""
+    if profile_of(ats).get("account") == "none":
+        return "none"
+    if store is None:
+        try:
+            store = caps.open_store(root)
+        except Exception:  # no tracker, or openpyxl missing here: count it as a new site
+            store = None
+    sites = set()
+    for r in (store.accounts.rows() if store is not None and getattr(store, "accounts", None) is not None else []):
+        s = str(r.get("Site") or "").strip().lower()
+        s = (netfetch.host_of(s) if "://" in s else s).removeprefix("www.")
+        if s:
+            sites.add(s)
+    host = "usajobs.gov" if ats == "usajobs" else netfetch.host_of(url or "")
+    return "exists" if host and any(host == s or host.endswith("." + s) or s in host for s in sites) else "new"
+
+
+def refresh_user_item(root, it):
+    """A job from a link, its statuses read from its folder again: the session
+    builds its resume and fill plan around the add."""
+    folder = Path(root) / str(it.get("folder", ""))
+    via = it.get("added_by", "")
+    if via == "add" and (folder / "resume_B.pdf").exists():
+        it["tier"] = "B"
+    if it.get("tier") == "B":
+        log = read_json(folder / "tune_log.json", {})
+        it["resume_status"] = "fallback_base" if str(log.get("status", "")).startswith("fallback") else "built"
+        it["variant"] = str(log.get("variant") or it.get("variant") or "")
+        it["family"] = it.get("family") or str(log.get("family") or "")
+    else:
+        it["resume_status"] = "tier_a_ready" if user_resume(folder) else "tier_a_pending"
+    plan = read_json(folder / "fill_plan.json", {})
+    if plan.get("fields"):
+        it["answers_status"], it["needs"], it["sensitive"] = plan_fields(plan)
+    return it
+
+
+def user_item(root, n, job_key, folder_rel, via, family="", store=None):
+    """One job from a link as a 2.5 queue item: no score, Tier A for a pasted
+    link (the single-job flow), Tier B for /job add with its resume_B files."""
+    root = Path(root)
+    head = posting_head(root / folder_rel)
+    prefix = job_key.split(":", 1)[0]
+    ats = prefix if prefix in ATS_PROFILES else "other"
+    prof = profile_of(ats)
+    url = head.get("URL", "")
+    company = head.get("Company", "") or "Employer"
+    account = account_for(root, ats, url, store)
+    it = {"n": n, "job_key": job_key, "company": company, "role": head.get("Role", ""),
+          "location": head.get("Location", ""), "ats": ats, "host": netfetch.host_of(url) if url else "",
+          "apply_url": url, "referral_url": "", "folder": folder_rel, "family": family or "", "mode": "industry",
+          "tier": "A", "tier_reason": "user", "variant": "", "posted": head.get("Posted") or None,
+          "age_days": None, "band": "", "repost_of": None, "score": 0, "score_parts": {k: 0 for k in SCORE_PARTS},
+          "account": account, "attach": prof["attach"], "captcha_risk": prof["captcha_risk"],
+          "est_user_min": NEW_TENANT_MIN if account == "new" else prof["est_user_min"],
+          "upload": f"upload/{plan_upload(n, last_name(root), company)}", "resume_status": "tier_a_pending",
+          "answers_status": "complete", "needs": [], "sensitive": [],
+          "referral": {"state": "none", "contact_ref": "", "hold_until": ""}, "posting_status": "read",
+          "flags": [], "added_by": via}
+    return refresh_user_item(root, it)
+
+
+def user_addendum(root, today=None, emit=print):
+    """queue/<date>/addendum_user.json from the day's added events; written only
+    when an item changed. Returns the path written, or None."""
+    root = Path(root)
+    today = today or jobfs.today(root)
+    f = jobfs.Folder(root)
+    path = f.queue_dir(today) / "addendum_user.json"
+    old = read_json(path, {})
+    items = {it["job_key"]: it for it in old.get("items") or [] if isinstance(it, dict) and it.get("job_key")}
+    for ev_it in events.user_items(root, today):
+        if ev_it["job_key"] in items:
+            continue
+        # The full 2.5 item, with what the session recorded at the add kept as it was.
+        full = user_item(root, ev_it["n"], ev_it["job_key"], ev_it.get("folder", ""), ev_it["added_by"],
+                         ev_it.get("family", ""))
+        full.update({k: ev_it[k] for k in ("company", "role", "location", "ats", "host", "apply_url", "account",
+                                           "attach", "upload") if ev_it.get(k)})
+        items[ev_it["job_key"]] = full
+    if not items:
+        return None
+    new = sorted((refresh_user_item(root, dict(it)) for it in items.values()), key=lambda it: it["n"])
+    if new == old.get("items"):
+        return None
+    data = {"v": 1, "date": today.isoformat(), "built_at": jobfs.now_iso(root), "runner_version": jobfs.VERSION,
+            "target": int(jobfs.settings(root)["daily"].get("target", 20)), "size": len(new), "pool_left": 0,
+            "items": new, "account_block": {"after_n": new[0]["n"] - 1, "tenants": []},
+            "counts": {"seen": 0, "passed": 0, "discarded": 0, "deferred": 0}}
+    jobfs.atomic_write_json(path, data)
+    jobfs.prev_path(path).unlink(missing_ok=True)  # the readers skip *.prev.json; keep only the real file
+    emit(f"ADDENDUM {path.name} items={','.join(str(it['n']) for it in new)}")
     return path
 
 
@@ -822,14 +1004,16 @@ def stage_uploads(root, today=None, emit=print):
     if not active:
         old_day = manifest.get("date") or ""
         same_day = old_day == today.isoformat()
+        zone = jobfs.now(root).tzinfo  # file times in the folder's [time] timezone, not the PC's
         for p in sorted(f.upload.iterdir()):
             if not p.is_file() or p.name.startswith(".") or (same_day and p.name in planned):
                 continue
+            made = datetime.fromtimestamp(p.stat().st_mtime, zone).date()
             # today's do-yourself files (E<n>_..., spec 5.8) sit beside the NN files
-            if re.match(r"E\d+_", p.name) and datetime.fromtimestamp(p.stat().st_mtime).date() == today:
+            if re.match(r"E\d+_", p.name) and made == today:
                 continue
             # an earlier day's file (even one with today's name) goes to that day's _done folder
-            day = old_day if old_day and not same_day else datetime.fromtimestamp(p.stat().st_mtime).date().isoformat()
+            day = old_day if old_day and not same_day else made.isoformat()
             move_to_done(root, p, day)
             moved += 1
     applied = {it["job_key"] for it in events.overlay(root, today)["items"].values() if it.get("state") == "applied"}
@@ -847,6 +1031,8 @@ def stage_uploads(root, today=None, emit=print):
         src = folder / ("resume.pdf" if it.get("tier") == "A" and (folder / "resume.pdf").exists() else "resume_B.pdf")
         if not dest.exists():
             if not src.exists():
+                if it.get("added_by"):
+                    continue  # a job from a link: its resume is the session's, attached from its folder
                 warn += 1
                 emit(f"WARN #{it.get('n'):02d} no built resume in {it.get('folder')}")
                 continue
@@ -940,13 +1126,20 @@ def cmd_fold(a):
     return 0
 
 
+def cmd_user(a):
+    if user_addendum(a.root, parse_day(a.date, a.root)) is None:
+        print("ADDENDUM addendum_user.json unchanged")
+    return 0
+
+
 def build_parser():
     ap = Parser(prog="jobqueue.py", description="Queue builder (spec 3.12).", allow_abbrev=False)
     sub = ap.add_subparsers(dest="cmd", required=True, metavar="command")
     for name, func, hlp in (("build", cmd_build, "Build queue/<date>/queue.json from the pool."),
                             ("addendum", cmd_addendum, "Append new items (late finds or more)."),
                             ("stage-uploads", cmd_stage, "Stage NN upload files; move done ones."),
-                            ("fold-events", cmd_fold, "Fold queue events into state/queue_state.json.")):
+                            ("fold-events", cmd_fold, "Fold queue events into state/queue_state.json."),
+                            ("user-addendum", cmd_user, "Write addendum_user.json from the added events.")):
         p = sub.add_parser(name, help=hlp, allow_abbrev=False)
         p.add_argument("--root", required=True)
         p.add_argument("--date")

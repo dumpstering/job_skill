@@ -6,7 +6,8 @@ Usage:
     python answers.py years     --root R --skill X
     python answers.py questions --root R --date YYYY-MM-DD [--json]
     python answers.py add       --root R --question Q --answer A [--kind text|yesno|number|choice]
-                                [--scope any|US|CA] [--sensitive yes|no] [--source S] [--also "a; b"]
+                                [--scope any|US|Canada] [--sensitive yes|no] [--source S] [--also "a; b"]
+    python answers.py list      --root R
     python answers.py unpark    --root R --date YYYY-MM-DD [--session ID]
     python answers.py migrate   --root R
 
@@ -14,12 +15,20 @@ answers.md lines (one per answer):
     - ANS-012 | <question> | <answer> | <kind> | <scope> | <sensitive yes|no> | <source> | <last confirmed> [| also: <a>; <b>]
 source is profile:<field>, library:L-0031, computed:years(<term>),
 template:<family> (an approved free-text answer with {company} {role}
-{focus} slots) or user:YYYY-MM-DD.
+{focus} slots) or user:YYYY-MM-DD. scope is any, US or Canada (any case);
+add refuses CA, which a California user would read as the state, with
+REFUSED and a line saying to write US or Canada. A CA already in answers.md
+(v1.1 wrote it for Canada) is still read as Canada, and list names each such
+line in a WARN.
+
+list prints the bank, one line per answer, then ANSWERS n=<count>:
+    ANS-012 | <scope> | sensitive yes|no | <question> = <answer>
+    WARN answers.md line <n>: scope "CA" is read as Canada; write US or Canada
 
 plan writes fill_plan.json in the job folder from posting.md's application
 questions (or, for other forms, the profile's contact and eligibility
 fields): every filled value names its answer_source. Criminal-history,
-attestation, consent and ID questions are never filled or stored (his part).
+attestation, consent and ID questions are never filled or stored (the user's part).
 Salary, visa, sponsorship and bank answers marked sensitive are
 sensitive_confirm. An unknown required answer is needs_you, which parks the
 job; the question joins the batch. Never a guess.
@@ -62,7 +71,7 @@ QLINE = re.compile(r"^\s*\d+\.\s+(.*\S)\s*$")
 QTYPED = re.compile(r"^(?P<label>.+?)(?P<req> \(required\))? - (?P<type>[a-z][a-z_]*(?:/[a-z][a-z_]*)*)(?:: (?P<opts>.*))?$")
 QPLAIN = re.compile(r"^(?P<label>.+?)(?P<req> \(required\))?$")
 
-# Never filled, never stored, never asked in chat: his part on the form (v1.1).
+# Never filled, never stored, never asked in chat: the user's part on the form (v1.1).
 NEVER = re.compile(
     r"convict|criminal|felon|misdemean|arrest|pending charge|plead(?:ed)? guilty|offen[cs]e record|"
     r"\bcertify\b|\battest|\backnowledg|\bi agree\b|\bi understand\b|signature|\be-?sign|electronically sign|"
@@ -124,6 +133,9 @@ COUNTRY_CODES = {"united states": "US", "united states of america": "US", "usa":
                  "mexico": "MX", "germany": "DE", "france": "FR", "india": "IN", "ireland": "IE"}
 US_STATES = set("AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM "
                 "NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY PR".split())
+# Answer scopes a new answer may take (any case), stored in this spelling.
+SCOPES = {"any": "any", "us": "US", "canada": "Canada"}
+LEGACY_CA = "CA"  # v1.1's scope for Canada; read as Canada, refused for new answers
 STOP = set("a an the of to in on for with and or is are do does did you your have has had be been any at as "
            "please this that what which".split())
 
@@ -229,6 +241,27 @@ def format_line(a):
     return line
 
 
+def scope_country(scope):
+    """"any", or the country code a scope covers: US, Canada and the legacy CA
+    are US and CA; another hand-written code is compared as it is."""
+    s = (scope or "any").strip()
+    if s.lower() == "any":
+        return "any"
+    if s.lower() == "canada" or s.upper() == LEGACY_CA:
+        return "CA"
+    return s.upper()
+
+
+def check_scope(scope):
+    """The stored spelling of a new answer's scope (any, US, Canada), or Refused."""
+    s = (scope or "any").strip()
+    if s.upper() == LEGACY_CA:
+        raise Refused(f'REFUSED scope "{s}" could mean California or Canada: write --scope US or --scope Canada')
+    if s.lower() not in SCOPES:
+        raise Refused(f'REFUSED scope "{s}": write any, US or Canada')
+    return SCOPES[s.lower()]
+
+
 def find_answer(label, bank, country="", slots=None):
     """The bank entry for a question: same text, an also: alias, or similarity
     0.8. slots ({"{company}": "Acme Bio", ...}) fill template questions first."""
@@ -236,7 +269,8 @@ def find_answer(label, bank, country="", slots=None):
     for a in bank:
         if not a.answer.strip():
             continue
-        if a.scope.lower() != "any" and a.scope.upper() != (country or "").upper():
+        covers = scope_country(a.scope)
+        if covers != "any" and covers != (country or "").upper():
             continue
         for form in a.forms():
             for slot, value in (slots or {}).items():
@@ -452,7 +486,7 @@ class Planner:
              "user_part": False, "status": "ok"}
         if NEVER.search(label) or PII.search(label):
             f.update(user_part=True, status="check")
-            self.log.append(f'"{label[:60]}": his part (never filled or stored)')
+            self.log.append(f"\"{label[:60]}\": the user's part (never filled or stored)")
             return f
         if f["type"] == "file":
             f["user_part"] = True
@@ -809,12 +843,13 @@ def bank_file(root):
 def add(root, question, answer, kind="text", scope="any", sensitive=None, source=None, also=()):
     """("ADDED"|"UPDATED", Answer). Refuses what is never stored."""
     if NEVER.search(question) or PII.search(question):
-        raise Refused("REFUSED never stored: criminal history, attestations, consent and ID numbers are his part")
+        raise Refused("REFUSED never stored: criminal history, attestations, consent and ID numbers are the user's part")
     for text in [question, answer, *also]:
         if "|" in text or "\n" in text:
             raise Refused("ERROR answers cannot contain | or line breaks")
     if kind not in KINDS:
         raise Refused(f"ERROR kind must be one of {', '.join(KINDS)}")
+    scope = check_scope(scope)
     today = jobfs.today(root).isoformat()
     source = source or f"user:{today}"
     if not SOURCE_RE.match(source):
@@ -844,6 +879,20 @@ def add(root, question, answer, kind="text", scope="any", sensitive=None, source
     return verb, new
 
 
+def listing(root):
+    """The bank as lines, a WARN for each legacy CA scope, then ANSWERS n=<count>."""
+    path = jobfs.Folder(root).answers
+    bank = load_bank(path)
+    out = []
+    for a in bank:
+        out.append(f"{a.id} | {a.scope} | sensitive {'yes' if a.sensitive else 'no'} | {a.question} = {a.answer}")
+        if a.scope.strip().upper() == LEGACY_CA:
+            out.append(f'WARN {path.name} line {a.line}: scope "{a.scope.strip()}" is read as Canada; '
+                       "write US or Canada")
+    out.append(f"ANSWERS n={len(bank)}")
+    return out
+
+
 def migrate(root):
     f = jobfs.Folder(root)
     try:
@@ -855,7 +904,8 @@ def migrate(root):
         if not a.answer.strip():
             skipped.append(a.question)
             continue
-        verb, new = add(root, a.question, a.answer, "text", a.scope, a.sensitive)
+        scope = "Canada" if a.scope.strip().upper() == LEGACY_CA else a.scope  # v1.1 wrote CA for Canada
+        verb, new = add(root, a.question, a.answer, "text", scope, a.sensitive)
         done.append(f"{verb} {new.id} {a.question}")
     return done, skipped
 
@@ -921,7 +971,7 @@ def unpark(root, day, session=None):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("plan", "years", "questions", "add", "unpark", "migrate"):
+    for name in ("plan", "years", "questions", "add", "list", "unpark", "migrate"):
         p = sub.add_parser(name)
         p.add_argument("--root", required=True, help="the JobSearch folder")
     sub.choices["plan"].add_argument("--job", required=True, help="the job folder")
@@ -936,12 +986,17 @@ def main(argv=None):
     a.add_argument("--question", required=True)
     a.add_argument("--answer", required=True)
     a.add_argument("--kind", default="text")
-    a.add_argument("--scope", default="any")
+    a.add_argument("--scope", default="any", help="any, US or Canada (any case)")
     a.add_argument("--sensitive", choices=["yes", "no"])
     a.add_argument("--source")
     a.add_argument("--also", default="", help="aliases separated by ;")
     args = ap.parse_args(argv)
     root = Path(args.root)
+    for stream in (sys.stdout, sys.stderr):  # list prints the user's own answers as written
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
     try:
         return run(args, root)
     except Refused as e:
@@ -983,6 +1038,10 @@ def run(args, root):
         sens = None if args.sensitive is None else args.sensitive == "yes"
         verb, new = add(root, args.question, args.answer, args.kind, args.scope, sens, args.source, also)
         print(f"{verb} {new.id}")
+        return 0
+    if args.cmd == "list":
+        for line in listing(root):
+            print(line)
         return 0
     if args.cmd == "unpark":
         done = unpark(root, args.date, args.session)

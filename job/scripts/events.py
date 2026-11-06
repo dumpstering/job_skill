@@ -7,23 +7,39 @@ Every event is one create-only file runner/in/events/<YYYYMMDDTHHMMSSZ>_<8hex>_<
 Usage:
     python events.py emit --root R --type T (--json J | --json-file F) [--job-key K]
         [--n N] [--date YYYY-MM-DD] [--session S]
+    python events.py add --root R --folder <job folder> --via pasted|add [--family F]
+        [--date YYYY-MM-DD] [--session S]
     python events.py overlay --root R [--date YYYY-MM-DD]
 
 emit prints EVENT <id>. J is the payload object, or an object holding
 "payload" plus any of job_key, n, date, session.
 
+add puts one job folder from a link into today's list (spec 5.11,
+addendum_user): an `added` event holding the whole queue item, numbered
+after the highest number given today. today_view, tracker.py check and the
+overlay read it at once; the next tick writes it into
+queue/<date>/addendum_user.json (the runner stays the only writer of queue
+files). --via pasted is a /job <link> folder (Tier A, the single-job flow);
+--via add is a /job add <link> folder (Tier B when resume_B.pdf is there).
+    ADDED #<n> <job_key> (addendum_user)
+    IN QUEUE <date> #<n>          (already in today's list; nothing written)
+    NO LIST <date> (mode M): the tracker row is the record
+    NO LIST <date> (no list built yet): the tracker row is the record
+
 overlay prints the day's merged view of pending and applied events:
     OVERLAY <date>
     ITEM #<n> <job_key> <state> [reason=<code>] [questions=<ids>] [confirmation=<how>]
     ITEMS none
+    ADDED #<n> <job_key> <via>
     TRACKER PENDING <count>
     TRACKER REJECTED <count>
     USAGE after #<n> session <s>% weekly <w>% minutes <m>
     ANSWER USED <ANS-id> x<count>
 
 The library (validate, emit, read_file, pending_files, recent, move_done,
-reject, note_failure, overlay) is what tracker.py apply-events, today_view
-and caps use. Stdlib only.
+reject, note_failure, overlay, user_items) is what tracker.py apply-events,
+today_view, jobqueue and caps use. Stdlib only (add also reads the queue
+through jobqueue).
 
 Exit codes: 0 ok, 1 bad input (ERROR ...).
 """
@@ -46,11 +62,15 @@ YOUNG_SECONDS = 5        # a file this new may still be arriving over the bridge
 RECENT_DAYS = 7          # how far back the overlay reads events_done
 
 QUEUE_TYPES = ("started", "handed_over", "applied", "skipped", "later", "parked", "unparked", "blocked")
-TYPES = ("tracker",) + QUEUE_TYPES + ("answer_used", "usage")
+# "added" is a job from a link joining today's list (addendum_user, spec 5.11).
+TYPES = ("tracker",) + QUEUE_TYPES + ("answer_used", "usage", "added")
+VIAS = ("pasted", "add")
+ADDED_TEXT = ("company", "role", "location", "ats", "host", "apply_url", "folder", "family", "tier", "variant",
+              "account", "attach", "upload", "resume_status", "answers_status")
 # tracker.py write subcommands an event may carry (2.5 plus init and archive).
 TRACKER_COMMANDS = ("init", "add", "update", "account", "log-email", "inbox-done", "referral-add",
                     "employer-set", "activity-add", "archive")
-# Failure taxonomy (5.10), plus "user" for his own skip or later.
+# Failure taxonomy (5.10), plus "user" for the user's own skip or later.
 REASONS = ("closed", "login_required", "account_needed", "account_locked", "captcha_failed",
            "email_code_timeout", "sso_required", "spam_rejected", "site_error", "upload_failed",
            "form_error", "host_mismatch", "unknown_required", "knockout_at_form",
@@ -170,6 +190,32 @@ def check_usage_payload(p):
     return None
 
 
+def check_added_payload(ev, p, root):
+    """An added event: a numbered job folder under applications/, plain fields."""
+    if not isinstance(ev.get("n"), int) or isinstance(ev["n"], bool) or not 0 < ev["n"] < 1000:
+        return "an added event needs n (a number from 1 to 999)"
+    if not ev.get("job_key"):
+        return "an added event needs job_key"
+    if p.get("via") not in VIAS:
+        return f"payload.via must be one of {', '.join(VIAS)}"
+    it = p.get("item")
+    if not isinstance(it, dict):
+        return "payload.item must be an object"
+    for k in ADDED_TEXT:
+        if not isinstance(it.get(k, ""), str) or len(it.get(k, "")) > 2000:
+            return f"payload.item.{k} must be text"
+    for k in ("needs", "sensitive"):
+        v = it.get(k, [])
+        if not isinstance(v, list) or not all(isinstance(x, str) and len(x) <= 80 for x in v):
+            return f"payload.item.{k} must be a list of short strings"
+    folder = str(it.get("folder", "")).replace("\\", "/")
+    if not folder.startswith("applications/") or not _inside(root, folder):
+        return "payload.item.folder must be a job folder under applications/"
+    if it.get("apply_url") and not re.match(r"^https?://", it["apply_url"], re.I):
+        return "payload.item.apply_url must be an http(s) URL"
+    return None
+
+
 def validate(ev, root, name=None):
     """None when the event is well formed, else the reason it is not."""
     if not isinstance(ev, dict):
@@ -207,6 +253,8 @@ def validate(ev, root, name=None):
         return "payload.answer_id must be ANS-<number>"
     if ev["type"] == "usage":
         return check_usage_payload(p)
+    if ev["type"] == "added":
+        return check_added_payload(ev, p, root)
     return None
 
 
@@ -379,9 +427,28 @@ def fold(evs, day):
     return items
 
 
+def user_items(root, day=None, evs=None):
+    """The day's jobs from links (added events, pending and applied) as queue
+    items in number order: the event's item plus n, job_key and added_by.
+    The first event for a job key wins."""
+    day = jobfs.iso_date(day) if day else jobfs.today(root).isoformat()
+    evs = recent(root) if evs is None else evs
+    out, keys = [], set()
+    for ev in evs:
+        if ev["type"] != "added" or (ev.get("date") or "") != day or ev["job_key"] in keys:
+            continue
+        keys.add(ev["job_key"])
+        it = dict(ev["payload"]["item"])
+        it.update(n=ev["n"], job_key=ev["job_key"], added_by=ev["payload"]["via"])
+        it.setdefault("needs", [])
+        it.setdefault("sensitive", [])
+        out.append(it)
+    return sorted(out, key=lambda it: it["n"])
+
+
 def overlay(root, day=None):
-    """The merged view for one date: queue items' states, pending tracker events,
-    rejected files, usage readings and answers used."""
+    """The merged view for one date: queue items' states, jobs added from links,
+    pending tracker events, rejected files, usage readings and answers used."""
     today = jobfs.today(root)
     day = jobfs.iso_date(day) if day else today.isoformat()
     evs = recent(root, today)
@@ -391,7 +458,7 @@ def overlay(root, day=None):
         if ev["type"] == "answer_used" and ev.get("date") == day:
             aid = ev["payload"]["answer_id"]
             used[aid] = used.get(aid, 0) + 1
-    return {"date": day, "items": fold(evs, day),
+    return {"date": day, "items": fold(evs, day), "added": user_items(root, day, evs),
             "tracker_pending": [ev["id"] for ev in evs if ev["type"] == "tracker" and ev["_pending"]],
             "rejected": rejected_list(root), "usage": usage, "answers_used": used}
 
@@ -414,6 +481,8 @@ def print_overlay(view):
         print(item_line(it))
     if not items:
         print("ITEMS none")
+    for it in view.get("added") or []:
+        print(f"ADDED #{it['n']} {it['job_key']} {it['added_by']}")
     print(f"TRACKER PENDING {len(view['tracker_pending'])}")
     print(f"TRACKER REJECTED {len(view['rejected'])}")
     for u in view["usage"]:
@@ -421,6 +490,55 @@ def print_overlay(view):
               f"weekly {u.get('weekly_pct', '-')}% minutes {u.get('minutes', '-')}")
     for aid in sorted(view["answers_used"]):
         print(f"ANSWER USED {aid} x{view['answers_used'][aid]}")
+
+
+# ---------- a job from a link joins today's list ----------
+
+def job_folder_rel(root, folder):
+    """applications/<name> for a job folder given as a path (absolute or from the root)."""
+    root = Path(root)
+    path = Path(folder) if Path(folder).is_absolute() else root / folder
+    try:
+        rel = path.resolve().relative_to(root.resolve())
+    except (ValueError, OSError):
+        raise EventError(f"--folder {folder} is outside the JobSearch folder")
+    if len(rel.parts) != 2 or rel.parts[0] != "applications" or rel.parts[1].startswith("_"):
+        raise EventError(f"--folder {folder} is not a job folder under applications/")
+    if not (root / rel / "posting.md").exists():
+        raise EventError(f"--folder {folder} has no posting.md (save the posting first)")
+    return rel.as_posix()
+
+
+def add(root, folder, via, family="", day=None, session=None):
+    """Number one job folder from a link into today's list. Returns the line to
+    print and the event written (None when nothing was written)."""
+    import jobkey
+    import jobqueue  # the queue files and the item shape; read only from here
+    import netfetch
+    root = Path(root)
+    day = jobfs.iso_date(day) if day else jobfs.today(root).isoformat()
+    rel = job_folder_rel(root, folder)
+    head = jobqueue.posting_head(root / rel)
+    key = head.get("Job key") or jobkey.job_key(head.get("URL", ""))
+    if not key:
+        raise EventError("posting.md has no Job key or URL line")
+    board = netfetch.job_board(netfetch.host_of(head.get("URL", ""))) if head.get("URL") else None
+    if board:
+        raise EventError(f"posting.md's URL is a job board ({board}): it goes on the do-yourself list, "
+                         "never in today's list")
+    if str(jobfs.settings(root)["runner"].get("mode", "L")).upper() == "M":
+        return f"NO LIST {day} (mode M): the tracker row is the record", None
+    if not jobfs.Folder(root).queue_json(day).exists():
+        return f"NO LIST {day} (no list built yet): the tracker row is the record", None
+    items = jobqueue.day_items(root, day)
+    same = next((it for it in items if it.get("job_key") == key), None)
+    if same is not None:
+        return f"IN QUEUE {day} #{same.get('n')}", None
+    n = max([int(it.get("n") or 0) for it in items] + [0]) + 1
+    it = jobqueue.user_item(root, n, key, rel, via, family)
+    payload = {"via": via, "item": {k: v for k, v in it.items() if k in ADDED_TEXT + ("needs", "sensitive", "posted")}}
+    ev, _ = emit(root, "added", payload, job_key=key, n=n, day=day, session=session)
+    return f"ADDED #{n} {key} (addendum_user)", ev
 
 
 # ---------- CLI ----------
@@ -459,6 +577,16 @@ def cmd_overlay(a):
     return 0
 
 
+def cmd_add(a):
+    if a.date and not DAY_RE.match(a.date):
+        raise EventError(f"--date must be YYYY-MM-DD, got '{a.date}'")
+    if a.family and not re.fullmatch(r"[a-z0-9_]{1,40}", a.family):
+        raise EventError(f"--family must be a family id (a-z, 0-9, _), got '{a.family}'")
+    line, _ = add(a.root, a.folder, a.via, a.family or "", a.date, a.session)
+    print(line)
+    return 0
+
+
 def build_parser():
     ap = Parser(prog="events.py", description="Event files for the runner (spec 2.5).")
     sub = ap.add_subparsers(dest="cmd", required=True, metavar="command")
@@ -473,6 +601,14 @@ def build_parser():
     p.add_argument("--date")
     p.add_argument("--session")
     p.set_defaults(func=cmd_emit)
+    p = sub.add_parser("add", help="Put one job folder from a link into today's list (addendum_user).")
+    p.add_argument("--root", required=True)
+    p.add_argument("--folder", required=True, help="the job folder (applications/<date> <Company> - <Role>)")
+    p.add_argument("--via", required=True, choices=VIAS, help="pasted (/job <link>) or add (/job add <link>)")
+    p.add_argument("--family", default="", help="the role family its title matches, if any")
+    p.add_argument("--date")
+    p.add_argument("--session")
+    p.set_defaults(func=cmd_add)
     p = sub.add_parser("overlay", help="Print the merged view of the day's events.")
     p.add_argument("--root", required=True)
     p.add_argument("--date")

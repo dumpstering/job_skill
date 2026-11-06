@@ -1,6 +1,6 @@
 # Discovery: alert intake, the lead resolver, gates and the queue
 
-The runner finds postings on his PC (boards, aggregators), Claude adds leads from alert emails, and the runner turns everything into one gated pool and a daily queue. This file covers Claude's part and how to read what the runner wrote. Board readers are in `sources.md`.
+The runner finds postings on the user's PC (boards, aggregators), Claude adds leads from alert emails, and the runner turns everything into one gated pool and a daily queue. This file covers Claude's part and how to read what the runner wrote. Board readers are in `sources.md`.
 
 ## Alert intake (job-morning; spec 3.5)
 
@@ -68,14 +68,14 @@ Cheapest first; a list record that fails G1-G5 never gets a detail call.
 - A `preferred_patterns` match only flags the item (`license_preferred:<id>`) and lowers fit.
 - Every discard is one line in `queue/<date>/discards.csv`: `date,lane,company,role,location,host,job_key,gate,reason,profile_hash`.
 - Location, title, stale and knockout discards carry `profile_hash`; after search_profile.toml, the licenses held or the widen steps change, they are judged again on the next run.
-- `python scripts/gates.py explain --root <JobSearch> --job-key <key>` prints one posting's trail, `GATE G1 ok ...` through the gate that stopped it, for example `GATE G7 knockout:ca_cls required "CLS license required"`. Use it when he asks why a job was not queued.
+- `python scripts/gates.py explain --root <JobSearch> --job-key <key>` prints one posting's trail, `GATE G1 ok ...` through the gate that stopped it, for example `GATE G7 knockout:ca_cls required "CLS license required"`. Use it when the user asks why a job was not queued.
 - Parked AI-text postings are in `state/pool.json` `needs_you` (`job_key, company, role, quote`); show each once.
 
 ### Title terms in search_profile.toml
 
 Whole words of the title, ignoring case and punctuation: `capa` never matches "Capacity". `microbiolog*` is a stem. `qc+micro*` needs both parts. `lecturer|instructor+biolog*` is either word plus a biology word. An exclude word in capitals of three letters or fewer (`IT`, `HR`, `VP`) matches only the title's own capitals. Families are tried in file order and the first that matches wins; for academic, institute and government employers a `cv` family goes first, and `usajobs` families take USAJOBS postings only. Status `proposed` families join when the widen step `adjacent_families` is on.
 
-To loosen a gate he agreed to change, edit search_profile.toml (backup first) and say which gate it was; the next run re-judges the affected discards.
+To loosen a gate the user agreed to change, edit search_profile.toml (backup first) and say which gate it was; the next run re-judges the affected discards.
 
 ## The queue (runner; spec 3.12)
 
@@ -90,7 +90,7 @@ WIDEN adjacent_families
 - Order: #1-#10 no-account items, then the account block (`account_block.after_n`, `tenants`), then the rest. Never the same employer twice in a row, at most 3 in a row on one ATS host.
 - Until a family's variant is approved its items can only be Tier A.
 - `FROZEN` means events exist for that date (late finds go to an addendum). `WAIT` means a session is active.
-- `WIDEN <step>`: the pool was under target, so one widen step is now on (state/queue_state.json). Tell him in the weekly summary, not the card.
+- `WIDEN <step>`: the pool was under target, so one widen step is now on (state/queue_state.json). Tell the user in the weekly summary, not the card.
 
 Other commands (runner):
 - `jobqueue.py addendum` appends new numbered items to `addendum_<HHMM>.json`; `more` is the same with the next `more_size` items from the pool.
