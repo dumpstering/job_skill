@@ -1,0 +1,9 @@
+{
+ "job_key": "greenhouse:5000002",
+ "company": "Acme Bio",
+ "title": "QC Analyst",
+ "url": "https://boards.greenhouse.io/example/jobs/5000002",
+ "req_ids": [
+  "R-5002"
+ ]
+}

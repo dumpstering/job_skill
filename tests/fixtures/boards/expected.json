@@ -1,0 +1,98 @@
+{
+ "adp:a21467f2-5c74-46bf-bd5c-61cdb598d8b3": {
+  "first_posted": "2026-11-06",
+  "n": 3,
+  "site": "19000101_000001"
+ },
+ "ashby:insitro": {
+  "first_posted": "2026-09-21",
+  "n": 3
+ },
+ "bamboohr:mangomaterials": {
+  "first_posted": "2022-08-29",
+  "n": 1
+ },
+ "breezy:vaxart-inc": {
+  "first_posted": "2026-10-15",
+  "n": 1
+ },
+ "comeet:pinnaclehomecare": {
+  "first_posted": null,
+  "n": 3,
+  "site": "1B.00E"
+ },
+ "dayforce:asburyauto": {
+  "first_posted": "2026-11-05",
+  "n": 3,
+  "site": "ASBURYCAREERSITE"
+ },
+ "greenhouse:vaxcyte": {
+  "first_posted": "2026-10-19",
+  "n": 3
+ },
+ "hireology:jaguarlandrover": {
+  "first_posted": "2024-01-25",
+  "n": 3
+ },
+ "jazzhr:buckinstitute": {
+  "first_posted": "2026-09-28",
+  "n": 3
+ },
+ "jobvite:sutrobio": {
+  "first_posted": "2026-10-23",
+  "n": 3
+ },
+ "lever:synthego": {
+  "first_posted": "2026-11-05",
+  "n": 3
+ },
+ "manatal:doyensec-llc": {
+  "first_posted": null,
+  "n": 2
+ },
+ "oracle:ebwb": {
+  "first_posted": "2026-11-05",
+  "host": "ebwb.fa.us2.oraclecloud.com",
+  "n": 3,
+  "site": "CX"
+ },
+ "paylocity:fb344149-f240-4648-a99b-7e27510b63c2": {
+  "first_posted": "2026-10-30",
+  "n": 3,
+  "site": "Codexis-Inc"
+ },
+ "personio:capmo": {
+  "first_posted": "2025-07-29",
+  "n": 3
+ },
+ "phenom:abbvie": {
+  "first_posted": "2026-09-09",
+  "host": "careers.abbvie.com",
+  "n": 3
+ },
+ "pinpoint:workwithus": {
+  "first_posted": null,
+  "n": 3
+ },
+ "recruitee:acmebio": {
+  "first_posted": "2026-11-03",
+  "n": 1
+ },
+ "rippling:seti-institute": {
+  "first_posted": null,
+  "n": 3
+ },
+ "teamtailor:career": {
+  "first_posted": "2026-11-03",
+  "host": "career.teamtailor.com",
+  "n": 3
+ },
+ "workable:huggingface": {
+  "first_posted": "2026-05-29",
+  "n": 3
+ },
+ "workday:gilead": {
+  "first_posted": "2026-10-01",
+  "n": 3
+ }
+}

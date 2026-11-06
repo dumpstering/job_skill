@@ -3,20 +3,40 @@
 Usage:
     python build_resume.py resume.json --out <folder> --base "First Last Resume"
         [--sources FILE [FILE ...]] [--terms terms.json]
+        [--mode industry|cv|usajobs] [--max-pages N] [--publications publications.md]
+        [--posting posting.md] [--strict]
 
 The JSON format is documented in references/writing_rules.md (Block A and
-Cover letter). The .docx uses Arial and the .pdf Helvetica, which share
-metrics, so the PDF's page count holds for both. Lint warnings mirror the
-writing rules a script can check; the agent fixes each or keeps it for a
-stated reason. After the WARN lines come the checks in checks.py: PARSE (the
-PDF read back as text), FACT (numbers, names and dates against --sources) and
-KEYWORD (posting terms from --terms). The agent acts on each line they print:
-fix the resume, or carry the item into "Verify before sending".
+Cover letter) and references/cv_publications.md (citations, modes). The .docx
+uses Arial and the .pdf Helvetica, which share metrics, so the PDF's page
+count holds for both. Lint warnings mirror the writing rules a script can
+check; the agent fixes each or keeps it for a stated reason. After the WARN
+lines come the checks in checks.py: PARSE (the PDF read back as text), FACT
+(numbers, names and dates against --sources), EVIDENCE (ev tags against the
+library), CITE (citations against --publications), LETTER (a letter against
+--posting) and KEYWORD (posting terms from --terms). The agent acts on each
+line they print: fix the resume, or carry the item into "Verify before
+sending".
+
+v1.2 flags (without them the v1.1 behavior is unchanged):
+- --mode sets the page cap: industry 2, usajobs 2 (hard), cv none (a warning
+  above 8 pages, and the sections are put in the CV order). --max-pages
+  lowers the cap (or sets one for cv).
+- --publications fills {"citations": ["P-003"]} sections with the exact
+  publications.md text, *italics* rendered, the user's name in bold with
+  "bold_name": true. Citations skip the bullet lint and FACT.
+- --posting runs the letter check: company and role equal posting.md's.
+- --strict (mode industry unless given) fails the build on any FACT line,
+  PARSE other than ok, an EVIDENCE, CITE or LETTER problem, pages over the
+  cap, or a banned word, printing one STRICT-FAIL line each.
+- Any v1.2 flag ends the output with VERDICT ok|fail.
 
 Exit codes: 0 built, 1 bad input, 2 a package is missing (pip install
-python-docx reportlab). The checks never change the exit code.
+python-docx reportlab), 6 STRICT-FAIL (only with --strict). Without --strict
+the checks never change the exit code.
 """
 import argparse
+import io
 import json
 import re
 import sys
@@ -34,6 +54,21 @@ FONT_DOCX = "Arial"
 FONT_PDF = ("Helvetica", "Helvetica-Bold", "Helvetica-Oblique")
 PAPER_IN = {"letter": (8.5, 11.0), "a4": (8.27, 11.69)}
 
+# v1.2 document modes (spec 4.8): page caps and the CV section order.
+MODE_CAPS = {"industry": 2, "usajobs": 2, "cv": None}
+CV_WARN_PAGES = 8
+CV_ORDER = ["education", "research experience", "professional experience", "publications",
+            "presentations", "patents", "grants and fellowships", "teaching and mentoring",
+            "techniques", "awards", "service", "memberships", "references"]
+CV_ALIASES = {"experience": "professional experience", "selected publications": "publications",
+              "skills": "techniques", "honors": "awards", "awards and honors": "awards",
+              "honors and awards": "awards", "grants": "grants and fellowships",
+              "fellowships": "grants and fellowships", "teaching": "teaching and mentoring",
+              "mentoring": "teaching and mentoring", "professional service": "service",
+              "professional memberships": "memberships"}
+CITATION_ID = re.compile(r"^P-\d{3,}$")
+BULLET_KEYS = {"text", "ev", "keep"}
+
 # Mirror of the Writing style list in references/writing_rules.md.
 BANNED = [
     "proven", "strong", "rigorous", "highly skilled", "expert", "data-driven",
@@ -43,12 +78,32 @@ BANNED = [
     "high-velocity", "engine", "track record", "fast-paced",
 ]
 PRONOUNS = re.compile(r"\b(I|me|my|mine|we|our|ours)\b")
-SECTION_KEYS = {"heading", "paragraph", "lines", "entries", "bullets"}
+SECTION_KEYS = {"heading", "paragraph", "lines", "entries", "bullets", "citations", "bold_name"}
 ENTRY_KEYS = {"title", "dates", "org", "location", "bullets"}
 
 
 class InputError(Exception):
     pass
+
+
+text_of = checks.bullet_text
+
+
+def check_bullets(bullets, where):
+    """A bullet is a string (v1.1) or {"text", "ev": [L- IDs], "keep": bool}."""
+    if not isinstance(bullets, list):
+        raise InputError(f'"bullets" in {where} must be a list')
+    for b in bullets:
+        if isinstance(b, str):
+            continue
+        if not isinstance(b, dict) or not isinstance(b.get("text"), str):
+            raise InputError(f'a bullet in {where} must be a string or {{"text": ..., "ev": [...]}}')
+        extra = set(b) - BULLET_KEYS
+        if extra:
+            raise InputError(f'a bullet in {where} has unknown keys {sorted(extra)}')
+        ev = b.get("ev", [])
+        if not isinstance(ev, list) or not all(isinstance(i, str) for i in ev):
+            raise InputError(f'"ev" of a bullet in {where} must be a list of library IDs')
 
 
 # ---------- input ----------
@@ -83,10 +138,102 @@ def load(path):
                 extra = set(e) - ENTRY_KEYS
                 if extra:
                     raise InputError(f'entry "{e["title"]}" has unknown keys {sorted(extra)}')
+                check_bullets(e.get("bullets", []), f'"{e["title"]}"')
+            check_bullets(s.get("bullets", []), f'"{s["heading"]}"')
             for line in s.get("lines", []):
                 if "label" not in line or "text" not in line:
                     raise InputError(f'lines in "{s["heading"]}" need "label" and "text"')
+            if "citations" in s:
+                cites = s["citations"]
+                if not isinstance(cites, list) or not all(isinstance(c, str) and CITATION_ID.match(c) for c in cites):
+                    raise InputError(f'"citations" in "{s["heading"]}" must be a list of publication IDs like "P-003"')
+                if set(s) & {"paragraph", "lines", "entries", "bullets"}:
+                    raise InputError(f'section "{s["heading"]}" has "citations"; it cannot also hold other content')
     return data
+
+
+# ---------- v1.2: citations and modes ----------
+
+def prepare(data, pubs=None, mode=None, warnings=None):
+    """Resolve citations into s["_cites"] (the exact text to print) and, in cv
+    mode, put the sections in the CV order. Raises InputError for a citation
+    section without --publications or an ID publications.md lacks."""
+    if "letter" in data:
+        return data
+    for s in data["sections"]:
+        if "citations" in s:
+            if pubs is None:
+                raise InputError(f'section "{s["heading"]}" has citations: give --publications publications.md')
+            missing = [c for c in s["citations"] if c not in pubs]
+            if missing:
+                raise InputError(f'citation {", ".join(missing)} is not in publications.md')
+            s["_cites"] = [checks.printable(pubs[c]) for c in s["citations"]]
+        elif (pubs is not None and s.get("bullets") and not s.get("entries")
+              and checks.CITE_HEADING.search(s["heading"])):
+            # Citations typed out as bullets: printed as written, checked by CITE.
+            s["_cite"] = True
+            s["_cites"] = [text_of(b) for b in s["bullets"]]
+    if mode == "cv":
+        cv_order(data, warnings if warnings is not None else [])
+    return data
+
+
+def cv_order(data, warnings):
+    """Stable sort into CV_ORDER; a heading not in it stays after the one before it."""
+    ranks, last = [], -1.0
+    for s in data["sections"]:
+        key = s["heading"].strip().lower()
+        key = CV_ALIASES.get(key, key)
+        if key in CV_ORDER:
+            last = float(CV_ORDER.index(key))
+        ranks.append(last)
+    order = sorted(range(len(ranks)), key=lambda i: ranks[i])
+    if order != list(range(len(ranks))):
+        data["sections"] = [data["sections"][i] for i in order]
+        warnings.append("cv mode: sections reordered to the CV order (" +
+                        ", ".join(s["heading"] for s in data["sections"]) + ")")
+
+
+def author_pattern(name):
+    """The user's name as an author: "Avery JQ", "Avery, J. Q.", "J. Q. Avery", "Jordan Q. Avery"."""
+    words = re.findall(r"[A-Za-z][A-Za-z'-]*", name or "")
+    if len(words) < 2:
+        return None
+    last, first = re.escape(words[-1]), words[0]
+    i = re.escape(first[0])
+    pats = [last + r",?\s+" + i + r"\.?(?:\s?[A-Z]\.?){0,2}",
+            i + r"\.(?:\s?[A-Z]\.){0,2}\s+" + last,
+            re.escape(first) + r"(?:\s+[A-Z][A-Za-z]*\.?)?\s+" + last]
+    return re.compile(r"(?<![A-Za-z])(?:" + "|".join(pats) + r")(?![A-Za-z])")
+
+
+def cite_runs(text, name=None):
+    """[(text, bold, italic)] for one citation: *...* is italic, and with a
+    name its author forms are bold. An unpaired * stays as written."""
+    parts = text.split("*")
+    if len(parts) % 2 == 0:
+        parts = [text]
+    pat = author_pattern(name) if name else None
+    runs = []
+    for k, part in enumerate(parts):
+        italic = k % 2 == 1
+        pos = 0
+        for m in (pat.finditer(part) if pat else []):
+            if m.start() > pos:
+                runs.append((part[pos:m.start()], False, italic))
+            runs.append((m.group(0), True, italic))
+            pos = m.end()
+        if pos < len(part):
+            runs.append((part[pos:], False, italic))
+    return [r for r in runs if r[0]]
+
+
+def plain_cite(text):
+    return "".join(t for t, _, _ in cite_runs(text))
+
+
+def section_name(data, s):
+    return data["name"] if s.get("bold_name") else None
 
 
 def page_settings(data, warnings):
@@ -138,6 +285,8 @@ def lint(data):
         check_chars("contact", c)
     for s in data.get("sections", []):
         check_chars("heading", s["heading"])
+        if checks.is_citation(s):
+            continue  # CITE checks citations, including the font
         for ln in s.get("lines", []):
             check_chars(f'{s["heading"]} line', f'{ln["label"]} {ln["text"]}')
         for e in s.get("entries", []):
@@ -163,6 +312,8 @@ def lint(data):
 
     for s in data["sections"]:
         h = s["heading"]
+        if checks.is_citation(s):
+            continue
         if "paragraph" in s:
             check_text(h, s["paragraph"], False)
             if h.lower() == "summary":
@@ -170,21 +321,16 @@ def lint(data):
                 if n > 60:
                     out.append(f"Summary is {n} words (60 at most)")
         for e in s.get("entries", []):
-            bullets = e.get("bullets", [])
+            bullets = [text_of(b) for b in e.get("bullets", [])]
             for i, b in enumerate(bullets, 1):
                 check_text(f'{h} / {e["title"]} bullet {i}', b, True)
             check_run(f'{h} / {e["title"]}', bullets)
         for i, b in enumerate(s.get("bullets", []), 1):
-            check_text(f"{h} bullet {i}", b, True)
+            check_text(f"{h} bullet {i}", text_of(b), True)
     return out
 
 
-def _cp1252(c):
-    try:
-        c.encode("cp1252")
-        return True
-    except UnicodeEncodeError:
-        return False
+_cp1252 = checks._cp1252
 
 
 # ---------- text ----------
@@ -202,6 +348,10 @@ def build_txt(data):
         return "\n".join(lines).strip() + "\n"
     for s in data["sections"]:
         lines.append(s["heading"].upper())
+        if "_cites" in s:
+            lines += [f"- {plain_cite(c)}" for c in s["_cites"]]
+            lines.append("")
+            continue
         if "paragraph" in s:
             lines.append(s["paragraph"])
         for ln in s.get("lines", []):
@@ -209,8 +359,8 @@ def build_txt(data):
         for e in s.get("entries", []):
             head = " | ".join(x for x in (e["title"], e.get("org"), e.get("location"), e.get("dates")) if x)
             lines.append(head)
-            lines += [f"- {b}" for b in e.get("bullets", [])]
-        lines += [f"- {b}" for b in s.get("bullets", [])]
+            lines += [f"- {text_of(b)}" for b in e.get("bullets", [])]
+        lines += [f"- {text_of(b)}" for b in s.get("bullets", [])]
         lines.append("")
     return "\n".join(lines).strip() + "\n"
 
@@ -338,6 +488,13 @@ def build_docx(data, path, paper, size, margin):
     else:
         for s in data["sections"]:
             doc.add_paragraph(s["heading"], style="Heading 1")
+            if "_cites" in s:
+                for c in s["_cites"]:
+                    para = doc.add_paragraph(style="List Bullet")
+                    for text, bold, italic in cite_runs(c, section_name(data, s)):
+                        run = para.add_run(text)
+                        run.bold, run.italic = bold or None, italic or None
+                continue
             if "paragraph" in s:
                 tight(doc.add_paragraph(s["paragraph"]))
             for ln in s.get("lines", []):
@@ -350,9 +507,9 @@ def build_docx(data, path, paper, size, margin):
                 if e.get("org") or e.get("location"):
                     two_sided(e.get("org", ""), e.get("location", ""), italic=True)
                 for b in e.get("bullets", []):
-                    doc.add_paragraph(b, style="List Bullet")
+                    doc.add_paragraph(text_of(b), style="List Bullet")
             for b in s.get("bullets", []):
-                doc.add_paragraph(b, style="List Bullet")
+                doc.add_paragraph(text_of(b), style="List Bullet")
 
     now = datetime.now()
     cp = doc.core_properties
@@ -365,6 +522,19 @@ def build_docx(data, path, paper, size, margin):
 
 
 # ---------- pdf ----------
+
+def cite_markup(text, name=None):
+    """Paragraph markup for one citation: <i> for *italics*, <b> for the name."""
+    out = []
+    for t, bold, italic in cite_runs(text, name):
+        t = escape(t)
+        if italic:
+            t = f"<i>{t}</i>"
+        if bold:
+            t = f"<b>{t}</b>"
+        out.append(t)
+    return "".join(out)
+
 
 def build_pdf(data, path, paper, size, margin):
     from reportlab.lib.colors import black
@@ -437,6 +607,9 @@ def build_pdf(data, path, paper, size, margin):
     else:
         for s in data["sections"]:
             blocks = []
+            if "_cites" in s:
+                name = section_name(data, s)
+                blocks += [[Paragraph(cite_markup(c, name), bullet_st, bulletText=BULLET)] for c in s["_cites"]]
             if "paragraph" in s:
                 blocks.append([Paragraph(escape(s["paragraph"]), body)])
             for ln in s.get("lines", []):
@@ -445,10 +618,10 @@ def build_pdf(data, path, paper, size, margin):
                 block = [Spacer(1, 0 if k == 0 else 5), TwoSided(e["title"], show_dates(e.get("dates")), bold, regular)]
                 if e.get("org") or e.get("location"):
                     block.append(TwoSided(e.get("org", ""), e.get("location", ""), italic, italic))
-                block += [Paragraph(escape(b), bullet_st, bulletText=BULLET) for b in e.get("bullets", [])]
+                block += [Paragraph(escape(text_of(b)), bullet_st, bulletText=BULLET) for b in e.get("bullets", [])]
                 blocks.append(block)
-            if s.get("bullets"):
-                blocks.append([Paragraph(escape(b), bullet_st, bulletText=BULLET) for b in s["bullets"]])
+            if s.get("bullets") and "_cites" not in s:
+                blocks.append([Paragraph(escape(text_of(b)), bullet_st, bulletText=BULLET) for b in s["bullets"]])
             heading = [Paragraph(escape(s["heading"]), head_st), HRFlowable(width="100%", thickness=0.6, color=black, spaceBefore=1, spaceAfter=3)]
             if not blocks:
                 story += heading
@@ -462,30 +635,62 @@ def build_pdf(data, path, paper, size, margin):
                 story += block[4:]
 
     w, h = (letter if paper == "letter" else A4)
-    doc = SimpleDocTemplate(str(path), pagesize=(w, h), leftMargin=margin * inch, rightMargin=margin * inch,
+    target = path if isinstance(path, io.BytesIO) else str(path)
+    title = "resume" if isinstance(path, io.BytesIO) else Path(path).stem
+    doc = SimpleDocTemplate(target, pagesize=(w, h), leftMargin=margin * inch, rightMargin=margin * inch,
                             topMargin=margin * inch, bottomMargin=margin * inch,
-                            title=Path(path).stem, author=data["name"], creator=data["name"], subject="")
+                            title=title, author=data["name"], creator=data["name"], subject="")
     doc.build(story)
     return doc.page
 
 
+def count_pages(data):
+    """PDF page count of prepared data, built in memory (variants.py tune)."""
+    warnings = []
+    paper, size, margin = page_settings(data, warnings)
+    return build_pdf(data, io.BytesIO(), paper, size, margin)
+
+
 # ---------- main ----------
 
-def main():
+def parse_args(argv):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("json_path")
     ap.add_argument("--out", required=True, help="folder to write into")
     ap.add_argument("--base", required=True, help='file name without extension, e.g. "First Last Resume"')
     ap.add_argument("--sources", nargs="+", metavar="FILE", help="master_resume.md, achievement_library.md, notes.md, profile.md: enables the FACT check")
     ap.add_argument("--terms", metavar="terms.json", help="posting terms (strings or {term, aliases}): enables the KEYWORD check")
-    args = ap.parse_args()
+    ap.add_argument("--mode", choices=sorted(MODE_CAPS), help="v1.2 document mode: page cap and section order")
+    ap.add_argument("--max-pages", type=int, metavar="N", help="v1.2: lower the page cap (or set one in cv mode)")
+    ap.add_argument("--publications", metavar="publications.md", help="v1.2: fills citation sections and enables CITE")
+    ap.add_argument("--posting", metavar="posting.md", help="v1.2: letter check against the posting's company and role")
+    ap.add_argument("--strict", action="store_true", help="v1.2: exit 6 with STRICT-FAIL lines on any failed check")
+    return ap.parse_args(argv)
 
+
+def page_cap(mode, max_pages):
+    """The hard page cap for a mode: industry and usajobs 2, cv none (--max-pages lowers it)."""
+    cap = MODE_CAPS.get(mode)
+    if max_pages:
+        cap = min(cap, max_pages) if cap else max_pages
+    return cap
+
+
+def main(argv=None, emit=print):
+    """Build and check; returns the exit code. emit receives every output line
+    (variants.py collects them in-process)."""
+    args = parse_args(argv)
+    v12 = bool(args.strict or args.mode or args.max_pages or args.publications or args.posting)
+    mode = args.mode or ("industry" if args.strict else None)
     warnings = []
     try:
         data = load(args.json_path)
         paper, size, margin = page_settings(data, warnings)
-    except InputError as e:
-        print(f"ERROR {e}")
+        pubs = checks.load_publications(args.publications) if args.publications else None
+        posting = Path(args.posting).read_text(encoding="utf-8-sig") if args.posting else None
+        prepare(data, pubs, mode, warnings)
+    except (InputError, ValueError, OSError) as e:
+        emit(f"ERROR {e}")
         return 1
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -496,28 +701,53 @@ def main():
         return out / (args.base + ext)
 
     target(".txt").write_text(build_txt(data), encoding="utf-8")
-    print(f"wrote: {target('.txt')}")
+    emit(f"wrote: {target('.txt')}")
 
     try:
         build_docx(data, target(".docx"), paper, size, margin)
-        print(f"wrote: {target('.docx')}")
+        emit(f"wrote: {target('.docx')}")
     except ImportError:
-        print("MISSING python-docx: run  pip install python-docx  and build again")
+        emit("MISSING python-docx: run  pip install python-docx  and build again")
         code = 2
 
-    pdf_built = False
+    pdf_built, pages = False, None
     try:
         pages = build_pdf(data, target(".pdf"), paper, size, margin)
         pdf_built = True
-        print(f"wrote: {target('.pdf')} ({pages} page{'s' if pages != 1 else ''})")
+        emit(f"wrote: {target('.pdf')} ({pages} page{'s' if pages != 1 else ''})")
     except ImportError:
-        print("MISSING reportlab: run  pip install reportlab  and build again")
+        emit("MISSING reportlab: run  pip install reportlab  and build again")
         code = 2
 
-    for w in warnings + lint(data):
-        print(f"WARN {w}")
-    for line in checks.run_checks(data, target(".pdf") if pdf_built else None, target(".txt"), args.sources, args.terms):
-        print(line)
+    cap = page_cap(mode, args.max_pages) if "letter" not in data else None
+    over = pages is not None and cap is not None and pages > cap
+    if over:
+        warnings.append(f"pages {pages} > {cap} ({mode or 'page'} cap {cap})")
+    elif mode == "cv" and pages and pages > CV_WARN_PAGES and cap is None:
+        warnings.append(f"pages {pages}: a CV over {CV_WARN_PAGES} pages (no cap; trim older or minor items)")
+    lint_lines = lint(data)
+    for w in warnings + lint_lines:
+        emit(f"WARN {w}")
+    evidence = (args.strict and "letter" not in data) or "auto"
+    lines = checks.run_checks(data, target(".pdf") if pdf_built else None, target(".txt"), args.sources, args.terms,
+                              pubs=pubs, evidence=evidence, posting=posting, letter=v12)
+    for line in lines:
+        emit(line)
+    if not v12:
+        return code
+
+    failures = checks.strict_failures(lines)
+    if not pdf_built:
+        failures.append("PARSE not run (no PDF built)")
+    if not args.sources:
+        failures.append("FACT not run (no --sources)")
+    if over:
+        failures.append(f"pages {pages} > {cap}")
+    failures += [f"lint {w}" for w in lint_lines if "is on the banned-word list" in w]
+    for line in checks.verdict(failures, args.strict):
+        emit(line)
+    if args.strict and failures and code == 0:
+        code = 6
     return code
 
 

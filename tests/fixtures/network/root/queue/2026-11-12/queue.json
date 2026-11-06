@@ -1,0 +1,131 @@
+{
+ "v": 1,
+ "date": "2026-11-12",
+ "built_at": "2026-11-12T05:41:07-08:00",
+ "runner_version": "1.2.0",
+ "target": 20,
+ "size": 6,
+ "pool_left": 0,
+ "items": [
+  {
+   "n": 1,
+   "job_key": "greenhouse:5000001",
+   "company": "Acme Bio",
+   "role": "QC Microbiologist II",
+   "location": "Springfield, IL",
+   "ats": "greenhouse",
+   "host": "boards.greenhouse.io",
+   "apply_url": "https://boards.greenhouse.io/example/jobs/5000001",
+   "referral_url": "",
+   "folder": "applications/2026-11-12 Acme Bio - QC Microbiologist II",
+   "family": "qc_micro",
+   "tier": "B",
+   "score": 90,
+   "referral": {
+    "state": "none",
+    "contact_ref": "",
+    "hold_until": ""
+   }
+  },
+  {
+   "n": 2,
+   "job_key": "greenhouse:5000002",
+   "company": "Acme Bio",
+   "role": "QC Analyst",
+   "location": "Springfield, IL",
+   "ats": "greenhouse",
+   "host": "boards.greenhouse.io",
+   "apply_url": "https://boards.greenhouse.io/example/jobs/5000002",
+   "referral_url": "",
+   "folder": "applications/2026-11-12 Acme Bio - QC Analyst",
+   "family": "qc_micro",
+   "tier": "B",
+   "score": 85,
+   "referral": {
+    "state": "none",
+    "contact_ref": "",
+    "hold_until": ""
+   }
+  },
+  {
+   "n": 3,
+   "job_key": "greenhouse:5000003",
+   "company": "Globex Labs",
+   "role": "Lab Technician",
+   "location": "Springfield, IL",
+   "ats": "greenhouse",
+   "host": "boards.greenhouse.io",
+   "apply_url": "https://boards.greenhouse.io/example/jobs/5000003",
+   "referral_url": "",
+   "folder": "applications/2026-11-12 Globex Labs - Lab Technician",
+   "family": "qc_micro",
+   "tier": "B",
+   "score": 80,
+   "referral": {
+    "state": "none",
+    "contact_ref": "",
+    "hold_until": ""
+   }
+  },
+  {
+   "n": 4,
+   "job_key": "greenhouse:5000004",
+   "company": "Initech Bio",
+   "role": "Research Associate",
+   "location": "Springfield, IL",
+   "ats": "greenhouse",
+   "host": "boards.greenhouse.io",
+   "apply_url": "https://boards.greenhouse.io/example/jobs/5000004",
+   "referral_url": "",
+   "folder": "applications/2026-11-12 Initech Bio - Research Associate",
+   "family": "qc_micro",
+   "tier": "B",
+   "score": 75,
+   "referral": {
+    "state": "none",
+    "contact_ref": "",
+    "hold_until": ""
+   }
+  },
+  {
+   "n": 5,
+   "job_key": "greenhouse:5000005",
+   "company": "Vandelay Bio",
+   "role": "Assay Scientist",
+   "location": "Springfield, IL",
+   "ats": "greenhouse",
+   "host": "boards.greenhouse.io",
+   "apply_url": "https://boards.greenhouse.io/example/jobs/5000005",
+   "referral_url": "",
+   "folder": "applications/2026-11-12 Vandelay Bio - Assay Scientist",
+   "family": "qc_micro",
+   "tier": "B",
+   "score": 70,
+   "referral": {
+    "state": "none",
+    "contact_ref": "",
+    "hold_until": ""
+   }
+  },
+  {
+   "n": 6,
+   "job_key": "greenhouse:5000006",
+   "company": "Hooli Health",
+   "role": "Microbiologist",
+   "location": "Springfield, IL",
+   "ats": "greenhouse",
+   "host": "boards.greenhouse.io",
+   "apply_url": "https://boards.greenhouse.io/example/jobs/5000006",
+   "referral_url": "",
+   "folder": "applications/2026-11-12 Hooli Health - Microbiologist",
+   "family": "qc_micro",
+   "tier": "B",
+   "score": 60,
+   "referral": {
+    "state": "none",
+    "contact_ref": "",
+    "hold_until": ""
+   }
+  }
+ ]
+}

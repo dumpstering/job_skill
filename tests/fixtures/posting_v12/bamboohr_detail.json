@@ -1,0 +1,18 @@
+{
+  "meta": {"isPreview": false},
+  "result": {
+    "jobOpening": {
+      "id": "42",
+      "jobOpeningName": "Research Associate, Cell Biology",
+      "departmentLabel": "Research",
+      "employmentStatusLabel": "Full-Time",
+      "atsLocation": {"country": "United States", "state": "California", "province": null, "city": "Springfield"},
+      "isRemote": false,
+      "locationType": "0",
+      "datePosted": "2026-10-28",
+      "compensation": "$85,000 - $100,000 / year",
+      "jobOpeningShareUrl": "https://acmebio.bamboohr.com/careers/42",
+      "description": "<p>Acme Bio is hiring a research associate.</p><ul><li>Culture mammalian cells</li><li>Run flow cytometry panels</li></ul><p>Req ID: RA-2026-07</p>"
+    }
+  }
+}

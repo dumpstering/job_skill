@@ -1,0 +1,24 @@
+employer,employer_norm,parent,ats,board,host,site,extra,careers_url,main_website,segment,city,families,priority,status,added_on,added_by,ref,notes
+Vaxcyte,vaxcyte,,greenhouse,vaxcyte,,,,,,biotech,,,2,active,2026-10-01,user,,test fixture
+Synthego,synthego,,lever,synthego,,,,,,biotech,,,2,active,2026-10-01,user,,test fixture
+insitro,insitro,,ashby,insitro,,,,,,biotech,,,2,active,2026-10-01,user,,test fixture
+Gilead Sciences,gilead sciences,,workday,gilead,wd1,gileadcareers,,,,biotech,,,2,active,2026-10-01,user,,test fixture
+Acme Biologics,acme biologics,,workday,acmebio,wd1,External,,,,biotech,,,2,active,2026-10-01,user,,test fixture
+Mango Materials,mango materials,,bamboohr,mangomaterials,,,,,,biotech,,,2,active,2026-10-01,user,,test fixture
+Vaxart,vaxart,,breezy,vaxart-inc,,,,,,biotech,,,2,active,2026-10-01,user,,test fixture
+Hugging Face,hugging face,,workable,huggingface,,,,,,biotech,,,2,active,2026-10-01,user,,test fixture
+SETI Institute,seti institute,,rippling,seti-institute,,,,,,biotech,,,2,active,2026-10-01,user,,test fixture
+Pinpoint,pinpoint,,pinpoint,workwithus,,,,,,biotech,,,2,active,2026-10-01,user,,test fixture
+Teamtailor,teamtailor,,teamtailor,career,career.teamtailor.com,,,,,biotech,,,2,active,2026-10-01,user,,test fixture
+Capmo,capmo,,personio,capmo,,,,,,biotech,,,2,active,2026-10-01,user,,test fixture
+Doyensec,doyensec,,manatal,doyensec-llc,,,,,,biotech,,,2,active,2026-10-01,user,,test fixture
+Jaguar Land Rover Coral Gables,jaguar land rover coral gables,,hireology,jaguarlandrover,,,,,,biotech,,,2,active,2026-10-01,user,,test fixture
+Pinnacle Home Care,pinnacle home care,,comeet,pinnaclehomecare,,1B.00E,,,,biotech,,,2,active,2026-10-01,user,,test fixture
+Cytek Biosciences,cytek biosciences,,adp,a21467f2-5c74-46bf-bd5c-61cdb598d8b3,,19000101_000001,,,,biotech,,,2,active,2026-10-01,user,,test fixture
+Hologic,hologic,,oracle,ebwb,ebwb.fa.us2.oraclecloud.com,CX,,,,biotech,,,2,paused,2026-10-01,user,,fixture list was recorded without a family keyword
+Codexis,codexis,,paylocity,fb344149-f240-4648-a99b-7e27510b63c2,,Codexis-Inc,,,,biotech,,,2,active,2026-10-01,user,,test fixture
+Asbury Automotive,asbury automotive,,dayforce,asburyauto,,ASBURYCAREERSITE,,,,biotech,,,2,active,2026-10-01,user,,test fixture
+Sutro Biopharma,sutro biopharma,,jobvite,sutrobio,,,,,,biotech,,,2,active,2026-10-01,user,,test fixture
+Buck Institute,buck institute,,jazzhr,buckinstitute,,,,,,biotech,,,2,active,2026-10-01,user,,test fixture
+AbbVie,abbvie,,phenom,abbvie,careers.abbvie.com,,,https://careers.abbvie.com/en,,biotech,,,2,active,2026-10-01,user,,test fixture
+Acme Bio,acme bio,,recruitee,acmebio,,,,,,biotech,,,2,active,2026-10-01,user,,test fixture

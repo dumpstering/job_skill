@@ -1,0 +1,177 @@
+# Work-search presets per state (spec 6.6), read by worksearch.py.
+#
+# Every rule value is a table {value, ref, confirmed}:
+#   value      what worksearch.py uses
+#   ref        the research finding behind it (worksearch A<n>), or "design"
+#   confirmed  true when an official page read live states it; false when the
+#              value is a default or the source was not confirmed. Check the
+#              claimant's own notice (CA DE 429Z, TX TWC letter) before relying on
+#              an unconfirmed value.
+#
+# Keys:
+#   weekly_minimum   contacts a week (0 = no fixed number)
+#   min_days         distinct days a week with a contact (0 = no rule)
+#   week_start       first day of the claim week (sunday | monday)
+#   entry_mode       portal (typed in with each certification) | record (kept, shown on request)
+#   period_weeks     weeks per certification (the export period)
+#   ready_rows       rows per week in the ready-to-type block of the .md
+#   website          which URL the ready-to-type block shows: posting | main
+#   checks           extra per-week checks: new_employers, days, same_employer_location, repeat_job,
+#                    applications_plus_activity
+#   registration     the job-bank registration rule, said once at setup
+#   retention        how long the state says to keep the record (worksearch A21)
+# Unlisted states use [generic]. Rows are never deleted; keep them at least 2 years.
+
+[generic]
+name = "Other state"
+weekly_minimum = { value = 0, ref = "design", confirmed = false }
+min_days = { value = 0, ref = "design", confirmed = false }
+week_start = { value = "sunday", ref = "worksearch A15", confirmed = false }
+entry_mode = { value = "record", ref = "design", confirmed = false }
+period_weeks = { value = 1, ref = "design", confirmed = false }
+ready_rows = { value = 5, ref = "design", confirmed = false }
+website = { value = "posting", ref = "design", confirmed = false }
+checks = { value = [], ref = "design", confirmed = false }
+registration = { value = "", ref = "design", confirmed = false }
+retention = { value = "at least 2 years (the longest period any state gives)", ref = "worksearch A21", confirmed = false }
+note = "Check your state's work-search rules: this export has every column, a Sunday-Saturday week and no minimum."
+
+[states.CA]
+name = "California"
+weekly_minimum = { value = 0, ref = "worksearch A4", confirmed = true }
+min_days = { value = 0, ref = "worksearch A4", confirmed = true }
+week_start = { value = "sunday", ref = "worksearch A15", confirmed = false }
+entry_mode = { value = "record", ref = "worksearch A4", confirmed = true }
+period_weeks = { value = 2, ref = "worksearch verifier omission", confirmed = true }
+ready_rows = { value = 5, ref = "design", confirmed = false }
+website = { value = "posting", ref = "design", confirmed = false }
+checks = { value = [], ref = "worksearch A4", confirmed = true }
+registration = { value = "CalJOBS within 21 days of the DE 8405 notice", ref = "worksearch A20", confirmed = true }
+retention = { value = "no period given; keep 2 years", ref = "worksearch A21", confirmed = true }
+note = "EDD gives no weekly number or format; your DE 429Z states your requirement. Certification is every two weeks."
+
+[states.TX]
+name = "Texas"
+weekly_minimum = { value = 3, ref = "worksearch A2", confirmed = true }
+min_days = { value = 0, ref = "worksearch A2", confirmed = true }
+week_start = { value = "sunday", ref = "worksearch A15", confirmed = true }
+entry_mode = { value = "record", ref = "worksearch A3", confirmed = true }
+period_weeks = { value = 1, ref = "worksearch A3", confirmed = true }
+ready_rows = { value = 5, ref = "worksearch A2", confirmed = false }
+website = { value = "posting", ref = "worksearch A18", confirmed = true }
+checks = { value = [], ref = "worksearch A16", confirmed = true }
+registration = { value = "WorkInTexas within 3 business days of applying", ref = "worksearch A20", confirmed = true }
+retention = { value = "the benefit year, or while receiving benefits if longer", ref = "worksearch A21", confirmed = true }
+note = "Your county sets 1 to 5 a week (Harris, Dallas, Travis, Bexar and Tarrant: 5); your TWC letter wins. Phone with area code is required."
+
+[states.FL]
+name = "Florida"
+weekly_minimum = { value = 5, ref = "worksearch A5", confirmed = true }
+min_days = { value = 0, ref = "worksearch A5", confirmed = true }
+week_start = { value = "sunday", ref = "worksearch A15", confirmed = false }
+entry_mode = { value = "portal", ref = "worksearch A5", confirmed = true }
+period_weeks = { value = 2, ref = "worksearch A5", confirmed = true }
+ready_rows = { value = 5, ref = "worksearch A5", confirmed = true }
+website = { value = "posting", ref = "worksearch A18", confirmed = true }
+checks = { value = ["same_employer_location"], ref = "worksearch A5 correction", confirmed = true }
+registration = { value = "Employ Florida (deadline not found)", ref = "worksearch A20", confirmed = false }
+retention = { value = "no period given; keep 2 years", ref = "worksearch A21", confirmed = true }
+note = "5 a week in counties over 75,000 people, 3 in smaller ones. Contacts go per week inside the bi-weekly Reconnect request."
+
+[states.NY]
+name = "New York"
+weekly_minimum = { value = 3, ref = "worksearch A6", confirmed = true }
+min_days = { value = 0, ref = "worksearch A6", confirmed = true }
+week_start = { value = "monday", ref = "worksearch A15", confirmed = true }
+entry_mode = { value = "portal", ref = "worksearch A6 correction", confirmed = true }
+period_weeks = { value = 1, ref = "worksearch A6", confirmed = true }
+ready_rows = { value = 3, ref = "worksearch A6 correction", confirmed = true }
+website = { value = "posting", ref = "worksearch A19", confirmed = true }
+checks = { value = [], ref = "worksearch A6", confirmed = true }
+registration = { value = "", ref = "worksearch A20", confirmed = false }
+retention = { value = "1 year from the claim's effective date", ref = "worksearch A21", confirmed = true }
+note = "The week ends on Sunday (WS5: use the Sunday date). Enter 3 activities in each weekly certification and keep proof of online applications."
+
+[states.GA]
+name = "Georgia"
+weekly_minimum = { value = 3, ref = "worksearch A8", confirmed = true }
+min_days = { value = 3, ref = "worksearch A8", confirmed = true }
+week_start = { value = "sunday", ref = "worksearch A15", confirmed = false }
+entry_mode = { value = "portal", ref = "worksearch A8", confirmed = true }
+period_weeks = { value = 1, ref = "worksearch A8", confirmed = true }
+ready_rows = { value = 3, ref = "worksearch A8", confirmed = true }
+website = { value = "posting", ref = "worksearch A8", confirmed = true }
+checks = { value = ["new_employers", "days"], ref = "worksearch A8", confirmed = true }
+registration = { value = "WorkSource Georgia within 10 days of the first payment", ref = "worksearch A20", confirmed = true }
+retention = { value = "no period given; keep 2 years", ref = "worksearch A21", confirmed = true }
+note = "3 new employers never contacted before, on 3 or more days, every week. Applying for a job you are not qualified for does not count."
+
+[states.NC]
+name = "North Carolina"
+weekly_minimum = { value = 3, ref = "worksearch A10", confirmed = true }
+min_days = { value = 0, ref = "worksearch A10", confirmed = true }
+week_start = { value = "sunday", ref = "worksearch A15", confirmed = false }
+entry_mode = { value = "portal", ref = "worksearch A10", confirmed = true }
+period_weeks = { value = 1, ref = "worksearch A10", confirmed = true }
+ready_rows = { value = 3, ref = "worksearch A10", confirmed = true }
+website = { value = "main", ref = "worksearch A10", confirmed = true }
+checks = { value = [], ref = "worksearch A10", confirmed = true }
+registration = { value = "NCWorks (deadline not found)", ref = "worksearch A10", confirmed = false }
+retention = { value = "2 years recommended", ref = "worksearch A21", confirmed = true }
+note = "Enter the employer's main website only, never the posting or application link."
+
+[states.OH]
+name = "Ohio"
+weekly_minimum = { value = 2, ref = "worksearch A11", confirmed = true }
+min_days = { value = 0, ref = "worksearch A11", confirmed = true }
+week_start = { value = "sunday", ref = "worksearch A15", confirmed = false }
+entry_mode = { value = "portal", ref = "worksearch A11", confirmed = true }
+period_weeks = { value = 1, ref = "worksearch A11", confirmed = true }
+ready_rows = { value = 2, ref = "worksearch A11", confirmed = true }
+website = { value = "posting", ref = "design", confirmed = false }
+checks = { value = [], ref = "worksearch A11", confirmed = true }
+registration = { value = "OhioMeansJobs is automatic; post a resume by week 4 and the Career Profile by week 8", ref = "worksearch A20", confirmed = true }
+retention = { value = "18 months", ref = "worksearch A21", confirmed = true }
+note = "The fields of the weekly claim are not published; this export has every column."
+
+[states.PA]
+name = "Pennsylvania"
+weekly_minimum = { value = 3, ref = "worksearch A12 correction", confirmed = true }
+min_days = { value = 0, ref = "worksearch A12", confirmed = true }
+week_start = { value = "sunday", ref = "worksearch A15", confirmed = true }
+entry_mode = { value = "record", ref = "worksearch A12", confirmed = true }
+period_weeks = { value = 1, ref = "worksearch A12", confirmed = true }
+ready_rows = { value = 3, ref = "worksearch A12", confirmed = true }
+website = { value = "posting", ref = "worksearch A19", confirmed = true }
+checks = { value = ["applications_plus_activity", "repeat_job"], ref = "worksearch A12 correction", confirmed = true }
+registration = { value = "PA CareerLink within 30 days of filing", ref = "worksearch A20", confirmed = true }
+retention = { value = "2 years from the claim's effective date", ref = "worksearch A21", confirmed = true }
+note = "From week 3: 2 applications plus 1 work-search activity a week (a 3rd application may replace the activity). A repeat application to the same job does not count."
+
+[states.AZ]
+name = "Arizona"
+weekly_minimum = { value = 4, ref = "worksearch A13", confirmed = true }
+min_days = { value = 4, ref = "worksearch A13", confirmed = true }
+week_start = { value = "sunday", ref = "worksearch A15", confirmed = false }
+entry_mode = { value = "portal", ref = "worksearch A13", confirmed = true }
+period_weeks = { value = 1, ref = "worksearch A13", confirmed = true }
+ready_rows = { value = 4, ref = "worksearch A13", confirmed = true }
+website = { value = "posting", ref = "worksearch A18", confirmed = true }
+checks = { value = ["days"], ref = "worksearch A13", confirmed = true }
+registration = { value = "", ref = "worksearch A13", confirmed = false }
+retention = { value = "DES may audit for 2 years after the claim begins", ref = "worksearch A21", confirmed = true }
+note = "At least 4 contacts a week on at least 4 different days. Keep email or website confirmations."
+
+[states.IL]
+name = "Illinois"
+weekly_minimum = { value = 0, ref = "worksearch A7", confirmed = true }
+min_days = { value = 0, ref = "worksearch A7", confirmed = true }
+week_start = { value = "sunday", ref = "worksearch A15 correction", confirmed = false }
+entry_mode = { value = "record", ref = "worksearch A7", confirmed = true }
+period_weeks = { value = 1, ref = "worksearch A7", confirmed = true }
+ready_rows = { value = 5, ref = "design", confirmed = false }
+website = { value = "posting", ref = "design", confirmed = false }
+checks = { value = [], ref = "worksearch A7", confirmed = true }
+registration = { value = "IllinoisJobLink by the date in the mailed notice", ref = "worksearch A20", confirmed = false }
+retention = { value = "53 weeks after each claimed week", ref = "worksearch A21 correction", confirmed = true }
+note = "Quality, not a fixed number. Form ADJ034F columns: week ending, contact date, name and address, person contacted, method, type of work, results."

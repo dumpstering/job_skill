@@ -1,0 +1,50 @@
+# Synthetic test profile (tests/test_daily_e2e.py --make).
+version = 1
+
+[home]
+label = "Springfield, IL"
+zip = ""
+radius_miles = 40
+places = ["Springfield", "Redwood City", "Foster City", "Santa Clara", "South San Francisco", "San Carlos",
+          "Mountain View", "Novato", "Fremont"]
+remote = "us"
+
+[gates]
+exclude_title_words = ["Director", "Vice President", "VP", "Intern", "Internship", "Chief", "Head of"]
+
+[[knockout]]
+id = "ca_cls"
+name = "Clinical Laboratory Scientist license"
+required_patterns = ['(?i)\bCLS\b.{0,40}(licen[cs]e|required)']
+title_patterns = ['(?i)\bCLS\b']
+
+[[family]]
+id = "qc_micro"
+label = "QC / Microbiology"
+status = "active"
+mode = "industry"
+variant = "qc_micro"
+core_titles = ["QC Microbiologist"]
+adjacent_titles = ["Microbiology Analyst"]
+title_any = ["microbiolog*", "sterility", "laboratory", "lab"]
+title_none = ["sales", "manager"]
+terms = ["GMP", "aseptic technique", "environmental monitoring", "endotoxin testing", "real-time PCR"]
+priority = 1
+min_share = 0.10
+
+[[family]]
+id = "assay_dev"
+label = "Scientist / Assay development"
+status = "active"
+mode = "industry"
+variant = "assay_dev"
+core_titles = ["Scientist, Assay Development"]
+title_any = ["scientist"]
+title_none = ["machine learning", "data"]
+terms = ["real-time PCR", "ELISA", "assay development", "16S rRNA sequencing"]
+priority = 2
+min_share = 0.10
+
+[widen]
+enabled = true
+steps = ["adjacent_families", "remote_us", "second_ring"]

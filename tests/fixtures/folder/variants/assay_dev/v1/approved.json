@@ -1,0 +1,14 @@
+{
+ "family": "assay_dev",
+ "version": 1,
+ "approved_on": "2026-11-05",
+ "library_rev": "4e75e0bb4196288a6ee56058e34e30f2340729a3fc82135d6a13f6c0a9e8e698",
+ "sha256": {
+  "resume.json": "df2e2166f303d9fe0fe7e47f59a25e24ba103876fc6d9c1fee2c030c8ec1b2f8",
+  "pool.json": "382803e94bb621f7cabccdf0d098ca0d2acbad33fc2e392cc12aaaddd1e69b00",
+  "letter.json": "244846eb1c8d75f319f0b7fa5148202d87d40ebb75deeca4b4085d59dd940bd5"
+ },
+ "mode": "industry",
+ "max_pages": 2,
+ "publications_max": 3
+}

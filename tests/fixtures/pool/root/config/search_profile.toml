@@ -1,0 +1,47 @@
+version = 1
+
+[home]
+label = "Springfield, IL"
+zip = ""
+radius_miles = 40
+places = ["Springfield", "Shelbyville", "Capital City"]
+second_ring = ["Ogdenville"]
+remote = "us"
+
+[gates]
+exclude_title_words = ["Director", "VP", "Intern", "IT"]
+
+[[knockout]]
+id = "ca_cls"
+name = "California Clinical Laboratory Scientist license"
+title_patterns = ['(?i)^(?!.*\btrainee\b).*\b(CLS|clinical lab(oratory)? scientist)\b']
+required_patterns = ['(?i)\b(CLS|clinical lab(oratory)? scientist)\b(?! trainee)[^.;\n]{0,40}\b(licen[cs]e|licensure|required)']
+preferred_patterns = ['(?i)\b(CLS|clinical lab(oratory)? scientist)\b[^.;\n]{0,40}\b(preferred|a plus|desired)']
+
+[[family]]
+id = "qc_micro"
+label = "QC / Microbiology"
+status = "active"
+mode = "industry"
+variant = "qc_micro"
+core_titles = ["QC Microbiologist"]
+title_any = ["microbiolog*", "sterility"]
+title_none = ["sales"]
+require_any = ["aseptic", "microb*", "sterility"]
+terms = ["aseptic technique", "PCR"]
+priority = 1
+min_share = 0.10
+
+[[family]]
+id = "research_assoc"
+label = "Research associate"
+status = "active"
+mode = "industry"
+variant = "research_assoc"
+title_any = ["research associate"]
+priority = 3
+min_share = 0.10
+
+[widen]
+enabled = true
+steps = ["adjacent_families", "remote_us", "second_ring"]

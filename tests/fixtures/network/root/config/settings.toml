@@ -1,0 +1,7 @@
+[runner]
+mode = "L"
+
+[referrals]
+enabled = true
+asks_per_day = 3
+hold_days = 0

@@ -1,0 +1,45 @@
+{
+ "https://api.ashbyhq.com/posting-api/job-board/betabio?includeCompensation=true": {
+  "status": 404
+ },
+ "https://api.lever.co/v0/postings/betabio?mode=json&skip=0&limit=100": {
+  "status": 404
+ },
+ "https://api.lever.co/v0/postings/globexbio?mode=json&skip=0&limit=100": "lever_globexbio.json",
+ "https://api.rippling.com/platform/api/ats/v1/board/betabio/jobs": {
+  "status": 404
+ },
+ "https://apply.workable.com/api/v1/widget/accounts/betabio?details=true": {
+  "status": 404
+ },
+ "https://betabio.applytojob.com/apply/jobs": {
+  "file": "empty.html",
+  "url": "https://www.jazzhr.com/"
+ },
+ "https://betabio.bamboohr.com/careers/list": {
+  "file": "empty.html",
+  "url": "https://www.bamboohr.com/"
+ },
+ "https://betabio.breezy.hr/json": {
+  "status": 404
+ },
+ "https://betabio.jobs.personio.de/xml?language=en": "personio_empty.xml",
+ "https://betabio.pinpointhq.com/postings.json": {
+  "status": 404
+ },
+ "https://betabio.teamtailor.com/jobs.json": {
+  "status": 404
+ },
+ "https://boards-api.greenhouse.io/v1/boards/acmebio/jobs/900101?questions=true": "gh_acmebio_900101.json",
+ "https://boards-api.greenhouse.io/v1/boards/acmebio/jobs?content=true": "gh_acmebio_list.json",
+ "https://boards-api.greenhouse.io/v1/boards/betabio/jobs?content=true": {
+  "status": 404
+ },
+ "https://careers.deltabio.example/jobs": "careers_deltabio.html",
+ "https://jobs.jobvite.com/betabio/jobs": {
+  "file": "empty.html",
+  "url": "https://jobs.jobvite.com/betabio/jobs?invalid=1"
+ },
+ "https://jobs.smartrecruiters.com/robots.txt": "robots_block_all.txt",
+ "https://www.epsilonbio.example/careers": "careers_epsilonbio.html"
+}

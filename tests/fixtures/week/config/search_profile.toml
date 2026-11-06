@@ -1,0 +1,11 @@
+version = 1
+
+[[family]]
+id = "qc_micro"
+label = "QC / Microbiology"
+status = "active"
+
+[[family]]
+id = "assay_dev"
+label = "Assay development"
+status = "active"

@@ -1,136 +1,201 @@
-# Job application helper for Claude
+# Job search helper for Claude: setup and daily use
 
-Paste a job link. Claude checks you haven't already applied for it, reads the
-posting, checks it against your resume, asks you a few questions, writes a
-tailored resume (Word and PDF), and fills in the application in your browser.
-You review it and click Submit yourself. Every job goes into a spreadsheet,
-and Claude can check your Gmail for replies and update the spreadsheet for
-you. Each application also adds to a file of your achievements, so the next
-one starts with more material.
+Each morning a small job finder on your PC reads employers' job boards and
+makes a list of about 30 fresh jobs that fit you, each with a resume
+already built from a version you approved. You open Claude, type `/job`,
+and Claude fills in the applications one at a time in its browser. You
+attach the file it names, look over the page, and click Submit yourself.
+Every application goes into a spreadsheet, and Claude checks Gmail for
+replies.
 
 You need:
-- The Claude desktop app for Windows, signed in on a paid plan (Pro or higher).
+- The Claude desktop app for Windows, signed in on a paid plan (Pro or
+  higher; see "Checking your usage" for which plan).
 - Your most complete resume as a Word or PDF file.
-- Gmail, if you want Claude to check for replies (optional).
-- Google Chrome, if you want Claude to use your own browser (optional).
+- Gmail (for replies and job alerts).
+- About 25 minutes on the first day and 20 on the second.
 
-## One-time setup (about 10 minutes)
+**You are responsible for what is sent in your name.** Claude never clicks
+Submit, never creates accounts, never handles passwords or verification
+codes, and never solves CAPTCHAs. Submit is always yours.
+
+## Day 1: install and set up (about 25 minutes)
 
 1. **Make the folder.** In File Explorer, open Documents and create a folder
-   named `JobSearch`. Copy your most complete resume into it, with "resume" in
-   the file name (for example `Resume - full.docx`). Use your full version,
-   not one you cut down for a particular job.
-2. **Turn on file creation.** In Claude, open Settings > Capabilities and
-   switch on "Code execution and file creation" (newer versions call it
-   "Create and edit files").
-3. **Install the skill.** Open Customize > Skills, click +, then Create skill
-   > Upload a skill, and choose `job.zip`. Check that "job" is switched on in
-   the list.
-4. **Connect Gmail (optional).** In Claude's settings, open Connectors and
-   connect Gmail. Claude searches and reads your mail for job replies. It
-   never sends, deletes or moves anything; it saves a draft follow-up only
-   when you ask for one, for you to send yourself.
-5. **Pick a browser (optional).** Claude uses Cowork's built-in browser unless
-   you change it. To use your own Chrome, where you are already signed in to
-   job sites, install the Claude in Chrome extension and choose Chrome under
-   Settings > Cowork.
+   named `JobSearch`. Copy your most complete resume into it, with "resume"
+   in the file name (for example `Resume - full.docx`). Use your full
+   version, not one cut down for a particular job.
+2. **Turn on code and files.** In Claude, open Settings > Capabilities,
+   switch on "Code execution and file creation", and check "Allow network
+   egress".
+3. **Install the plugin.** Open the Plugins page, choose Add > Upload
+   plugin, and pick `job-search-plugin.zip`. (This click path is UNVERIFIED:
+   menu names were changing in November 2026, and "Customize" is being
+   renamed "Plugins".) If the plugin will not install, upload `job.zip` as a
+   skill instead; everything works, a little slower. If you uploaded an
+   earlier version before 2026-10-05, remove it and upload this one.
+4. **Connect the folder.** Start a new task, connect your
+   `Documents\JobSearch` folder, and allow it. It then stays under Trusted
+   folders, so you connect it once. Do not put the folder inside a Project:
+   Claude cannot change a project's files.
+5. **Connect Gmail.** In Claude's settings, open Connectors and connect
+   Gmail. Claude only searches and reads: it never sends, deletes, labels or
+   moves mail.
+6. **Type `/job setup`** (or `/job-search:job setup`). Claude reads your
+   resume, shows what it found, and asks the details applications want
+   (contact, work authorization, start date, licenses you hold, whether you
+   are claiming unemployment), in one list. "Skip" is fine for anything. It
+   also asks where you applied recently, so reposts get caught, and shows
+   your publications and lab techniques for a yes.
+7. **Create job alerts on LinkedIn** when Claude suggests them: 5 now, daily,
+   by email, one per broad job title; Claude suggests 3 more each of the
+   next few days, up to 20. Claude never opens LinkedIn; it only reads the
+   alert emails for the company, title and place.
+8. **Request your LinkedIn data export:** on LinkedIn, Me > Settings &
+   Privacy > Data Privacy > Download your data. It can take up to 48 hours.
+   Claude uses it to find people you know at the companies you apply to.
+9. **Say yes to the two scheduled tasks** Claude offers: "job-morning" at
+   6:30 (it reads your mail, prepares the day's best few applications in
+   full, and gathers the day's questions) and "job-inbox" at 1:00 pm (it
+   checks for replies). They run only while the Claude desktop app is open.
+   Free plans have no scheduled tasks; then `/job` does the morning work
+   itself.
 
-## Applying for a job
+## Day 2: the job finder (about 20 minutes)
 
-1. In the Claude app, switch to **Cowork** and start a new task. Use a new
-   task for each job.
-2. Connect your `Documents\JobSearch` folder to the task.
-3. Type `/job`, pick "job" from the menu, paste the job link, and send. If
-   /job is not in the menu, type "Use the job skill:" followed by the link.
-4. **First time only:** Claude reads your resume, shows you what it found, and
-   asks for the details every application wants (address, phone, work
-   authorization, start date and so on). It also asks where you have applied
-   recently, so reposts of those jobs get caught. Your details are saved in
-   `profile.md` in your folder. Skip anything you like; Claude asks when an
-   application needs it.
-5. **Duplicate check:** if you already applied for this job, or it looks like
-   a repost of one you did, Claude tells you when and asks whether to go on.
-6. Claude shows how well you match the job and asks a few questions (up to
-   6, plus some one-line quick checks). Short answers, rough numbers and
-   "skip" are all fine.
-7. Claude writes the resume and saves it as Word and PDF in
-   `JobSearch\applications\<date> <company> - <role>`. Read it, and read the
-   "Verify before sending" list: you are the one signing this resume. Ask for
-   any changes in plain words.
-8. Reply **audit** for a line-by-line check against what you told it. Claude
-   also runs this itself before it fills in an application.
-9. Reply **apply**. Claude opens the application and fills it in page by
-   page. It stops and asks you to:
-   - sign in or create an account (it never handles passwords or
-     verification codes; it reminds you which email you used on that site
-     before),
-   - attach your resume file when it cannot attach it itself (it tells you
-     which file),
-   - answer anything your files do not cover,
-   - fill in sensitive items yourself: SSN, date of birth, bank details,
-     signatures and "I certify" boxes.
-10. Claude stops on the last page, before Submit. Check each page, click
-    Submit, then reply **submitted** so it is logged. Claude keeps a copy of
-    exactly what you sent.
+1. **Install the job finder.** Download `install_runner.cmd` from the
+   release page and double-click it. If Windows SmartScreen warns you,
+   click More info > Run anyway. It needs no administrator rights. It
+   installs Python for your user, checks that the download is the published
+   one (it stops if not), and sets up two Windows tasks: one at 5:30 every
+   morning and a short check every 15 minutes from 6 am to 10 pm, both
+   without a window. It adds a desktop shortcut, "Run job finder now".
+2. **Optional free keys.** The installer asks for keys for Adzuna and
+   USAJOBS (federal jobs). Type them only into that installer window,
+   never into a chat. You can skip them and add them later by running
+   `install_runner.cmd` again.
+3. **The first run.** Double-click "Run job finder now". Then in Claude say
+   `/job setup` again to finish: Claude switches to the job finder, shows
+   the job families and places it searches (reply "ok" or name a change),
+   and lists the alert senders it found in your mail for a yes.
+4. **Approve your base resumes.** For each of 2-4 job families, Claude
+   builds one base resume and has a second reviewer check it. You read one
+   PDF and one page of extra lines per family, then reply `approve
+   <family>`. These bases are what most applications start from, so they
+   are worth 15-20 minutes. Claude only ever reorders and selects approved
+   lines for a job; it never writes new claims into them.
+5. **Drop in the export.** When LinkedIn's email arrives, put the zip into
+   `JobSearch\network\raw`. Nothing else to do; it is read on the next run.
 
-LinkedIn does not allow automated tools, so Claude never opens or fills in
-LinkedIn pages. For a LinkedIn job, paste the posting text (or the company's
-own application link, if the listing has one). For Easy Apply jobs, Claude
-writes out your answers for you to paste.
+The job finder can be removed with `uninstall_runner.ps1`; that never
+touches your JobSearch folder.
 
-When Claude pauses for you (to sign in, attach a file, or close the
-spreadsheet), reply **done** when you have finished.
+## Your day
 
-## Other things you can ask
+**A normal day.** Start a new task with the JobSearch folder, type `/job`.
+You see one short card: what is ready, any urgent mail (an interview
+request, an assessment with a deadline), up to 6 questions, and the salary
+and sponsorship answers it will use, for one "ok". Claude starts on #1 right
+away; answer the questions whenever you like, in one reply. For each job:
+1. Attach the file starting with the job's number from `JobSearch\upload`
+   when Claude asks (pin that folder in Quick access the first time), and
+   type `ok`.
+2. Look over the page Claude filled, click Submit, and type `s`.
+Type `k` to skip a job, `later` to move it to tomorrow, `stop` to end.
+After 10 jobs Claude suggests a break and a new task: type `/job` there and
+it picks up at #11. Sites that need an account (Workday and the like) come
+after the first 10, grouped, at most 3 new sites a day; you create each
+account and sign in yourself, and Claude tells you which email you used
+there before.
 
-Start a Cowork task with your JobSearch folder connected, then type:
-- **/job inbox** - Claude checks Gmail for replies (confirmations,
-  rejections, interview requests, offers), updates your spreadsheet, and
-  warns you about anything that looks like a job scam.
-- **/job status** - what is in progress, which follow-ups are due, and your
-  response rate so far.
-- **/job log** - tell Claude about a job you applied for on your own, so it
-  goes in the spreadsheet too.
-- **/job prep** - interview prep for a job, built from the resume you sent.
+**A short day.** Type `/job short`, or say "short" at any point. Claude does
+only the quick jobs that need no account, asks nothing, and stops when you
+say `stop`. Even shorter: `/job inbox` just checks your mail.
 
-In a job task you can also reply **go** (skip the questions and write the
-resume), **cover letter**, **library** (see your achievement library) or
-**profile** (see or change your saved details).
+**After a break.** Nothing piles up. The list is rebuilt every morning from
+what is still open, never more than about 30, and the card shows only what
+happened that needs you: interviews, assessments, offers, direct questions.
 
-## What is in your JobSearch folder
+**Keep the Claude app open** while job-morning runs and while you apply, and
+keep the browser pane visible while Claude fills a form.
 
-- `applications.xlsx` - the spreadsheet of every job you started or applied
-  for: status, dates, follow-ups, and links. It also lists the job-site
-  accounts you created (which email, never passwords) and every email Claude
-  read for you. Close it in Excel while Claude is working, so Claude can
-  update it.
-- `profile.md` - your contact details and standard answers. Open it in
-  Notepad and edit it whenever you like.
-- `achievement_library.md` - everything you have done, role by role. It
-  grows with each application, and every new resume draws on it.
-- `applications\` - one folder per job: the posting, your tailored resume (and
-  cover letter, if you asked for one), what was entered in the form, and,
-  for applications Claude filled in, a `submitted` folder with exactly what
-  you sent.
-- `backups\` - dated copies of your profile, library and spreadsheet from
-  before changes. Claude adds and updates files here but never deletes them.
+**The browser.** Claude uses its built-in browser unless you choose Claude
+in Chrome (install the extension, then pick Chrome under Settings > Cowork >
+Preferred browser). In the built-in browser, sign in to job sites once
+inside it; on Windows it can import cookies only from Firefox.
+
+## Replies, rejections and follow-ups
+
+- Interview requests, screens, assessments with deadlines, offers and
+  direct questions reach you at once (a phone notification from the
+  scheduled task, and the top of the card).
+- **Rejections come weekly.** They update the spreadsheet right away but
+  appear only in the Monday summary, as one plain list.
+- Follow-ups are offered only for the jobs Claude tailored in full and the
+  ones someone referred you to, as text for you to send.
+- `/job week` shows the weekly summary any time: what you sent, the
+  conversations started, and what is working.
+
+## Checking your usage (days 1 and 2)
+
+Usage limits are not published, so on your first two days Claude asks three
+times (before the first application, after the 3rd and after the 5th): "What
+does Settings > Usage show now?" Reply with the two percentages. `/job
+usage` then says whether your plan fits 20 applications a day or what to
+change (two sittings, a larger plan, or a lower daily number). A good start
+is Max for two weeks, or Pro with usage credits on.
+
+## The work-search record (if you claim unemployment)
+
+Tell Claude "I'm claiming unemployment in <state>". In certification weeks
+it offers `/job worksearch`, which writes your job-search activity (dates,
+employers, how you applied, results) to a spreadsheet and a ready-to-type
+list in `JobSearch\worksearch`. Boxes for your SSN, claimant ID and
+signature are left blank for you. Check your state's own rules; the
+spreadsheet is your record, not a filing.
+
+## Other things you can type
+
+- `/job <link>` - one job from a link, with full tailoring: duplicate check,
+  fit, a few questions, a tailored resume, then the form.
+- `/job add <link>` - put a job you found into today's list.
+- `/job log` - tell Claude about a job you applied for on your own.
+- `/job status` - what is in flight and what is ready to follow up.
+- `/job prep` - interview prep from what you sent.
+- `/job settings` - the switches in plain words ("aim for 25 a day", "use
+  Chrome", "confirm salary once a day").
+- `/job watch <company>` - add an employer to the job finder's list.
+- `/job network` - people you know at the companies on your list.
+- `/job variants` - your base resumes.
+In Cowork the plugin form is `/job-search:job` followed by the same words.
+
+LinkedIn and Indeed do not allow automated tools, so Claude never opens or
+fills them. For a job you found there, paste the posting text or the
+company's own application link. Easy Apply jobs go on a short do-yourself
+list with your answers written out, for you to apply in your own browser;
+type `log e1` afterwards.
+
+## What never leaves your PC
+
+Your resume, profile, achievements, answers, spreadsheet, contacts export,
+job list and uploads are files in `Documents\JobSearch`. Claude reads them
+during a task, the same as anything you paste into a chat, and reads only
+the contacts that match the job in front of it. The job finder sends nothing
+personal over the network, except the email you used for a USAJOBS key,
+which USAJOBS requires. API keys stay in your Windows user profile, never in
+the folder or a chat. Claude never asks for or saves your SSN, date of
+birth, bank details or passwords.
 
 ## If something goes wrong
 
-- **Claude says it cannot find your folder:** connect `Documents\JobSearch`
-  to the Cowork task and send /job again.
-- **Claude says the spreadsheet is locked:** close `applications.xlsx` in
-  Excel and reply "done".
-- **The job page will not load:** copy the posting text from your browser and
-  paste it in.
-- **/job does not appear in Cowork:** install `job-search-plugin.zip` from
-  Customize > Plugins > Add > Upload plugin, then type / and pick
-  "job-search:job".
-- **The resume runs over one page:** say "make it fit on one page".
-- Cowork on Windows is in beta, so menu names may differ a little from the
-  ones above.
-
-Privacy: your resume, profile, library and spreadsheet are files in your
-JobSearch folder. Claude reads them during a task, the same as anything you
-paste into a chat. It never asks for or saves your SSN, date of birth, bank
-details or passwords.
+- **Claude cannot find your folder:** connect `Documents\JobSearch` to the
+  task and type `/job` again.
+- **The card says the job finder has not run:** double-click "Run job finder
+  now" on the desktop.
+- **The card asks you to close the spreadsheet:** close `applications.xlsx`
+  in Excel; Claude never needs it open.
+- **A job page will not load:** paste the posting text instead.
+- **`/job` does not appear:** type `/job-search:job`, or "Use the job
+  skill:" followed by what you want.
+- **A usage limit:** stop; type `/job` after the window resets. Nothing is
+  lost.

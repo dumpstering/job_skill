@@ -1,0 +1,6 @@
+# Fixtures are compared byte for byte (variant approvals hash the exact LF
+# bytes of resume.json, pool.json and letter.json), so no line-ending changes.
+tests/fixtures/** -text
+
+# cmd.exe labels misbehave with LF line endings.
+*.cmd text eol=crlf

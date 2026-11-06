@@ -1,0 +1,525 @@
+# Preset: life-science title families, license knockouts and San Francisco
+# Bay Area places (research run 2, with the verifier's fixes applied).
+# Setup copies this file to config/search_profile.toml when his field and
+# region match, then fills [home] label and zip from profile.md. Nothing in
+# it is personal: the places are regional.
+#
+# Term syntax (see templates/search_profile.toml): whole words; "stem*";
+# "a+b" needs every part; "a|b" is either. Families are tried in file order,
+# so the specific ones come first and the general scientist families last.
+# For academic, institute and government employers (watch-list segment) a
+# cv-mode family wins over an industry one; usajobs-mode families take only
+# USAJOBS postings.
+#
+# Fixes from the verifier (families_research verdicts):
+# - CAPA and deviation are whole words ("Capacity Planner" no longer matches);
+#   deviation needs specialist, investigator or analyst.
+# - Clinical lab(oratory) scientist, CLS, clinical microbiology scientist,
+#   medical lab technician / scientist / technologist, MLS, MLT, MT(ASCP) and
+#   public health microbiologist are license knockouts and title_none terms
+#   in the families they leaked into; trainee titles are exempt and have
+#   their own (proposed) family.
+# - Specialist, product specialist, applications specialist, technical writer
+#   and lecturer / instructor titles need a science word in the title.
+# - Intern, internship, co-op and graduate intern are global excludes.
+# - Stanford's "Life Science Research Professional" matches; bare "research
+#   professional" excludes social science.
+# - Formulation and physical scientist are out of the scientist family;
+#   clinical research titles stay out of the research associate family.
+# - Bare upstream, downstream, purification and scale-up need a bio word.
+
+version = 1
+
+[home]
+label = ""                  # setup fills "City, ST" from profile.md
+zip = ""
+radius_miles = 40
+places = ["San Francisco", "South San Francisco", "Brisbane", "Daly City", "San Bruno", "Millbrae",
+          "Burlingame", "San Mateo", "Foster City", "Belmont", "San Carlos", "Redwood City",
+          "Redwood Shores", "Menlo Park", "Palo Alto", "Stanford", "East Palo Alto", "Los Altos",
+          "Mountain View", "Sunnyvale", "Santa Clara", "San Jose", "Cupertino", "Milpitas", "Campbell",
+          "Los Gatos", "Fremont", "Newark", "Union City", "Hayward", "San Leandro", "Alameda", "Oakland",
+          "Emeryville", "Berkeley", "Albany", "Richmond", "El Cerrito", "Pleasanton", "Dublin",
+          "San Ramon", "Livermore", "Walnut Creek", "Half Moon Bay", "Pacifica", "Moffett Field",
+          "Bay Area", "San Francisco Bay Area", "SF Bay Area", "Peninsula", "Silicon Valley"]
+second_ring = ["Vacaville", "Fairfield", "Vallejo", "Benicia", "Martinez", "Concord", "Pleasant Hill",
+               "Danville", "Santa Cruz", "Scotts Valley", "Watsonville", "Morgan Hill", "Gilroy",
+               "Petaluma", "Novato", "San Rafael", "Napa", "Santa Rosa", "Tracy", "Davis"]
+remote = "us"
+relocate = false
+
+[gates]
+# The global exclude (research design implication, plus the verifier's intern
+# and co-op leaks). Director is left to each family's title_none, so the
+# proposed study-director family can still see "Associate Director".
+exclude_title_words = ["Vice President", "VP", "Chief", "head of", "Intern", "Interns", "Internship",
+                       "co-op", "coop", "graduate intern", "student", "undergraduate", "sales",
+                       "account executive", "account manager", "customer success", "titling", "payroll",
+                       "benefits", "recruiter", "recruiting", "talent", "human resources", "marketing",
+                       "help desk", "helpdesk", "desktop support", "software", "web", "seo", "accounting",
+                       "finance", "legal", "paralegal", "facilities", "security officer", "driver",
+                       "warehouse", "retail", "insurance", "loan", "mortgage", "real estate", "billing",
+                       "medical coding", "call center", "claims", "IT", "HR"]
+employment_types = ["full-time", "contract", "temporary"]
+undated_policy = "first_seen_after_2_polls"
+
+# ---------- license knockouts (CDPH Laboratory Field Services; F07-F10) ----------
+# Research, academic and biotech lab years do not count toward any of these.
+# Trainee postings are exempt (license path, paid training).
+
+[[knockout]]
+id = "ca_cls"
+name = "California Clinical Laboratory Scientist license"
+title_patterns = ['(?i)^(?!.*\btrainee\b).*\b(CLS|clinical lab(oratory)? scientist)\b']
+required_patterns = ['(?i)\b(CLS|clinical lab(oratory)? scientist)\b(?! trainee)[^.;\n]{0,40}\b(licen[cs]e|licensure|required)',
+                     '(?i)\bCalifornia (CLS|clinical laboratory scientist) licen[cs]e']
+preferred_patterns = ['(?i)\b(CLS|clinical lab(oratory)? scientist)\b[^.;\n]{0,40}\b(preferred|a plus|desired)']
+
+[[knockout]]
+id = "ca_cms"
+name = "California Clinical Microbiologist Scientist license"
+title_patterns = ['(?i)^(?!.*\btrainee\b).*\bclinical microbiolog(y|ist) scientist\b']
+required_patterns = ['(?i)\bclinical microbiolog(y|ist) scientist (licen[cs]e|certificate)']
+
+[[knockout]]
+id = "ca_mlt"
+name = "California Medical Laboratory Technician license"
+title_patterns = ['(?i)^(?!.*\btrainee\b).*(\bmedical lab(oratory)? technician\b|\bMLT\b)']
+required_patterns = ['(?i)\b(MLT|medical laboratory technician) (licen[cs]e|certificate|certification)\b(?! trainee)']
+
+[[knockout]]
+id = "ascp_mls"
+name = "Medical Laboratory Scientist / MT(ASCP) credential"
+title_patterns = ['(?i)^(?!.*\btrainee\b).*(\bmedical lab(oratory)? (scientist|technologist)\b|\bMLS\b|\bMT ?\(ASCP\)|\bmedical technologist\b)']
+required_patterns = ['(?i)\b(MLS|MT) ?\(ASCP\)[^.;\n]{0,30}\b(required|certification)']
+
+[[knockout]]
+id = "ca_phm"
+name = "California Public Health Microbiologist certificate"
+title_patterns = ['(?i)^(?!.*\btrainee\b).*\bpublic health microbiologist\b']
+required_patterns = ['(?i)\bpublic health microbiologist (certificate|certification)\b']
+
+[[knockout]]
+id = "clearance"
+name = "Active security clearance"
+required_patterns = ['(?i)\b(active|current) (security|secret|top secret|TS/SCI) clearance\b']
+
+# ---------- title families (specific first) ----------
+
+[[family]]
+id = "license_path_trainee"
+label = "License path (paid trainee)"
+status = "proposed"
+mode = "industry"
+variant = "license_path_trainee"
+core_titles = ["CLS Trainee", "Clinical Laboratory Scientist Trainee", "Public Health Microbiologist Trainee"]
+adjacent_titles = []
+title_any = ["trainee+cls|clinical lab*|clinical laboratory scientist|medical lab*|mlt|public health microbiologist|clinical microbiolog*"]
+title_none = ["director", "manager", "supervisor"]
+require_any = []
+terms = ["clinical laboratory", "CLIA", "microbiology", "specimen processing", "quality control"]
+seniority_ok = []
+needs_license = []
+priority = 3
+min_share = 0.0
+
+[[family]]
+id = "postdoc"
+label = "Postdoctoral"
+status = "active"
+mode = "cv"
+variant = "postdoc"
+core_titles = ["Postdoctoral Fellow", "Postdoctoral Scholar", "Postdoctoral Researcher", "Industry Postdoc"]
+adjacent_titles = []
+title_any = ["postdoctoral", "postdoc*", "post doc*"]
+title_none = ["coordinator", "administrator", "program manager", "affairs", "office", "director"]
+require_any = []
+terms = ["microbiology", "molecular biology", "bacterial genetics", "microbiome", "CRISPR", "sequencing",
+         "publications", "grant writing"]
+seniority_ok = []
+needs_license = []
+priority = 1
+min_share = 0.10
+
+[[family]]
+id = "qc_micro_sterility"
+label = "QC microbiology / sterility assurance"
+status = "active"
+mode = "industry"
+variant = "qc_micro_sterility"
+core_titles = ["QC Microbiology Analyst", "QC Microbiologist", "QC Scientist", "Sterility Assurance Specialist",
+               "Sterility Assurance Scientist", "Aseptic Processing Specialist", "Environmental Monitoring Specialist",
+               "Environmental Monitoring Technician", "Contamination Control Specialist"]
+adjacent_titles = ["QC Micro Supervisor"]
+title_any = ["sterility", "aseptic", "environmental monitoring", "bioburden", "endotoxin", "contamination control",
+             "em specialist|em technician|em associate|em analyst", "qc|quality control+micro*"]
+title_none = ["director", "vp", "head of", "software", "sales", "data center", "food service"]
+require_any = []
+terms = ["cGMP", "aseptic technique", "environmental monitoring", "bioburden", "endotoxin", "sterility testing",
+         "USP <61>", "USP <62>", "USP <71>", "USP <85>", "LIMS", "gowning", "microbial identification"]
+seniority_ok = ["i", "ii", "iii", "1", "2", "3", "senior", "associate", "lead"]
+needs_license = []
+priority = 1
+min_share = 0.10
+
+[[family]]
+id = "process_dev_fermentation"
+label = "Process development / fermentation"
+status = "active"
+mode = "industry"
+variant = "process_dev_fermentation"
+core_titles = ["Scientist, Fermentation", "Process Development Scientist", "Upstream Process Scientist",
+               "Bioprocess Scientist", "Bioprocess Engineer", "Strain Engineering Scientist", "MSAT Scientist",
+               "Cell Culture Scientist"]
+adjacent_titles = []
+title_any = ["fermentation", "bioprocess*", "cell culture", "process development", "msat", "manufacturing science*",
+             "strain engineering|strain development|strain engineer",
+             "upstream|downstream|purification|scale up|scaleup+bio*|scientist|associate|protein*|cell*|ferment*"]
+title_none = ["director", "vp", "head of", "maintenance", "mechanic", "electrician", "software", "data", "supply chain",
+              "warehouse", "operator", "oil", "gas", "semiconductor"]
+require_any = ["bioreactor*", "fermentation", "fermenter*", "microb*", "cell culture", "biolog*", "protein*",
+               "yeast", "e coli", "strain*", "biologics"]
+terms = ["fermentation", "bioreactor", "DoE", "tech transfer", "scale-up", "upstream", "downstream", "GMP",
+         "strain engineering", "metabolic engineering"]
+seniority_ok = ["i", "ii", "iii", "1", "2", "3", "senior", "associate"]
+needs_license = []
+priority = 1
+min_share = 0.10
+
+[[family]]
+id = "assay_development"
+label = "Assay development / diagnostics R&D"
+status = "active"
+mode = "industry"
+variant = "assay_development"
+core_titles = ["Assay Development Scientist", "Scientist, Assay Development", "Diagnostics R&D Scientist",
+               "Immunoassay Scientist", "Molecular Assay Scientist"]
+adjacent_titles = []
+title_any = ["assay", "assays", "immunoassay", "elisa", "pcr", "qpcr",
+             "diagnostic|diagnostics+scientist|development|r d"]
+title_none = ["director", "vp", "head of", "sales", "software", "account"]
+require_any = []
+terms = ["assay development", "assay validation", "qPCR", "ELISA", "NGS", "flow cytometry", "ISO 13485",
+         "21 CFR 820", "CLIA", "design controls", "infectious disease"]
+seniority_ok = ["i", "ii", "iii", "1", "2", "3", "senior", "associate"]
+needs_license = []
+priority = 1
+min_share = 0.10
+
+[[family]]
+id = "field_application_tech_support"
+label = "Field application / technical support scientist"
+status = "active"
+mode = "industry"
+variant = "field_application_tech_support"
+core_titles = ["Field Application Scientist", "Application Scientist", "Applications Scientist",
+               "Technical Support Scientist", "Technical Applications Scientist", "Scientific Support Specialist"]
+adjacent_titles = []
+title_any = ["field application*", "application scientist|applications scientist", "technical support scientist",
+             "technical service scientist", "technical applications scientist|technical application scientist",
+             "scientific support", "customer support scientist|customer application scientist", "product scientist",
+             "applications specialist|application specialist|technical support specialist|technical service specialist|product specialist+bio*|life science*|molecular|genomic*|cell*|microbio*|sequencing|ngs|pcr|assay*|laboratory|lab|scientific|instrument*|cytometry|proteomic*|diagnostic*"]
+title_none = ["sales representative", "sales executive", "sales manager", "account manager", "account executive",
+              "director", "vp", "head of", "software", "saas", "it support", "help desk", "helpdesk"]
+require_any = []
+terms = ["customer training", "instrument troubleshooting", "NGS", "qPCR", "flow cytometry", "cell culture",
+         "technical support", "application notes"]
+seniority_ok = []
+needs_license = []
+priority = 1
+min_share = 0.05
+
+[[family]]
+id = "medical_science_liaison"
+label = "Medical science liaison / medical affairs"
+status = "active"
+mode = "industry"
+variant = "medical_science_liaison"
+core_titles = ["Medical Science Liaison", "Regional MSL", "Medical Affairs Scientist", "Medical Information Specialist",
+               "Scientific Liaison"]
+adjacent_titles = []
+title_any = ["medical science liaison", "msl", "scientific liaison",
+             "medical affairs|medical information+scientist|specialist|associate|manager"]
+title_none = ["director", "vp", "head of", "executive director", "sales"]
+require_any = []
+terms = ["infectious disease", "vaccines", "anti-infective", "microbiome", "KOL", "medical affairs", "scientific exchange"]
+seniority_ok = []
+needs_license = []
+priority = 2
+min_share = 0.0
+
+[[family]]
+id = "regulatory_affairs"
+label = "Regulatory affairs"
+status = "active"
+mode = "industry"
+variant = "regulatory_affairs"
+core_titles = ["Regulatory Affairs Associate", "Regulatory Affairs Specialist", "Regulatory Scientist",
+               "Regulatory CMC Specialist", "Regulatory Operations Specialist", "Regulatory Writer"]
+adjacent_titles = []
+title_any = ["regulatory affairs", "regulatory science", "regulatory scientist", "regulatory specialist",
+             "regulatory associate", "regulatory operations", "regulatory cmc", "regulatory writer|regulatory writing",
+             "regulatory submission*"]
+title_none = ["director", "vp", "head of", "counsel", "attorney", "lawyer", "financial", "banking", "bank", "tax",
+              "trade", "insurance", "energy", "utility", "aml", "compliance officer"]
+require_any = []
+terms = ["eCTD", "IND", "BLA", "510(k)", "CMC", "regulatory submissions", "RAC", "FDA"]
+seniority_ok = ["i", "ii", "1", "2", "associate"]
+needs_license = []
+priority = 2
+min_share = 0.05
+
+[[family]]
+id = "clinical_research"
+label = "Clinical research"
+status = "active"
+mode = "industry"
+variant = "clinical_research"
+core_titles = ["Clinical Scientist", "Clinical Development Scientist", "Clinical Research Associate",
+               "Clinical Research Coordinator", "Clinical Trial Associate", "Clinical Trial Assistant", "Study Manager"]
+adjacent_titles = []
+title_any = ["clinical scientist", "clinical development scientist", "cra", "study manager|study coordinator",
+             "clinical research|clinical trial*|clinical study|clinical operations+associate|coordinator|scientist|specialist|manager|assistant"]
+title_none = ["director", "vp", "head of", "nurse", "rn", "physician", "medical director", "pharmacist", "data manager",
+              "clinical microbiolog*", "clinical lab*"]
+require_any = []
+terms = ["GCP", "ICH E6", "clinical trials", "monitoring", "CCRP", "ACRP", "protocol", "IRB"]
+seniority_ok = ["i", "ii", "1", "2", "associate"]
+needs_license = []
+priority = 2
+min_share = 0.05
+
+[[family]]
+id = "medical_scientific_writing"
+label = "Medical / scientific writing"
+status = "active"
+mode = "industry"
+variant = "medical_scientific_writing"
+core_titles = ["Medical Writer", "Scientific Writer", "Regulatory Medical Writer", "Science Writer",
+               "Scientific Communications Specialist", "Publications Specialist"]
+adjacent_titles = ["Grant Writer"]
+title_any = ["medical writ*", "scientific writ*", "regulatory writ*", "science writer", "grant writer",
+             "medical communication*", "scientific communication*",
+             "publication|publications+manager|specialist|lead",
+             "technical writer+bio*|life science*|scientific|medical|clinical|pharma*|regulatory|laboratory"]
+title_none = ["director", "vp", "head of", "copywriter", "marketing", "ux", "software", "api", "developer"]
+require_any = ["clinical", "scientific", "regulatory", "medical", "biolog*", "pharma*", "life science*", "drug*",
+               "therap*", "research"]
+terms = ["clinical study report", "protocol", "investigator brochure", "ICH E3", "AMWA", "manuscripts", "grants"]
+seniority_ok = []
+needs_license = []
+priority = 2
+min_share = 0.05
+
+[[family]]
+id = "bioinformatics_comp_bio"
+label = "Bioinformatics / computational biology"
+status = "proposed"
+mode = "industry"
+variant = "bioinformatics_comp_bio"
+core_titles = ["Bioinformatics Scientist", "Computational Biologist", "Bioinformatician", "Microbiome Data Scientist",
+               "Genomics Scientist", "Metagenomics Analyst"]
+adjacent_titles = []
+title_any = ["bioinformatic*", "computational biolog*", "genomics scientist|genomics analyst", "microbiome",
+             "metagenomic*"]
+title_none = ["director", "vp", "head of", "principal", "software engineer", "machine learning engineer", "ml engineer",
+              "devops"]
+require_any = []
+terms = ["Python", "R", "Nextflow", "Snakemake", "HPC", "cloud", "16S", "metagenomics", "RNA-seq"]
+seniority_ok = []
+needs_license = []
+priority = 2
+min_share = 0.0
+
+[[family]]
+id = "quality_validation"
+label = "Quality / validation"
+status = "active"
+mode = "industry"
+variant = "quality_validation"
+core_titles = ["Validation Scientist", "Validation Specialist", "QA Specialist", "Quality Specialist",
+               "Quality Systems Specialist", "CAPA Specialist", "Deviation Specialist"]
+adjacent_titles = []
+title_any = ["capa", "deviation specialist|deviation investigator|deviation analyst",
+             "validation+scientist|specialist|engineer|associate|analyst",
+             "quality assurance+specialist|associate|scientist|analyst", "qa+specialist|associate|analyst",
+             "quality specialist", "quality systems specialist"]
+title_none = ["software", "sdet", "qa engineer", "test engineer", "automation engineer", "director", "vp", "head of",
+              "call center"]
+require_any = []
+terms = ["GMP", "21 CFR 210", "21 CFR 211", "21 CFR 820", "Veeva", "TrackWise", "CAPA", "deviations",
+         "method validation", "sterilization validation"]
+seniority_ok = ["i", "ii", "1", "2", "associate", "senior"]
+needs_license = []
+priority = 2
+min_share = 0.05
+
+[[family]]
+id = "biosafety"
+label = "Biosafety"
+status = "active"
+mode = "industry"
+variant = "biosafety"
+core_titles = ["Biosafety Officer", "Biosafety Specialist", "Biosafety Manager", "Biological Safety Officer"]
+adjacent_titles = []
+title_any = ["biosafety", "biological safety"]
+title_none = ["director", "vp", "head of"]
+require_any = []
+terms = ["BSL-2", "BSL-3", "IBC", "biosafety", "risk assessment", "select agents", "NIH Guidelines"]
+seniority_ok = []
+needs_license = []
+priority = 2
+min_share = 0.0
+
+[[family]]
+id = "government_microbiologist"
+label = "Government microbiologist (USAJOBS)"
+status = "active"
+mode = "usajobs"
+variant = "government_microbiologist"
+core_titles = ["Microbiologist", "Biologist", "Research Microbiologist", "Biological Science Technician"]
+adjacent_titles = []
+title_any = ["microbiologist", "biologist", "0403", "0401", "public health laborator*",
+             "research microbiologist|research biologist", "biological science technician"]
+title_none = ["clinical laboratory scientist", "cls", "wildlife", "fisheries", "marine mammal", "physical scientist"]
+require_any = []
+terms = ["microbiology", "GS-0403", "GS-0401", "laboratory", "research"]
+seniority_ok = []
+needs_license = []
+priority = 1
+min_share = 0.0
+
+[[family]]
+id = "microbiologist"
+label = "Microbiologist"
+status = "active"
+mode = "industry"
+variant = "microbiologist"
+core_titles = ["Microbiologist", "Microbiologist II", "Senior Microbiologist", "Research Microbiologist",
+               "Food Microbiologist", "Microbiology Scientist"]
+adjacent_titles = []
+title_any = ["microbiologist", "microbiology", "microbiolog*"]
+title_none = ["clinical lab*", "clinical laboratory scientist", "cls", "public health microbiologist",
+              "clinical microbiologist scientist", "clinical microbiology scientist", "medical lab*", "sales", "account",
+              "director", "vp", "head of", "lecturer", "instructor", "professor", "adjunct", "teaching"]
+require_any = []
+terms = ["microbiology", "aseptic technique", "bacterial culture", "GMP", "GLP", "USP <61>", "USP <62>", "USP <71>",
+         "FSMA", "AOAC", "microbial identification"]
+seniority_ok = ["i", "ii", "iii", "1", "2", "3", "senior", "associate"]
+needs_license = []
+priority = 1
+min_share = 0.10
+
+[[family]]
+id = "research_associate_lab_tech"
+label = "Research associate / lab technician"
+status = "active"
+mode = "industry"
+variant = "research_associate_lab_tech"
+core_titles = ["Research Associate", "Research Associate II", "Research Associate III", "Senior Research Associate",
+               "Staff Research Associate", "Research Assistant", "Laboratory Technician", "Lab Associate",
+               "Applications Lab Associate", "Lab Manager"]
+adjacent_titles = []
+title_any = ["research associate", "research assistant", "staff research associate", "sra",
+             "lab|laboratory+technician|associate|specialist|assistant|manager", "lab tech",
+             "biology technician|biological technician|research technician|life science technician"]
+title_none = ["clinical", "clinical laboratory scientist", "cls", "mlt", "medical lab*", "phlebotom*", "animal",
+              "vivarium", "husbandry", "director", "vp", "undergraduate", "student", "intern"]
+require_any = []
+terms = ["cell culture", "PCR", "qPCR", "ELISA", "Western blot", "aseptic technique", "molecular cloning",
+         "lab management", "inventory"]
+seniority_ok = []
+needs_license = []
+priority = 3
+min_share = 0.10
+
+[[family]]
+id = "lecturer_teaching"
+label = "Lecturer / teaching (biology)"
+status = "proposed"
+mode = "cv"
+variant = "lecturer_teaching"
+core_titles = ["Lecturer in Microbiology", "Lecturer in Biology", "Adjunct Instructor, Biology",
+               "Biology Instructor", "Visiting Assistant Professor of Biology"]
+adjacent_titles = []
+title_any = ["lecturer|instructor|adjunct|teaching professor|assistant professor|visiting professor|visiting assistant professor|teaching faculty+biolog*|microbiolog*|life science*"]
+title_none = ["nursing", "music", "art", "english", "law", "business", "economics", "history", "dance", "theater",
+              "theatre", "spanish", "math", "computer", "driving", "fitness", "yoga", "cpr", "phlebotomy"]
+require_any = []
+terms = ["teaching", "curriculum", "laboratory course", "microbiology", "student mentoring"]
+seniority_ok = []
+needs_license = []
+priority = 3
+min_share = 0.0
+
+[[family]]
+id = "study_director_assoc_director"
+label = "Study director / associate director"
+status = "proposed"
+mode = "industry"
+variant = "study_director_assoc_director"
+core_titles = ["Study Director", "Associate Director, Microbiology", "Associate Director, Process Development",
+               "Associate Director, Assay Development"]
+adjacent_titles = []
+title_any = ["study director", "associate director"]
+title_none = ["finance", "financial", "marketing", "sales", "human resources", "legal", "facilities", "communications",
+              "business development", "fund development", "development office", "director of development",
+              "advancement", "admissions", "alumni", "athletics", "procurement", "accounting", "tax", "talent",
+              "recruiting", "environmental health", "safety", "ehs"]
+require_any = []
+terms = ["GLP", "study director", "people management", "CRO"]
+seniority_ok = []
+needs_license = []
+priority = 3
+min_share = 0.0
+
+[[family]]
+id = "academic_staff_research"
+label = "Academic staff research (UC, Stanford, institutes)"
+status = "active"
+mode = "cv"
+variant = "academic_staff_research"
+core_titles = ["Staff Scientist", "Project Scientist", "Assistant Researcher", "Associate Researcher",
+               "Associate Specialist", "Research Scientist", "Life Science Research Professional 1",
+               "Life Science Research Professional 2"]
+adjacent_titles = []
+title_any = ["staff scientist", "project scientist", "research scientist", "life science research professional",
+             "research professional", "professional researcher", "assistant researcher|associate researcher",
+             "junior specialist|assistant specialist|associate specialist|research specialist",
+             "specialist+lab|laboratory|microbio*|biolog*"]
+title_none = ["director", "vp", "head of", "data", "ai", "ml", "software", "computer", "sales", "social science",
+              "admissions", "communications", "nurse", "informatics", "clinical lab*", "clinical laboratory",
+              "student services", "administrative", "clinical research coordinator"]
+require_any = []
+terms = ["microbiology", "molecular biology", "grant-funded", "publications", "lab management", "mentoring"]
+seniority_ok = []
+needs_license = []
+priority = 1
+min_share = 0.10
+
+[[family]]
+id = "industry_rd_scientist"
+label = "Industry R&D scientist"
+status = "active"
+mode = "industry"
+variant = "industry_rd_scientist"
+core_titles = ["Associate Scientist", "Scientist I", "Scientist II", "Scientist III", "Research Scientist",
+               "Senior Scientist", "Staff Scientist", "Principal Scientist"]
+adjacent_titles = []
+title_any = ["scientist"]
+title_none = ["data", "computer", "software", "machine learning", "ml", "ai", "computational", "clinical laboratory",
+              "clinical lab*", "cls", "clinical microbiology scientist", "clinical microbiologist", "director", "vp",
+              "vice president", "head of", "materials", "polymer", "formulation", "process engineer",
+              "physical scientist", "social science"]
+require_any = ["biolog*", "microbiolog*", "microb*", "bacteri*", "cell*", "molecular", "protein*", "assay*",
+               "biochem*", "immunolog*", "pcr", "sequencing", "fermentation", "antibod*", "life science*"]
+terms = ["PCR", "qPCR", "cell culture", "assay development", "ELISA", "flow cytometry", "CRISPR", "microbiology",
+         "aseptic technique", "Western blot", "NGS"]
+seniority_ok = ["associate", "i", "ii", "iii", "1", "2", "3", "senior"]
+needs_license = []
+priority = 1
+min_share = 0.10
+
+[widen]
+enabled = true
+steps = ["adjacent_families", "remote_us", "second_ring"]

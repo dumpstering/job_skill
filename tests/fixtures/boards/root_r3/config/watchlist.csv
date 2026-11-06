@@ -1,0 +1,12 @@
+employer,employer_norm,parent,ats,board,host,site,extra,careers_url,main_website,segment,city,families,priority,status,added_on,added_by,ref,notes
+Vaxcyte,vaxcyte,,greenhouse,vaxcyte,,,,https://vaxcyte.com/careers/,https://vaxcyte.com,biotech,San Carlos,,1,active,2026-11-05,seed,test,
+Synthego,synthego,,lever,synthego,,,,,,biotech,Redwood City,,2,active,2026-11-05,seed,test,
+Homebrew,homebrew,,bamboohr,homebrew,,,,,,other,,,3,active,2026-11-05,seed,test,tenant gone
+Example SR,example sr,,smartrecruiters,ExampleSR,,,,https://careers.smartrecruiters.com/ExampleSR,,biotech,,,2,lead_only,2026-11-05,seed,test,R3
+Example SR Active,example sr active,,smartrecruiters,ExampleSR2,,,,,,biotech,,,2,active,2026-11-05,seed,test,R3 row mislabeled active
+Example UKG,example ukg,,ukg,EXA1000EXAM,recruiting.ultipro.com,0a1b2c3d-1111-2222-3333-444455556666,,https://recruiting.ultipro.com/EXA1000EXAM/JobBoard/0a1b2c3d-1111-2222-3333-444455556666,,institute,,,2,lead_only,2026-11-05,seed,test,R3
+Example iCIMS,example icims,,icims,careers-example,careers-example.icims.com,,,https://careers-example.icims.com/jobs/search?ss=1,,biotech,,,2,lead_only,2026-11-05,seed,test,R3
+Example Paycom,example paycom,,paycom,0123456789ABCDEF0123456789ABCDEF,portal-applicant-tracking.us-cent.paycomonline.net,,,https://www.paycomonline.net/v4/ats/web.php/portal/0123456789ABCDEF0123456789ABCDEF/career-page,,other,,,3,lead_only,2026-11-05,seed,test,R3
+Example ClearCompany,example clearcompany,,clearcompany,example,careers-page.clearcompany.com,,,https://example.clearcompany.com/careers,,other,,,3,lead_only,2026-11-05,seed,test,R3
+Example Paycor,example paycor,,paycor,8a7882525b6027b0015b692822e00000,recruitingbypaycor.com,,,https://recruitingbypaycor.com/career/CareerHome.action?clientId=8a7882525b6027b0015b692822e00000,,biotech,,,3,lead_only,2026-11-05,seed,test,R3
+Example County,example county,,neogov,examplecounty,www.governmentjobs.com,,,https://www.governmentjobs.com/careers/examplecounty,,government,,,3,lead_only,2026-11-05,seed,test,robots

@@ -1,0 +1,34 @@
+{
+ "v": 1,
+ "id": "20261112T200000Z_0000a001",
+ "type": "tracker",
+ "at": "2026-11-12T12:00:00-08:00",
+ "session": "fixture",
+ "job_key": "",
+ "n": null,
+ "date": "2026-11-12",
+ "payload": {
+  "argv": [
+   "add",
+   "--company",
+   "Cyberdyne Labs",
+   "--role",
+   "Lab Technician",
+   "--status",
+   "Applied",
+   "--applied",
+   "2026-11-12",
+   "--source",
+   "By hand",
+   "--tier",
+   "By hand",
+   "--family",
+   "qc_micro",
+   "--found-via",
+   "alert:linkedin",
+   "--location",
+   "Springfield, IL"
+  ],
+  "pid": "P-0000a001"
+ }
+}

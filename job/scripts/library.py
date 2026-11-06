@@ -1,0 +1,306 @@
+"""Achievement library IDs: stable [L-0001] labels on every entry, and a check
+that nothing cites an ID the library no longer has.
+
+Usage:
+    python library.py ids   --root <folder>  [--file achievement_library.md]
+    python library.py check --root <folder>  [--file ...] [--cites FILE ...]
+
+ids gives each entry without an ID the next free one, in file order. It never
+renumbers, never reuses a retired ID (a `<!-- last-id: L-0042 -->` line keeps
+the high-water mark) and copies the file to backups/ before it writes. A run
+with nothing to assign changes nothing.
+
+check prints DANGLING (an ID cited by a variant, a Tier A resume.json,
+answers.md or techniques.md that the library lacks), DUPLICATE and NO-ID
+lines, then `LIBRARY ok` or `LIBRARY fail`.
+
+Entries are the `- ` lines under `### ` headings; indented lines continue the
+entry above. "Not held: ..." lines get no ID. Role headings are
+`### Job Title | Company | Mon YYYY - Mon YYYY` (v1.1).
+
+Other scripts import parse(), load() and load_techniques().
+Exit codes: 0 ok, 1 bad input or a failed check.
+"""
+import argparse
+import re
+import shutil
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import jobfs  # noqa: E402
+
+ID_RE = re.compile(r"^(\s*[-*]\s+)\[(L-(\d{4,}))\]\s*")
+ENTRY_RE = re.compile(r"^(\s*)[-*]\s+(.*)$")
+HEADING_RE = re.compile(r"^###\s+(.*?)\s*$")
+LAST_ID_RE = re.compile(r"^<!--\s*last-id:\s*L-(\d{4,})\s*-->\s*$")
+CITED_RE = re.compile(r"(?<![A-Za-z0-9-])L-\d{4,}(?![0-9])")
+NOT_HELD = re.compile(r"^not held\b", re.I)
+
+
+@dataclass
+class Entry:
+    id: str            # "L-0001", or "" before ids runs
+    text: str          # the entry without its ID, continuation lines joined
+    heading: str       # the ### heading above it
+    line: int          # 1-based line number of the "- " line
+    held: bool = True  # False for "Not held: ..." lines
+
+
+@dataclass
+class Library:
+    entries: list = field(default_factory=list)
+    last_mark: int = 0          # the last-id high-water mark, 0 if absent
+
+    @property
+    def by_id(self):
+        return {e.id: e for e in self.entries if e.id}
+
+    def duplicates(self):
+        seen, dups = {}, []
+        for e in self.entries:
+            if e.id and e.id in seen:
+                dups.append((e.id, seen[e.id], e.line))
+            seen.setdefault(e.id, e.line)
+        return dups
+
+    def high_water(self):
+        nums = [int(e.id[2:]) for e in self.entries if e.id]
+        return max(nums + [self.last_mark])
+
+
+def parse(text):
+    """Library entries in file order. Fenced code blocks are skipped."""
+    lib, heading, fence, current = Library(), None, False, None
+    for n, raw in enumerate(text.splitlines(), 1):
+        line = raw.rstrip("\r\n")
+        if line.strip().startswith("```"):
+            fence, current = not fence, None
+            continue
+        if fence:
+            continue
+        mark = LAST_ID_RE.match(line.strip())
+        if mark:
+            lib.last_mark = max(lib.last_mark, int(mark.group(1)))
+            continue
+        h = HEADING_RE.match(line)
+        if h:
+            heading, current = h.group(1), None
+            continue
+        m = ENTRY_RE.match(line)
+        if m and heading is not None and len(m.group(1)) < 2:
+            idm = ID_RE.match(line)
+            body = line[idm.end():] if idm else m.group(2)
+            current = Entry(idm.group(2) if idm else "", body.strip(), heading, n,
+                            held=not NOT_HELD.match(body.strip()))
+            lib.entries.append(current)
+            continue
+        if current is not None and line.strip() and line[:1] in (" ", "\t"):
+            current.text = f"{current.text} {line.strip()}"
+            continue
+        current = None
+    return lib
+
+
+def load(path):
+    """parse() of a file; an empty Library when the file is missing."""
+    try:
+        return parse(Path(path).read_text(encoding="utf-8-sig"))
+    except FileNotFoundError:
+        return Library()
+
+
+def role_of(heading):
+    """(title, org, dates) from a role heading, or None for other headings."""
+    parts = [p.strip() for p in (heading or "").split("|")]
+    if len(parts) < 3 or not re.search(r"\d{4}", parts[-1]):
+        return None
+    return parts[0], parts[1], parts[-1]
+
+
+# ---------- techniques.md ----------
+
+@dataclass
+class Technique:
+    name: str
+    aliases: list
+    level: str          # hands-on | familiar
+    years_ok: bool
+    evidence: list      # L- IDs
+    line: int
+
+    @property
+    def forms(self):
+        return [self.name] + self.aliases
+
+
+def load_techniques(path):
+    """techniques.md lines `- <technique> | aliases: a; b | level: hands-on |
+    years_ok: yes | evidence: L-0012, L-0031`. A missing file is []."""
+    try:
+        text = Path(path).read_text(encoding="utf-8-sig")
+    except FileNotFoundError:
+        return []
+    out = []
+    for n, line in enumerate(text.splitlines(), 1):
+        m = re.match(r"^[-*]\s+(.+)$", line)  # top-level bullets; indented lines are examples
+        if not m or " | " not in m.group(1):
+            continue
+        parts = [p.strip() for p in m.group(1).split(" | ")]
+        keys = {}
+        for p in parts[1:]:
+            k, _, v = p.partition(":")
+            keys[k.strip().lower()] = v.strip()
+        if "level" not in keys and "evidence" not in keys:
+            continue  # a format example or note, not a technique
+        aliases = [a.strip() for a in keys.get("aliases", "").split(";") if a.strip()]
+        evidence = CITED_RE.findall(keys.get("evidence", ""))
+        out.append(Technique(parts[0], aliases, keys.get("level", "").lower(),
+                             keys.get("years_ok", "").lower() == "yes", evidence, n))
+    return out
+
+
+def find_technique(techniques, term):
+    low = (term or "").strip().lower()
+    for t in techniques:
+        if low in (f.lower() for f in t.forms):
+            return t
+    return None
+
+
+# ---------- ids ----------
+
+def backup(path, root=None):
+    """Copy path to backups/<stem>_<YYYY-MM-DD_HHMM>.md (never over an older copy)."""
+    path = Path(path)
+    folder = (Path(root) if root else path.parent) / "backups"
+    folder.mkdir(parents=True, exist_ok=True)
+    stamp = jobfs.now(root).strftime("%Y-%m-%d_%H%M")
+    dest = folder / f"{path.stem}_{stamp}{path.suffix}"
+    k = 2
+    while dest.exists():
+        dest = folder / f"{path.stem}_{stamp}_{k}{path.suffix}"
+        k += 1
+    shutil.copy2(path, dest)
+    return dest
+
+
+def assign(text):
+    """(new text, [assigned IDs]). Lines keep their endings; entries that
+    already hold an ID, and Not held lines, are left alone."""
+    lib = parse(text)
+    todo = {e.line for e in lib.entries if not e.id and e.held and e.text}
+    if not todo:
+        return text, []
+    nxt = lib.high_water() + 1
+    out, assigned = [], []
+    lines = text.splitlines(keepends=True)
+    for n, raw in enumerate(lines, 1):
+        if n in todo:
+            m = ENTRY_RE.match(raw.rstrip("\r\n"))
+            new_id = f"L-{nxt:04d}"
+            nxt += 1
+            assigned.append(new_id)
+            ending = raw[len(raw.rstrip("\r\n")):]
+            prefix = raw[:raw.index(m.group(2), len(m.group(1)))]
+            raw = f"{prefix}[{new_id}] {m.group(2)}{ending}"
+        elif LAST_ID_RE.match(raw.strip()):
+            continue  # rewritten at the end
+        out.append(raw)
+    newline = "\r\n" if "\r\n" in text else "\n"
+    body = "".join(out)
+    if body and not body.endswith(("\n", "\r")):
+        body += newline
+    return body + f"<!-- last-id: {assigned[-1]} -->{newline}", assigned
+
+
+def cmd_ids(path, root):
+    try:
+        raw = path.read_bytes()
+    except OSError as e:
+        print(f"ERROR cannot read {path}: {e}")
+        return 1
+    bom = raw.startswith(b"\xef\xbb\xbf")
+    text = raw.decode("utf-8-sig")
+    new, assigned = assign(text)
+    if not assigned:
+        print(f"IDS unchanged ({len(parse(text).by_id)} entries already have IDs)")
+        return 0
+    dest = backup(path, root)
+    print(f"BACKUP {dest}")
+    jobfs.atomic_write_text(path, ("\ufeff" if bom else "") + new)
+    print(f"IDS assigned {len(assigned)}: {assigned[0]}..{assigned[-1]}")
+    return 0
+
+
+# ---------- check ----------
+
+def citing_files(root):
+    """Files that may cite library IDs, relative to root."""
+    root = Path(root)
+    pats = ["variants/*/v*/resume.json", "variants/*/v*/pool.json", "applications/*/resume.json",
+            "answers.md", "techniques.md"]
+    found = []
+    for pat in pats:
+        found += sorted(p for p in root.glob(pat) if p.is_file())
+    return found
+
+
+def cmd_check(path, root, cites):
+    lib = load(path)
+    if not path.exists():
+        print(f"ERROR {path} not found")
+        return 1
+    ids = lib.by_id
+    problems = 0
+    for dup, first, again in lib.duplicates():
+        print(f"DUPLICATE {dup} (lines {first} and {again})")
+        problems += 1
+    for e in lib.entries:
+        if not e.id and e.held and e.text:
+            print(f'NO-ID line {e.line}: "{e.text[:50]}" (run library.py ids)')
+            problems += 1
+    files = [Path(c) for c in cites] if cites else (citing_files(root) if root else [])
+    refs = 0
+    for f in files:
+        try:
+            text = f.read_text(encoding="utf-8-sig", errors="replace")
+        except OSError as e:
+            print(f"ERROR cannot read {f}: {e}")
+            return 1
+        shown = f.relative_to(root) if root and f.is_relative_to(root) else f
+        for cid in sorted(set(CITED_RE.findall(text))):
+            refs += 1
+            if cid not in ids:
+                print(f"DANGLING {cid} in {shown.as_posix()}")
+                problems += 1
+    if problems:
+        print(f"LIBRARY fail ({problems} problem{'s' if problems != 1 else ''})")
+        return 1
+    print(f"LIBRARY ok ({len(ids)} entries, {refs} cited IDs checked)")
+    return 0
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    for name in ("ids", "check"):
+        p = sub.add_parser(name)
+        p.add_argument("--root", help="the JobSearch folder")
+        p.add_argument("--file", help="the library file (default <root>/achievement_library.md)")
+        if name == "check":
+            p.add_argument("--cites", nargs="+", metavar="FILE", help="check these files instead of the usual ones")
+    args = ap.parse_args(argv)
+    if not args.root and not args.file:
+        print("ERROR give --root or --file")
+        return 1
+    root = Path(args.root) if args.root else None
+    path = Path(args.file) if args.file else jobfs.Folder(root).library
+    if args.cmd == "ids":
+        return cmd_ids(path, root)
+    return cmd_check(path, root, args.cites)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

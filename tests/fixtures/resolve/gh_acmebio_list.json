@@ -1,0 +1,33 @@
+{
+ "jobs": [
+  {
+   "id": 900101,
+   "title": "Scientist II, Microbiology",
+   "location": {
+    "name": "South San Francisco, CA"
+   },
+   "requisition_id": "R-101",
+   "absolute_url": "https://job-boards.greenhouse.io/acmebio/jobs/900101",
+   "company_name": "Acme Biosciences",
+   "first_published": "2026-11-10T09:00:00-08:00",
+   "updated_at": "2026-11-10T09:00:00-08:00",
+   "content": "&lt;p&gt;Acme Biosciences grows bacteria for a living.&lt;/p&gt;&lt;h3&gt;Requirements&lt;/h3&gt;&lt;ul&gt;&lt;li&gt;Aseptic technique and PCR.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;Opening 900101.&lt;/p&gt;"
+  },
+  {
+   "id": 900103,
+   "title": "Research Associate, Cell Biology",
+   "location": {
+    "name": "South San Francisco, CA"
+   },
+   "requisition_id": "R-103",
+   "absolute_url": "https://job-boards.greenhouse.io/acmebio/jobs/900103",
+   "company_name": "Acme Biosciences",
+   "first_published": "2026-11-10T09:00:00-08:00",
+   "updated_at": "2026-11-10T09:00:00-08:00",
+   "content": "&lt;p&gt;Acme Biosciences grows bacteria for a living.&lt;/p&gt;&lt;h3&gt;Requirements&lt;/h3&gt;&lt;ul&gt;&lt;li&gt;Aseptic technique and PCR.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;Opening 900103.&lt;/p&gt;"
+  }
+ ],
+ "meta": {
+  "total": 2
+ }
+}

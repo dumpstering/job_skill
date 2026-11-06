@@ -1,0 +1,21 @@
+Senior Software Engineer, Payments Platform
+
+Initech builds the billing and payments infrastructure that thousands of online merchants rely on every day. We are looking for a senior engineer to join the platform team in Springfield or remotely within the United States.
+
+What you will do
+- Design, build and operate distributed services in Go and Kotlin that move money reliably.
+- Own the reliability of the ledger service, including on-call rotations, incident reviews and capacity planning.
+- Partner with product managers and designers to scope features and write technical design documents.
+- Improve developer tooling, continuous integration pipelines and observability across the platform.
+- Mentor engineers through code review, pairing and technical talks.
+
+What we look for
+- Six or more years of professional software development, ideally on high-volume transactional systems.
+- Deep experience with relational databases such as PostgreSQL, including schema design and query tuning.
+- Familiarity with cloud infrastructure on AWS or GCP, containers and Kubernetes.
+- A track record of shipping in small, safe increments and measuring the results.
+- Clear writing and a collaborative approach to solving ambiguous problems.
+
+Compensation for this role is $170,000 to $210,000 base plus equity and a yearly bonus. Initech offers flexible time off, parental leave and a home office stipend.
+
+Initech is proud to be an equal opportunity workplace and welcomes applicants of every background.

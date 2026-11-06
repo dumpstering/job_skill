@@ -1,0 +1,9 @@
+{
+ "https://boards-api.greenhouse.io/v1/boards/acme/jobs/1234567?questions=true": {"file": "gh_detail.json"},
+ "https://boards-api.greenhouse.io/v1/boards/acme/jobs/7654321?questions=true": {"status": 404, "headers": {"Content-Type": "application/json"}},
+ "https://job-boards.greenhouse.io/acme/jobs/7654321": {"status": 200, "url": "https://job-boards.greenhouse.io/acme?error=true", "file": "employer_page.html"},
+ "https://careers.acmebio.example/jobs/associate-scientist": {"file": "employer_page.html"},
+ "https://careers.acmebio.example/robots.txt": {"status": 404},
+ "https://blocked.example/robots.txt": {"file": "robots_blocked.txt"},
+ "https://blocked.example/jobs/1": {"file": "employer_page.html"}
+}

@@ -1,0 +1,62 @@
+[
+ {
+  "id": "00000000-0000-4000-8000-00000000a001",
+  "text": "Research Associate II",
+  "categories": {
+   "location": "Fremont, CA",
+   "commitment": "Full-time",
+   "allLocations": [
+    "Fremont, CA"
+   ]
+  },
+  "createdAt": 1794700800000,
+  "country": "US",
+  "workplaceType": "onsite",
+  "hostedUrl": "https://jobs.lever.co/globexbio/00000000-0000-4000-8000-00000000a001",
+  "applyUrl": "https://jobs.lever.co/globexbio/00000000-0000-4000-8000-00000000a001/apply",
+  "description": "<p>Research Associate II at Globex Bio: culture cells and run ELISA. Opening a001.</p>",
+  "descriptionPlain": "",
+  "lists": [],
+  "additional": ""
+ },
+ {
+  "id": "00000000-0000-4000-8000-00000000a002",
+  "text": "Research Associate II",
+  "categories": {
+   "location": "Newark, CA",
+   "commitment": "Full-time",
+   "allLocations": [
+    "Newark, CA"
+   ]
+  },
+  "createdAt": 1794700800000,
+  "country": "US",
+  "workplaceType": "onsite",
+  "hostedUrl": "https://jobs.lever.co/globexbio/00000000-0000-4000-8000-00000000a002",
+  "applyUrl": "https://jobs.lever.co/globexbio/00000000-0000-4000-8000-00000000a002/apply",
+  "description": "<p>Research Associate II at Globex Bio: culture cells and run ELISA. Opening a002.</p>",
+  "descriptionPlain": "",
+  "lists": [],
+  "additional": ""
+ },
+ {
+  "id": "00000000-0000-4000-8000-00000000a003",
+  "text": "Senior Scientist",
+  "categories": {
+   "location": "Fremont, CA",
+   "commitment": "Full-time",
+   "allLocations": [
+    "Fremont, CA"
+   ]
+  },
+  "createdAt": 1794700800000,
+  "country": "US",
+  "workplaceType": "onsite",
+  "hostedUrl": "https://jobs.lever.co/globexbio/00000000-0000-4000-8000-00000000a003",
+  "applyUrl": "https://jobs.lever.co/globexbio/00000000-0000-4000-8000-00000000a003/apply",
+  "description": "<p>Senior Scientist at Globex Bio: culture cells and run ELISA. Opening a003.</p>",
+  "descriptionPlain": "",
+  "lists": [],
+  "additional": ""
+ }
+]

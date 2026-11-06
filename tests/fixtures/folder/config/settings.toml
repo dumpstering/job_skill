@@ -1,0 +1,10 @@
+# Synthetic test settings (tests/test_daily_e2e.py --make).
+[runner]
+mode = "L"
+
+[sources]
+adzuna = false
+usajobs = false
+
+[time]
+timezone = "America/Los_Angeles"

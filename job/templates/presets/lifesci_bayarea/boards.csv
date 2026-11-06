@@ -1,0 +1,27 @@
+name,kind,sender_or_endpoint,enabled,terms_status,lead_only,ref,notes
+BioSpace job alerts,alert_email,sender UNVERIFIED (capture from the first alert),false,unknown,true,source:BioSpace;F5,Job board blocks scripts; create the alert in a browser. Industry-heavy.
+Science Careers (AAAS) job alerts,alert_email,sender UNVERIFIED,false,unknown,true,source:Science Careers;F1,No account needed for the alert form.
+Science Careers (AAAS) RSS,rss,https://jobs.sciencecareers.org/jobsrss/?keywords=<kw>&LocationId=5828448&countrycode=US&page=<n>,false,unknown,true,F1;F2,Madgex RSS; terms not retrieved; drop items by pubDate; robots disallows previewjob and emailjob paths.
+Nature Careers job alerts,alert_email,ealert.nature.com (sender domain),false,unknown,true,source:Nature Careers;F4,Its RSS is disallowed by robots: alerts only.
+ASM Career Connections job alerts,alert_email,sender UNVERIFIED,false,unknown,true,source:ASM Career Connections;F6,Site blocks scripts; set the alert in a browser and judge after two weeks.
+Chronicle of Higher Education jobs RSS,rss,https://jobs.chronicle.com/jobsrss/?keywords=<kw>&LocationId=5828448&countrycode=US&page=<n>,false,unknown,true,source:Chronicle of Higher Education jobs;F2,Madgex RSS; many AI-role false positives; filter by pubDate.
+Inside Higher Ed Careers RSS,rss,https://careers.insidehighered.com/jobsrss/?keywords=<kw>&LocationId=5828448&countrycode=US&page=<n>,false,unknown,true,source:Inside Higher Ed Careers;F2;F3,"Duplicates university Oracle boards; keeps stale postings, filter by pubDate."
+HigherEdJobs,browse_only,,false,unknown,true,source:HigherEdJobs;F18,Bot wall to scripts.
+AcademicJobsOnline RSS,rss,https://academicjobsonline.org/ajo?joblist-0-0-0-----rss--,false,unknown,true,source:AcademicJobsOnline;F17,Mostly physics and CS; robots Crawl-delay 5; applications are on AJO itself.
+Cell Press careers,browse_only,,false,unknown,true,source:Cell Press careers;F6,Hosts no longer resolve.
+BioPharmGuy Northern California directory,browse_only,https://biopharmguy.com/links/career-by-location-northern-california.php,false,restricted,true,source:BioPharmGuy Northern California directory;F7,"Company directory to seed the watch list by hand, not a job feed; its terms reserve the content. Accept 'South SF' as South San Francisco."
+California Life Sciences,browse_only,,false,unknown,true,source:California Life Sciences;F8,Member directory is password protected.
+Biocom California Career Hub,browse_only,https://careerhub.biocom.org/jobs,false,unknown,true,source:Biocom California Career Hub;F9,API needs a CSRF token; browse for new companies only. San Diego heavy.
+LinkedIn job alerts,alert_email,linkedin.com (handled by [alerts] read_linkedin),true,restricted,true,source:LinkedIn job alerts;F19,"Company, title and location only; links and IDs never kept (R2)."
+Indeed job alerts,alert_email,indeed.com (sender domain),false,restricted,true,source:Indeed job alerts;F19,Off: [alerts] read_indeed_family (terms ban AI data-mining).
+CalCareers saved searches,alert_email,sender UNVERIFIED,false,unknown,true,source:CalCareers;F16,No feed. State roles need exam or list eligibility first (an online step).
+governmentjobs.com (NEOGOV) agency alerts,alert_email,sender UNVERIFIED,false,restricted,true,source:governmentjobs.com (NEOGOV);F15,robots disallow all bots; agency job alerts by email only.
+USAJOBS Search API,api,https://data.usajobs.gov/api/search,false,ok,false,source:USAJOBS;F14,Run by aggregators.py once a key is in keys.toml ([sources] usajobs).
+Stanford careersearch (Oracle),api,https://careersearch.stanford.edu/hcmRestApi/resources/latest/recruitingCEJobRequisitions,false,ok,false,source:Stanford careersearch (Oracle Recruiting Cloud);F10;F11,Covered by the oracle rows in watchlist.csv.
+Stanford Office of Postdoctoral Affairs,browse_only,https://postdocs.stanford.edu/prospective/opportunities,false,unknown,true,source:Stanford Office of Postdoctoral Affairs open positions;F13,Postdocs only; robots Crawl-delay 10; many ask for a CV by email.
+UCSF careers (Oracle),api,https://iazuqy.fa.ocs.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitions,false,ok,false,source:UCSF careers (Oracle Recruiting Cloud) and AP Recruit;F10,Covered by the oracle row in watchlist.csv.
+UCSF AP Recruit,browse_only,https://aprecruit.ucsf.edu/apply,false,unknown,true,F12,Academic recruitments on one page; applications in AP Recruit itself.
+UC Berkeley staff jobs,browse_only,https://jobs.berkeley.edu/,false,unknown,true,source:UC Berkeley staff jobs (UCPath PeopleSoft Candidate Gateway),PeopleSoft gateway with no public feed.
+Lawrence Berkeley National Laboratory job alerts,alert_email,sender UNVERIFIED,false,unknown,true,source:Lawrence Berkeley National Laboratory jobs;F20,Sign Up for Job Alerts on jobs.lbl.gov; no feed.
+City and County of San Francisco (SmartRecruiters),api,,false,restricted,true,source:City and County of San Francisco (SmartRecruiters);F21,R3: list API disallowed by robots; single postings via leads.
+CSU careers,browse_only,https://csucareers.calstate.edu/,false,unknown,true,source:CSU careers (csucareers.calstate.edu),No feed found.

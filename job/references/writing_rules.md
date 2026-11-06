@@ -266,6 +266,9 @@ given, and a section may use any of `paragraph`, `lines`, `entries`,
 - For students, recent graduates, or career changers whose strongest evidence
   is education or projects, put Education (and Projects) right after the
   Summary. A project is an entry with a title and dates and no org.
+- v1.2 (daily batch, Tier A, variants): every bullet carries `ev` tags, the
+  build runs with `--strict`, and publications are cited by ID. See "Tiers,
+  evidence tags and strict builds (v1.2)" at the end of this file.
 
 ### Block B: Match Report
 
@@ -357,3 +360,88 @@ it with the same command, without `--terms`, and with
 ```
 
 Post the .txt content and the file paths.
+
+## Tiers, evidence tags and strict builds (v1.2)
+
+Everything above still applies. This part adds what the daily batch needs.
+
+### Tiers
+
+- **Tier A** (the day's best 3-5 jobs, `daily.tier_a_per_day`): this file in
+  full, written for that one job by the job-tailor sub-agent (inline when the
+  plugin is absent), then audited by job-auditor in a fresh context. At most
+  2 questions per job go into the day's batch (fit_and_questions.md, "Daily
+  batch mode"); if they stay unanswered, the "go" version stands. After 2
+  failed audit rounds, or a "rework" verdict, the job gets its Tier B files
+  for today.
+- **Tier B** (every other job): nothing is written for the job.
+  `variants.py tier-b` tunes the approved family variant
+  ([variants.md](variants.md)) and builds it with `--strict`; on any failure
+  it uses the untouched approved base, then parks the job.
+- **Family variants** are written with every rule in this file, plus `ev`
+  tags on every bullet, an approved pool and an alias table
+  ([variants.md](variants.md)), and are audited before I approve them.
+- A Tier B cover letter is only the approved family letter with its slots
+  filled from posting.md; no new claims.
+
+### Evidence tags
+
+- In `resume.json` for Tier A jobs and variants, a bullet is an object:
+  `{"text": "Validated 3 real-time PCR assays ...", "ev": ["L-0004"]}`.
+  `ev` lists the achievement library IDs (`[L-0004]` in
+  `achievement_library.md`) of every entry the bullet's facts rest on.
+- Every number in the bullet must appear in a cited entry (the EVIDENCE
+  check reads them the way FACT does, so "a dozen" covers 12). A fact that
+  exists only in my answers in this chat goes into the library first (Block
+  C), gets its ID from `library.py ids --root "<folder>"`, and is then cited.
+- `"keep": true` marks a bullet Tier B tuning must never drop.
+- Education, Certifications, Licenses, Awards, Honors, Memberships, Service,
+  References, Languages, Grants and Fellowships, and citation sections carry
+  no tags; FACT still checks their numbers, titles and dates.
+- A corrected library entry keeps its ID: when you merge a "Replaces:" entry,
+  the new text takes the replaced entry's `[L-...]`. New entries get new IDs;
+  an ID is never reused or renumbered.
+- A derived figure fails FACT under `--strict`. Record the derivation in the
+  library entry the bullet cites (Block C, with the arithmetic, e.g.
+  "410 to 120 is a 70% cut, derived"), so the figure has a source, and keep it
+  under Verify before sending.
+
+### Citations
+
+- Publications, presentations and patents come only from `publications.md`,
+  by ID: `{"heading": "Selected Publications", "citations": ["P-003"],
+  "bold_name": true}`. Never type a citation; the build inserts its exact
+  text, renders `*italics*`, bolds my name where `bold_name` is true, and the
+  CITE check compares every printed citation with its line.
+- Choose the citations by relevance; the text never changes. Industry
+  resumes carry at most `publications_max` (3 by default), most relevant
+  first, after Techniques. CV rules are in
+  [cv_publications.md](cv_publications.md).
+- Citations skip the bullet lint and FACT.
+
+### Techniques
+
+- Life-science resumes title the Skills section "Techniques" and draw it
+  from `techniques.md`: hands-on techniques only, with a level qualifier
+  where I partly meet a requirement (the Skills rule above). An alias goes on
+  the resume only where it names the same thing (the renamed-product rule).
+
+### Modes and the strict build
+
+- `--mode industry` (2 pages at most), `cv` (no cap, CV section order) or
+  `usajobs` (2 pages, hard): see [cv_publications.md](cv_publications.md).
+  A variant's mode and page cap come from its `approved.json`.
+- Tier A and variant builds add `--strict`, `--mode`, and
+  `--publications "<folder>/publications.md"` when that file exists:
+
+  `python "<skill>/scripts/build_resume.py" "<job folder>/resume.json" --out "<job folder>" --base "<Name> Resume" --sources "<folder>/master_resume.md" "<folder>/achievement_library.md" "<folder>/profile.md" "<job folder>/notes.md" --terms "<job folder>/terms.json" --mode industry --publications "<folder>/publications.md" --strict`
+
+- The build then ends with `VERDICT ok` or, after one `STRICT-FAIL` line per
+  problem, `VERDICT fail` and exit code 6. It fails on any FACT line, PARSE
+  other than ok, an EVIDENCE or CITE problem, more pages than the cap, or a
+  banned word. Fix each one and build again; a strict failure is never
+  carried into Verify as it stands.
+- Letters: build with `--posting "<job folder>/posting.md"` as well. The
+  LETTER check needs the posting's company and role named exactly as
+  posting.md's `Company:` and `Role:` lines give them, and no unfilled
+  `{slot}`.

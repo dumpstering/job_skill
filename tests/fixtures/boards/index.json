@@ -1,0 +1,1474 @@
+{
+"POST https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/jobs": [
+{
+"file": "workday_acmebio/p000.json"
+},
+{
+"file": "workday_acmebio/p001.json"
+}
+],
+"POST https://bigco.wd5.myworkdayjobs.com/wday/cxs/bigco/Careers/jobs": [
+{
+"file": "workday_bigco/p000.json"
+},
+{
+"file": "workday_bigco/p001.json"
+},
+{
+"file": "workday_bigco/p002.json"
+},
+{
+"file": "workday_bigco/p003.json"
+},
+{
+"file": "workday_bigco/p004.json"
+},
+{
+"file": "workday_bigco/p005.json"
+},
+{
+"file": "workday_bigco/p006.json"
+},
+{
+"file": "workday_bigco/p007.json"
+},
+{
+"file": "workday_bigco/p008.json"
+},
+{
+"file": "workday_bigco/p009.json"
+},
+{
+"file": "workday_bigco/p010.json"
+},
+{
+"file": "workday_bigco/p011.json"
+},
+{
+"file": "workday_bigco/p012.json"
+},
+{
+"file": "workday_bigco/p013.json"
+},
+{
+"file": "workday_bigco/p014.json"
+},
+{
+"file": "workday_bigco/p015.json"
+},
+{
+"file": "workday_bigco/p016.json"
+},
+{
+"file": "workday_bigco/p017.json"
+},
+{
+"file": "workday_bigco/p018.json"
+},
+{
+"file": "workday_bigco/p019.json"
+},
+{
+"file": "workday_bigco/p020.json"
+},
+{
+"file": "workday_bigco/p021.json"
+},
+{
+"file": "workday_bigco/p022.json"
+},
+{
+"file": "workday_bigco/p023.json"
+},
+{
+"file": "workday_bigco/p024.json"
+},
+{
+"file": "workday_bigco/p025.json"
+},
+{
+"file": "workday_bigco/p026.json"
+},
+{
+"file": "workday_bigco/p027.json"
+},
+{
+"file": "workday_bigco/p028.json"
+},
+{
+"file": "workday_bigco/p029.json"
+},
+{
+"file": "workday_bigco/p030.json"
+},
+{
+"file": "workday_bigco/p031.json"
+},
+{
+"file": "workday_bigco/p032.json"
+},
+{
+"file": "workday_bigco/p033.json"
+},
+{
+"file": "workday_bigco/p034.json"
+},
+{
+"file": "workday_bigco/p035.json"
+},
+{
+"file": "workday_bigco/p036.json"
+},
+{
+"file": "workday_bigco/p037.json"
+},
+{
+"file": "workday_bigco/p038.json"
+},
+{
+"file": "workday_bigco/p039.json"
+},
+{
+"file": "workday_bigco/p040.json"
+},
+{
+"file": "workday_bigco/p041.json"
+},
+{
+"file": "workday_bigco/p042.json"
+},
+{
+"file": "workday_bigco/p043.json"
+},
+{
+"file": "workday_bigco/p044.json"
+},
+{
+"file": "workday_bigco/p045.json"
+},
+{
+"file": "workday_bigco/p046.json"
+},
+{
+"file": "workday_bigco/p047.json"
+},
+{
+"file": "workday_bigco/p048.json"
+},
+{
+"file": "workday_bigco/p049.json"
+},
+{
+"file": "workday_bigco/p050.json"
+},
+{
+"file": "workday_bigco/p051.json"
+},
+{
+"file": "workday_bigco/p052.json"
+},
+{
+"file": "workday_bigco/p053.json"
+},
+{
+"file": "workday_bigco/p054.json"
+},
+{
+"file": "workday_bigco/p055.json"
+},
+{
+"file": "workday_bigco/p056.json"
+},
+{
+"file": "workday_bigco/p057.json"
+},
+{
+"file": "workday_bigco/p058.json"
+},
+{
+"file": "workday_bigco/p059.json"
+},
+{
+"file": "workday_bigco/p060.json"
+},
+{
+"file": "workday_bigco/p061.json"
+},
+{
+"file": "workday_bigco/p062.json"
+},
+{
+"file": "workday_bigco/p063.json"
+},
+{
+"file": "workday_bigco/p064.json"
+},
+{
+"file": "workday_bigco/p065.json"
+},
+{
+"file": "workday_bigco/p066.json"
+},
+{
+"file": "workday_bigco/p067.json"
+},
+{
+"file": "workday_bigco/p068.json"
+},
+{
+"file": "workday_bigco/p069.json"
+},
+{
+"file": "workday_bigco/p070.json"
+},
+{
+"file": "workday_bigco/p071.json"
+},
+{
+"file": "workday_bigco/p072.json"
+},
+{
+"file": "workday_bigco/p073.json"
+},
+{
+"file": "workday_bigco/p074.json"
+},
+{
+"file": "workday_bigco/p075.json"
+},
+{
+"file": "workday_bigco/p076.json"
+},
+{
+"file": "workday_bigco/p077.json"
+},
+{
+"file": "workday_bigco/p078.json"
+},
+{
+"file": "workday_bigco/p079.json"
+},
+{
+"file": "workday_bigco/p080.json"
+},
+{
+"file": "workday_bigco/p081.json"
+},
+{
+"file": "workday_bigco/p082.json"
+},
+{
+"file": "workday_bigco/p083.json"
+},
+{
+"file": "workday_bigco/p084.json"
+},
+{
+"file": "workday_bigco/p085.json"
+},
+{
+"file": "workday_bigco/p086.json"
+},
+{
+"file": "workday_bigco/p087.json"
+},
+{
+"file": "workday_bigco/p088.json"
+},
+{
+"file": "workday_bigco/p089.json"
+},
+{
+"file": "workday_bigco/p090.json"
+},
+{
+"file": "workday_bigco/p091.json"
+},
+{
+"file": "workday_bigco/p092.json"
+},
+{
+"file": "workday_bigco/p093.json"
+},
+{
+"file": "workday_bigco/p094.json"
+},
+{
+"file": "workday_bigco/p095.json"
+},
+{
+"file": "workday_bigco/p096.json"
+},
+{
+"file": "workday_bigco/p097.json"
+},
+{
+"file": "workday_bigco/p098.json"
+},
+{
+"file": "workday_bigco/p099.json"
+},
+{
+"file": "workday_bigco/p100.json"
+}
+],
+"POST https://gilead.wd1.myworkdayjobs.com/wday/cxs/gilead/gileadcareers/jobs": {
+"file": "workday_gilead_p0.json"
+},
+"POST https://jobs.dayforcehcm.com/api/geo/asburyauto/jobposting/search": {
+"file": "dayforce_search.json"
+},
+"POST https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/jobs": [
+{
+"file": "workday_nvidia/p000.json"
+},
+{
+"file": "workday_nvidia/p001.json"
+},
+{
+"file": "workday_nvidia/p002.json"
+},
+{
+"file": "workday_nvidia/p003.json"
+},
+{
+"file": "workday_nvidia/p004.json"
+},
+{
+"file": "workday_nvidia/p005.json"
+},
+{
+"file": "workday_nvidia/p006.json"
+},
+{
+"file": "workday_nvidia/p007.json"
+},
+{
+"file": "workday_nvidia/p008.json"
+},
+{
+"file": "workday_nvidia/p009.json"
+},
+{
+"file": "workday_nvidia/p010.json"
+}
+],
+"https://acmebio.recruitee.com/api/offers/": {
+"file": "recruitee_acme.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-0_JR2000000": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-10_JR2000010": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-11_JR2000011": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-12_JR2000012": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-13_JR2000013": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-14_JR2000014": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-15_JR2000015": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-16_JR2000016": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-17_JR2000017": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-18_JR2000018": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-19_JR2000019": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-1_JR2000001": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-20_JR2000020": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-21_JR2000021": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-22_JR2000022": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-23_JR2000023": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-24_JR2000024": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-25_JR2000025": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-26_JR2000026": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-27_JR2000027": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-28_JR2000028": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-29_JR2000029": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-2_JR2000002": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-30_JR2000030": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-31_JR2000031": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-32_JR2000032": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-33_JR2000033": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-34_JR2000034": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-35_JR2000035": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-36_JR2000036": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-3_JR2000003": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-4_JR2000004": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-5_JR2000005": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-6_JR2000006": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-7_JR2000007": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-8_JR2000008": {
+"file": "workday_acmebio/detail.json"
+},
+"https://acmebio.wd1.myworkdayjobs.com/wday/cxs/acmebio/External/job/US-CA-Santa-Clara/Research-Scientist-9_JR2000009": {
+"file": "workday_acmebio/detail.json"
+},
+"https://api.adzuna.com/v1/api/jobs/us/search/1?app_id=test-id&app_key=test-key&what_or=scientist+laboratory&where=Springfield&distance=40&max_days_old=3&sort_by=date&results_per_page=50": {
+"file": "agg_adzuna.json"
+},
+"https://api.ashbyhq.com/posting-api/job-board/insitro?includeCompensation=true": {
+"file": "ashby_insitro.json"
+},
+"https://api.hireology.com/v2/public/careers/jaguarlandrover?page_size=500": {
+"file": "hireology_jlr.json"
+},
+"https://api.lever.co/v0/postings/synthego?mode=json&skip=0&limit=100": {
+"file": "lever_synthego.json"
+},
+"https://api.rippling.com/platform/api/ats/v1/board/seti-institute/jobs": {
+"file": "rippling_seti.json"
+},
+"https://api.rippling.com/platform/api/ats/v1/board/seti-institute/jobs/c01bd6f0-887a-47fc-a269-5915d1c287b3": {
+"file": "rippling_seti_c01bd6f0.json"
+},
+"https://api.rippling.com/platform/api/ats/v1/board/seti-institute/jobs/c31628b4-7f97-44bc-b4b8-940819063b0f": {
+"file": "rippling_seti_c31628b4.json"
+},
+"https://api.rippling.com/platform/api/ats/v1/board/seti-institute/jobs/c96da4fa-849d-4597-8b87-3aff8291d8ea": {
+"file": "rippling_seti_c96da4fa.json"
+},
+"https://apply.workable.com/api/v1/widget/accounts/huggingface?details=true": {
+"file": "workable_huggingface.json"
+},
+"https://boards-api.greenhouse.io/v1/boards/vaxcyte/jobs/4731252008?questions=true": {
+"file": "greenhouse_vaxcyte_4731252008.json"
+},
+"https://boards-api.greenhouse.io/v1/boards/vaxcyte/jobs/5451712008?questions=true": {
+"file": "greenhouse_vaxcyte_5451712008.json"
+},
+"https://boards-api.greenhouse.io/v1/boards/vaxcyte/jobs/5451724008?questions=true": {
+"file": "greenhouse_vaxcyte_5451724008.json"
+},
+"https://boards-api.greenhouse.io/v1/boards/vaxcyte/jobs?content=true": {
+"file": "greenhouse_vaxcyte_list.json"
+},
+"https://buckinstitute.applytojob.com/apply/jobs": {
+"file": "jazzhr_buck.html"
+},
+"https://buckinstitute.applytojob.com/apply/jobs/details/DoPsm3uikO": {
+"file": "jazzhr_buck_DoPsm3uikO.html"
+},
+"https://buckinstitute.applytojob.com/apply/jobs/details/S2TJaE09ZD": {
+"file": "jazzhr_buck_S2TJaE09ZD.html"
+},
+"https://buckinstitute.applytojob.com/apply/jobs/details/ykiRfgTGAP": {
+"file": "jazzhr_buck_ykiRfgTGAP.html"
+},
+"https://capmo.jobs.personio.de/xml?language=en": {
+"file": "personio_capmo.xml"
+},
+"https://career.teamtailor.com/jobs.json": {
+"file": "teamtailor_career.json"
+},
+"https://careers.abbvie.com/en/job/analista-di-laboratorio-tempo-determinato-12-mesi-in-campoverde-lazio-jid-1514": {
+"file": "phenom_abbvie_job0.html"
+},
+"https://careers.abbvie.com/en/job/engineering-intern-6-months-internship-in-campoverde-lazio-jid-7175": {
+"file": "phenom_abbvie_job2.html"
+},
+"https://careers.abbvie.com/en/job/veteran-skillbridge-program-intern-in-north-chicago-il-jid-2680": {
+"file": "phenom_abbvie_job1.html"
+},
+"https://careers.abbvie.com/en/vacanciessitemap.xml": {
+"file": "phenom_abbvie_vacancies.xml"
+},
+"https://careers.abbvie.com/sitemap.xml": {
+"file": "phenom_abbvie_index.xml"
+},
+"https://data.usajobs.gov/api/search?Keyword=Laboratory+Scientist&LocationName=Springfield%2C+IL&Radius=40&DatePosted=3&ResultsPerPage=500": {
+"file": "agg_usajobs.json"
+},
+"https://ebwb.fa.us2.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitionDetails?expand=all&onlyData=true&finder=ById;Id=%2211525%22,siteNumber=CX": {
+"file": "oracle_hologic_11525.json"
+},
+"https://ebwb.fa.us2.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitionDetails?expand=all&onlyData=true&finder=ById;Id=%2212615%22,siteNumber=CX": {
+"file": "oracle_hologic_12615.json"
+},
+"https://ebwb.fa.us2.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitionDetails?expand=all&onlyData=true&finder=ById;Id=%2212641%22,siteNumber=CX": {
+"file": "oracle_hologic_12641.json"
+},
+"https://ebwb.fa.us2.oraclecloud.com/hcmRestApi/resources/latest/recruitingCEJobRequisitions?onlyData=true&expand=requisitionList.secondaryLocations&finder=findReqs;siteNumber=CX,limit=200,offset=0,sortBy=POSTING_DATES_DESC": {
+"file": "oracle_hologic_list.json"
+},
+"https://gilead.wd1.myworkdayjobs.com/wday/cxs/gilead/gileadcareers/job/United-States---California---Foster-City/Scientist--Drug-Metabolism_R0056377-1": {
+"file": "workday_gilead_d1.json"
+},
+"https://gilead.wd1.myworkdayjobs.com/wday/cxs/gilead/gileadcareers/job/United-States---California---Foster-City/Scientist--Process-Development_R0055911": {
+"file": "workday_gilead_d0.json"
+},
+"https://gilead.wd1.myworkdayjobs.com/wday/cxs/gilead/gileadcareers/job/United-States---North-Carolina---Raleigh/AI-Data-Science-Lead---PDM---Tech-Ops--Gilead---Kite-_R0052730-2": {
+"file": "workday_gilead_d2.json"
+},
+"https://homebrew.bamboohr.com/careers/list": {
+"file": "bamboohr_gone.html",
+"url": "https://www.bamboohr.com/"
+},
+"https://jobs.dayforcehcm.com/api/auth/csrf": {
+"file": "dayforce_csrf.json"
+},
+"https://jobs.dayforcehcm.com/en-US/asburyauto/ASBURYCAREERSITE": {
+"file": "dayforce_board.html"
+},
+"https://jobs.jobvite.com/fiverings/jobs": {
+"file": "jobvite_gone.html",
+"url": "https://www.jobvite.com/support/job-seeker-support/?invalid=1"
+},
+"https://jobs.jobvite.com/sutrobio/job/oBq0Afwl": {
+"file": "jobvite_sutrobio_oBq0Afwl.html"
+},
+"https://jobs.jobvite.com/sutrobio/job/oajWAfwJ": {
+"file": "jobvite_sutrobio_oajWAfwJ.html"
+},
+"https://jobs.jobvite.com/sutrobio/job/ozFWAfwu": {
+"file": "jobvite_sutrobio_ozFWAfwu.html"
+},
+"https://jobs.jobvite.com/sutrobio/jobs": {
+"file": "jobvite_sutrobio.html"
+},
+"https://mangomaterials.bamboohr.com/careers/52/detail": {
+"file": "bamboohr_mangomaterials_detail.json"
+},
+"https://mangomaterials.bamboohr.com/careers/list": {
+"file": "bamboohr_mangomaterials_list.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-0_JR2000000": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-100_JR2000100": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-101_JR2000101": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-102_JR2000102": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-103_JR2000103": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-104_JR2000104": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-105_JR2000105": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-106_JR2000106": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-107_JR2000107": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-108_JR2000108": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-109_JR2000109": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-10_JR2000010": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-110_JR2000110": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-111_JR2000111": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-112_JR2000112": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-113_JR2000113": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-114_JR2000114": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-115_JR2000115": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-116_JR2000116": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-117_JR2000117": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-118_JR2000118": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-119_JR2000119": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-11_JR2000011": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-120_JR2000120": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-121_JR2000121": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-122_JR2000122": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-123_JR2000123": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-124_JR2000124": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-125_JR2000125": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-126_JR2000126": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-127_JR2000127": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-128_JR2000128": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-129_JR2000129": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-12_JR2000012": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-130_JR2000130": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-131_JR2000131": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-132_JR2000132": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-133_JR2000133": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-134_JR2000134": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-135_JR2000135": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-136_JR2000136": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-137_JR2000137": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-138_JR2000138": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-139_JR2000139": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-13_JR2000013": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-140_JR2000140": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-141_JR2000141": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-142_JR2000142": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-143_JR2000143": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-144_JR2000144": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-145_JR2000145": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-146_JR2000146": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-147_JR2000147": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-148_JR2000148": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-149_JR2000149": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-14_JR2000014": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-150_JR2000150": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-151_JR2000151": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-152_JR2000152": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-153_JR2000153": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-154_JR2000154": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-155_JR2000155": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-156_JR2000156": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-157_JR2000157": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-158_JR2000158": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-159_JR2000159": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-15_JR2000015": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-160_JR2000160": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-161_JR2000161": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-162_JR2000162": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-163_JR2000163": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-164_JR2000164": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-165_JR2000165": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-166_JR2000166": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-167_JR2000167": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-168_JR2000168": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-169_JR2000169": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-16_JR2000016": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-170_JR2000170": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-171_JR2000171": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-172_JR2000172": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-173_JR2000173": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-174_JR2000174": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-175_JR2000175": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-176_JR2000176": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-177_JR2000177": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-178_JR2000178": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-179_JR2000179": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-17_JR2000017": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-180_JR2000180": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-181_JR2000181": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-182_JR2000182": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-183_JR2000183": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-184_JR2000184": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-185_JR2000185": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-186_JR2000186": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-187_JR2000187": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-188_JR2000188": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-189_JR2000189": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-18_JR2000018": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-190_JR2000190": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-191_JR2000191": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-192_JR2000192": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-193_JR2000193": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-194_JR2000194": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-195_JR2000195": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-196_JR2000196": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-197_JR2000197": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-198_JR2000198": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-199_JR2000199": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-19_JR2000019": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-1_JR2000001": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-20_JR2000020": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-21_JR2000021": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-22_JR2000022": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-23_JR2000023": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-24_JR2000024": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-25_JR2000025": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-26_JR2000026": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-27_JR2000027": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-28_JR2000028": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-29_JR2000029": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-2_JR2000002": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-30_JR2000030": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-31_JR2000031": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-32_JR2000032": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-33_JR2000033": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-34_JR2000034": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-35_JR2000035": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-36_JR2000036": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-37_JR2000037": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-38_JR2000038": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-39_JR2000039": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-3_JR2000003": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-40_JR2000040": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-41_JR2000041": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-42_JR2000042": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-43_JR2000043": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-44_JR2000044": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-45_JR2000045": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-46_JR2000046": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-47_JR2000047": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-48_JR2000048": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-49_JR2000049": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-4_JR2000004": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-50_JR2000050": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-51_JR2000051": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-52_JR2000052": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-53_JR2000053": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-54_JR2000054": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-55_JR2000055": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-56_JR2000056": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-57_JR2000057": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-58_JR2000058": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-59_JR2000059": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-5_JR2000005": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-60_JR2000060": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-61_JR2000061": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-62_JR2000062": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-63_JR2000063": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-64_JR2000064": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-65_JR2000065": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-66_JR2000066": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-67_JR2000067": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-68_JR2000068": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-69_JR2000069": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-6_JR2000006": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-70_JR2000070": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-71_JR2000071": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-72_JR2000072": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-73_JR2000073": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-74_JR2000074": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-75_JR2000075": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-76_JR2000076": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-77_JR2000077": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-78_JR2000078": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-79_JR2000079": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-7_JR2000007": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-80_JR2000080": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-81_JR2000081": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-82_JR2000082": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-83_JR2000083": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-84_JR2000084": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-85_JR2000085": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-86_JR2000086": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-87_JR2000087": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-88_JR2000088": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-89_JR2000089": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-8_JR2000008": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-90_JR2000090": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-91_JR2000091": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-92_JR2000092": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-93_JR2000093": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-94_JR2000094": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-95_JR2000095": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-96_JR2000096": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-97_JR2000097": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-98_JR2000098": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-99_JR2000099": {
+"file": "workday_nvidia/detail.json"
+},
+"https://nvidia.wd5.myworkdayjobs.com/wday/cxs/nvidia/NVIDIAExternalCareerSite/job/US-CA-Santa-Clara/Research-Scientist-9_JR2000009": {
+"file": "workday_nvidia/detail.json"
+},
+"https://personio.jobs.personio.de/xml?language=en": {
+"file": "personio_empty.xml"
+},
+"https://recruiting.paylocity.com/recruiting/jobs/All/fb344149-f240-4648-a99b-7e27510b63c2/Codexis-Inc": {
+"file": "paylocity_codexis.html"
+},
+"https://recruiting.paylocity.com/recruiting/jobs/Details/4611585/fb344149-f240-4648-a99b-7e27510b63c2": {
+"file": "paylocity_codexis_4611585.html"
+},
+"https://recruiting.paylocity.com/recruiting/jobs/Details/4611622/fb344149-f240-4648-a99b-7e27510b63c2": {
+"file": "paylocity_codexis_4611622.html"
+},
+"https://recruiting.paylocity.com/recruiting/jobs/Details/4627071/fb344149-f240-4648-a99b-7e27510b63c2": {
+"file": "paylocity_codexis_4627071.html"
+},
+"https://vaxart-inc.breezy.hr/json": {
+"file": "breezy_vaxart.json"
+},
+"https://vaxart-inc.breezy.hr/p/3f4e08cacf60-vice-president-technical-operations": {
+"file": "breezy_vaxart_detail.html"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000001_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000002_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000003_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000004_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000005_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000006_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000007_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000008_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000009_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000010_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000011_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000012_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000013_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000014_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000015_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000016_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000017_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000018_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000019_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000020_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000021_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000022_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000023_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000024_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000025_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000026_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000027_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000028_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000029_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000030_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000031_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000032_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000033_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000034_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000035_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000036_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000037_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000038_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000039_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000040_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000041_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000042_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000043_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000044_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000045_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000046_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000047_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000048_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000049_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000050_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000051_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000052_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000053_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000054_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000055_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000056_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000057_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000058_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000059_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000060_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000061_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000062_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000063_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000064_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000065_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000066_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000067_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000068_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000069_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000070_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000071_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000072_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/910000000073_1?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US": {
+"file": "adp_73/detail.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/9204819969617_1?cid=a21467f2-5c74-46bf-bd5c-61cdb598d8b3&ccId=19000101_000001&lang=en_US&locale=en_US": {
+"file": "adp_cytek_9204819969617_1.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/9205017378249_1?cid=a21467f2-5c74-46bf-bd5c-61cdb598d8b3&ccId=19000101_000001&lang=en_US&locale=en_US": {
+"file": "adp_cytek_9205017378249_1.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions/9205059563992_16?cid=a21467f2-5c74-46bf-bd5c-61cdb598d8b3&ccId=19000101_000001&lang=en_US&locale=en_US": {
+"file": "adp_cytek_9205059563992_16.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US&$top=20&$skip=0": {
+"file": "adp_73/p0.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US&$top=20&$skip=20": {
+"file": "adp_73/p1.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US&$top=20&$skip=40": {
+"file": "adp_73/p2.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US&$top=20&$skip=60": {
+"file": "adp_73/p3.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions?cid=0f0f0f0f-0000-4000-8000-000000000073&lang=en_US&locale=en_US&$top=20&$skip=80": {
+"file": "adp_73/p4.json"
+},
+"https://workforcenow.adp.com/mascsr/default/careercenter/public/events/staffing/v1/job-requisitions?cid=a21467f2-5c74-46bf-bd5c-61cdb598d8b3&ccId=19000101_000001&lang=en_US&locale=en_US&$top=20&$skip=0": {
+"file": "adp_cytek_p0.json"
+},
+"https://workwithus.pinpointhq.com/postings.json": {
+"file": "pinpoint_workwithus.json"
+},
+"https://www.careers-page.com/api/v1.0/c/doyensec-llc/jobs/": {
+"file": "manatal_doyensec.json"
+},
+"https://www.comeet.com/jobs/pinnaclehomecare/1B.00E": {
+"file": "comeet_pinnacle.html"
+}
+}

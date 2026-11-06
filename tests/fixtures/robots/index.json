@@ -1,0 +1,19 @@
+{
+ "https://api.lever.co/robots.txt": {"file": "lever.txt"},
+ "https://api.lever.co/v0/postings/acme?mode=json&skip=0&limit=100": {"file": "ok.json"},
+ "https://api.smartrecruiters.com/robots.txt": {"error": "connection reset (fixture: robots unreachable)"},
+ "https://recruiting.ultipro.com/robots.txt": {"file": "ukg.txt"},
+ "https://careers-acme.icims.com/robots.txt": {"file": "disallow_all.txt"},
+ "https://boards-api.greenhouse.io/robots.txt": {"file": "greenhouse.txt"},
+ "https://boards-api.greenhouse.io/v1/boards/acme/jobs": {"file": "ok.json"},
+ "https://apply.workable.com/robots.txt": {"file": "workable.txt"},
+ "https://api.ashbyhq.com/robots.txt": {"status": 401},
+ "https://api.ashbyhq.com/posting-api/job-board/acme": {"file": "ok.json"},
+ "https://acme.pinpointhq.com/robots.txt": {"file": "slow_ours.txt"},
+ "https://acme.pinpointhq.com/postings.json": {"file": "ok.json"},
+ "https://acme.bamboohr.com/robots.txt": {"status": 503},
+ "https://jobs.smartrecruiters.com/robots.txt": {"file": "smartrecruiters_jobs_allow.txt"},
+ "https://acme.breezy.hr/json": [{"status": 429, "headers": {"Retry-After": "30"}}, {"file": "ok.json"}],
+ "https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/External/jobs": {"file": "ok.json"},
+ "POST https://acme.wd5.myworkdayjobs.com/wday/cxs/acme/External/jobs": {"file": "ok.json"}
+}

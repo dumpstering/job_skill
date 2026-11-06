@@ -1,0 +1,15 @@
+{
+  "name": "Jordan Q. Avery",
+  "contact": ["Springfield, IL", "(555) 555-0199", "jordan.q.avery@example.com"],
+  "letter": {
+    "date": "{date}",
+    "recipient": ["Hiring Team", "{company}"],
+    "greeting": "Dear Hiring Team,",
+    "paragraphs": [
+      "I am applying for the {role} role at {company}. For 7 years I ran GMP QC microbiology testing at Northwind Biologics, including environmental monitoring for 4 ISO 7 cleanrooms.",
+      "Your posting's focus on {focus} matches work I did there: with our QC lead I validated 3 real-time PCR assays for mycoplasma release testing, which brought results from 28 days to 2 days.",
+      "I would welcome the chance to talk about how this work fits your team."
+    ],
+    "closing": "Sincerely,"
+  }
+}

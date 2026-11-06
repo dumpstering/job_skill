@@ -1,0 +1,62 @@
+[daily]
+target = 20                 # R1, configurable
+queue_factor = 1.5          # queue size = ceil(target * queue_factor)
+tier_a_per_day = 4          # 3-5 (R6)
+batch_size = 10             # applications per Claude task (R13)
+new_account_tenants_per_day = 3
+account_required_per_day = 6
+usajobs_per_day = 1
+questions_per_day = 6
+easy_apply_list_max = 5
+more_size = 10
+[runner]
+mode = "L"                  # L | S | M (2.1); W is an experiment flag below
+experiment_mode_w = false
+[alerts]
+read_linkedin = true        # company, title, location only (R2)
+read_indeed_family = false  # Indeed, Glassdoor, SimplyHired (R2; alerts A9)
+read_ziprecruiter = false   # links carry auth tokens (alerts A11)
+senders = []                # exact From addresses he confirmed at setup
+[sources]
+adzuna = false              # true once a key is in keys.toml
+usajobs = false             # true once a key is in keys.toml
+workable_search = false     # terms unknown (ats A7 correction)
+muse = false                # aggregators A2-A3 correction
+dayforce = true             # watch-listed Dayforce employers only (ats A13 correction)
+r3_sitemaps = false         # Paycom sitemap / Zoho RSS (robots-allowed, ats verifier omission); owner decision
+[referrals]
+enabled = true
+asks_per_day = 3            # 3-5 (R11)
+hold_days = 0               # R11: never a gate; owner may set 1-2 for the asked job only
+nudge_after_days = 5
+[followups]
+tiers = ["A", "referral"]   # Tier B rows get no follow-up date
+days = 7
+[apply]
+browser = "auto"            # auto | builtin | chrome
+try_chrome_upload = true    # one try per session, then he attaches (platform A9)
+fill_mode = "sequential"    # sequential | rounds (experiment, 5.6)
+rounds_size = 5
+sensitive_confirm = "per_job"   # per_job (v1.1 semantics, batched) | daily (owner opt-in)
+screener = false
+mygreenhouse_autofill = false   # oss A27 experiment
+[caps]                      # R7
+per_company_30d = 3
+per_family_per_company_30d = 1
+reject_reapply_days = 90
+ashby_one_open = true       # oss A19
+per_company_per_day = 2     # oss A25
+[[caps.employer]]
+name = "Google"
+match = ["google"]          # parent grouping elsewhere only where watchlist sets parent
+per_30d = 3
+same_job_reapply_days = 90  # volume A9
+[worksearch]
+claiming = false
+state = "CA"
+claim_effective = ""        # YYYY-MM-DD
+de8405_received = ""
+[time]
+timezone = "America/Los_Angeles"
+[schedule]
+weekly_day = "monday"

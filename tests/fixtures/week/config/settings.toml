@@ -1,0 +1,9 @@
+[runner]
+mode = "L"
+
+[worksearch]
+claiming = true
+state = "CA"
+
+[time]
+timezone = "America/Los_Angeles"

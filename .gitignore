@@ -1,7 +1,39 @@
+# Local environment and build output
 .env
 .venv/
 __pycache__/
+*.pyc
 dist/
+
+# Built documents and spreadsheets (real ones hold personal data)
 *.docx
 *.pdf
 *.xlsx
+
+# Never in the public repo (spec 8.7): anything from a JobSearch folder or the runner
+JobSearch/
+network/
+leads/
+queue/
+state/
+upload/
+claude/
+**/runner/in/
+**/runner/out/
+keys.toml
+*.jsonl
+Connections*.csv
+*LinkedInDataExport*
+
+# Test fixtures are synthetic and committed, even where the names above match
+# (state/, runner/in/, *.jsonl, Connections.csv). Keep this after the rules above.
+!tests/fixtures/**
+
+# ...except what running the tests or the acceptance commands writes into them
+tests/fixtures/**/__pycache__/
+tests/fixtures/**/*.pyc
+tests/fixtures/**/*.pdf
+tests/fixtures/**/*.docx
+tests/fixtures/**/*.xlsx
+tests/fixtures/week/worksearch/
+tests/fixtures/week/reports/week_*.md

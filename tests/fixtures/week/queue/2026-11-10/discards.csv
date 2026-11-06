@@ -1,0 +1,8 @@
+date,lane,company,role,location,host,job_key,gate,reason,profile_hash
+2026-11-10,watch,Example 0,Sales Lead,Springfield,boards.greenhouse.io,greenhouse:90,title,no family match,abc
+2026-11-10,watch,Example 1,Sales Lead,Springfield,boards.greenhouse.io,greenhouse:91,title,no family match,abc
+2026-11-10,watch,Example 2,Sales Lead,Springfield,boards.greenhouse.io,greenhouse:92,title,no family match,abc
+2026-11-10,watch,Example 3,Sales Lead,Springfield,boards.greenhouse.io,greenhouse:93,title,no family match,abc
+2026-11-10,watch,Example 4,Sales Lead,Springfield,boards.greenhouse.io,greenhouse:94,title,no family match,abc
+2026-11-10,watch,Example 0,QC Analyst,Far City,boards.greenhouse.io,greenhouse:80,location,outside radius,abc
+2026-11-10,watch,Example 1,QC Analyst,Far City,boards.greenhouse.io,greenhouse:81,location,outside radius,abc

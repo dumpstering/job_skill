@@ -1,0 +1,9 @@
+Notes:
+"When exporting your connection data, you may notice that some of the email addresses are missing. You will only see email addresses for connections who have allowed their connections to see or download their email address."
+
+First Name,Last Name,URL,Email Address,Company,Position,Connected On
+Jane,Doe,https://www.linkedin.com/in/janedoe-example,,Acme Bio,Senior Scientist,27 Mar 2024
+Bob,Stone,https://www.linkedin.com/in/bobstone-example,bob.stone@example.com,"Acme Bio, Inc.",QC Lead,10 Jan 2023
+Eve,Hack,https://www.linkedin.com/in/evehack-example,,"=HYPERLINK(""x"")",+Analyst,4-Apr-21
+Ivy,Moss,https://www.linkedin.com/in/ivymoss-example,,Self-employed,Consultant,01 Jan 2018
+Kim,Ray,https://www.linkedin.com/in/kimray-example,,Magnit,Magnit / Scientist @ Vandelay Bio,02 Feb 2025

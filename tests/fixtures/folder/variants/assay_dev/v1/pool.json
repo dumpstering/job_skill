@@ -1,0 +1,26 @@
+{
+  "summaries": [
+    "Microbiologist (Ph.D.) with 7 years of GMP QC microbiology, including validated real-time PCR methods for mycoplasma release testing and cleanroom environmental monitoring.",
+    "Microbiologist (Ph.D.) whose postdoc on gut anaerobes combined anaerobic culture, real-time PCR and 16S rRNA sequencing, followed by 7 years of GMP QC microbiology."
+  ],
+  "bullets": {
+    "Scientist II, QC Microbiology | Northwind Biologics": [
+      {"text": "Performed bioburden and sterility testing under GMP for 2 commercial products.", "ev": ["L-0008"]},
+      {"text": "Worked daily in a BSL-2 lab: culture, Gram stain and identification by MALDI-TOF.", "ev": ["L-0007"]}
+    ],
+    "Postdoctoral Fellow | Contoso Research Institute": [
+      {"text": "Ran 16S rRNA amplicon sequencing on about 400 stool samples with the sequencing core.", "ev": ["L-0011"]}
+    ],
+    "Graduate Research Assistant | Springfield State University": [
+      {"text": "Imaged biofilms on 3 surface types by confocal microscopy.", "ev": ["L-0016"]}
+    ]
+  },
+  "skills": [
+    {"label": "Molecular", "items": ["16S rRNA sequencing"]}
+  ],
+  "aliases": [
+    {"variant": "real-time PCR", "posting": ["qPCR", "quantitative PCR"]},
+    {"variant": "16S rRNA sequencing", "posting": ["16S sequencing"]}
+  ],
+  "publications": ["P-007", "P-011", "P-004"]
+}

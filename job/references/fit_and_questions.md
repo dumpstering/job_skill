@@ -103,3 +103,42 @@ and 'skip' are fine. For numbers, give one you're sure of, a floor ('at least
 200'), or 'about'."
 
 Then stop and wait for my answers. Write no part of the resume yet.
+
+## Daily batch mode (v1.2)
+
+Everything above applies, with these changes when the job is a Tier A item
+of the day's batch (the job-tailor sub-agent, or job-morning without the
+plugin):
+- Don't stop and wait. Write the Job Fit Assessment and all your questions
+  to the job's `notes.md`, then write the resume from my sources at once, as
+  if I had said "go" (writing_rules.md). It stands if I never answer.
+- Put at most 2 questions, the ones whose answers would change the resume
+  most, in `<job folder>/questions.json`:
+  `[{"q": "Have you worked in a BSL-2 lab? Where, and about how long?", "also": ["Do you have BSL-2 experience?"]}]`.
+  `also` lists other wordings of the same question, so the batch can merge
+  it with other jobs' questions. `answers.py questions` merges them with the
+  day's other questions; the card shows at most 6 in all, ranked by jobs
+  waiting, plus one sensitive-answers line.
+- Leave out anything `answers.md`, `techniques.md`, `publications.md`, my
+  library, my profile or `notes.md` already answers. Quick checks stay in
+  `notes.md`; they do not go into the batch.
+- When my answers arrive: recurring answers go to `answers.md`
+  (`answers.py add`, source `user:<date>`), achievements to the library as
+  new entries with IDs (`library.py ids`), job-specific ones to the job's
+  `notes.md`. Each file is backed up first. Then revise the resume and build
+  it again with `--strict`.
+- Unknown required form answers are not your questions: `answers.py plan`
+  marks them `needs_you` and they join the batch on their own.
+
+**Variant gaps.** When building a family variant ([variants.md](variants.md)),
+run this file against the union of the must-haves of the 3-5 representative
+postings, with up to 6 questions and "skip is fine". Questions still open
+after approval go to `variants/<family>/v<N>/questions.json` (same format)
+and join the batch after every job's own questions.
+
+**Document mode.** Note the mode in `notes.md` and build with it
+([cv_publications.md](cv_publications.md)):
+- `cv` when the posting asks for a CV or curriculum vitae, the employer is a
+  university, institute or government lab, or the title is a postdoc;
+- `usajobs` for a USAJOBS announcement (always Tier A, 2 pages, hard);
+- `industry` otherwise.

@@ -1,0 +1,65 @@
+# config/search_profile.toml: what the runner looks for (spec 2.5, 3.8).
+# The keys are fixed; setup fills the values from profile.md, or copies a
+# preset from templates/presets/ (for example lifesci_bayarea/families.toml)
+# that matches his field and region. Edit in Notepad any time: a file that
+# stops parsing makes the runner keep using the last good copy.
+#
+# Title terms (title_any, title_none, require_any, exclude_title_words) match
+# whole words of the title, ignoring case and punctuation:
+#   "capa"             matches "CAPA Specialist", never "Capacity Planner"
+#   "microbiolog*"     a stem: microbiology, microbiologist
+#   "qc+micro*"        every part must appear: "QC Analyst, Microbiology"
+#   "lecturer|instructor+biolog*"   either word, and a biology word
+# An exclude word in capitals of three letters or fewer ("IT", "HR", "VP")
+# matches only the title's own capitals.
+# Families are tried in this file's order and the first that matches wins, so
+# put specific families before general ones.
+
+version = 1
+
+[home]
+label = ""                  # "City, ST" from profile.md
+zip = ""
+radius_miles = 40
+places = []                 # accepted city names, confirmed once
+second_ring = []            # used only by the widen step "second_ring"
+remote = "us"               # none | us
+relocate = false
+
+[gates]
+exclude_title_words = ["Director", "Vice President", "VP", "Intern", "Internship", "Chief"]
+employment_types = ["full-time", "contract", "temporary"]
+undated_policy = "first_seen_after_2_polls"
+
+# One table per license, certificate or other requirement he cannot meet.
+# A knockout is "held" (and skipped) when profile.md "Licenses held:" lists
+# its id or name. Patterns are Python regular expressions: at most 200
+# characters, no nested quantifiers.
+# [[knockout]]
+# id = "example_license"
+# name = "Example State Practitioner license"
+# required_patterns = ['(?i)example practitioner licen[cs]e required']
+# preferred_patterns = ['(?i)example practitioner licen[cs]e preferred']
+# title_patterns = ['(?i)\bexample practitioner\b']
+
+# One table per title family he applies to.
+# [[family]]
+# id = "example_family"     # ASCII; used in variants\, tracker Family, metrics
+# label = ""
+# status = "active"         # active | paused | proposed (proposed joins with the widen step adjacent_families)
+# mode = "industry"         # industry | cv | usajobs
+# variant = "example_family"
+# core_titles = []          # exact title phrases (title match 1.0)
+# adjacent_titles = []      # approved neighbors, title match 0.6
+# title_any = []            # title terms; one hit is enough
+# title_none = []           # title terms that rule the family out
+# require_any = []          # description terms; at least one must hit
+# terms = []                # vocabulary for KEYWORD, tuning and fit coverage
+# seniority_ok = []         # level words that fit (senior, ii, associate, ...)
+# needs_license = []        # knockout ids this family requires (only when held)
+# priority = 1              # 1-3
+# min_share = 0.10          # exploration floor in the queue
+
+[widen]                     # approved once at setup; one step a day when the pool is under target
+enabled = true
+steps = ["adjacent_families", "remote_us", "second_ring"]

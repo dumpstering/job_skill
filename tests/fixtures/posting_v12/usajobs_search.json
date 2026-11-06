@@ -1,0 +1,42 @@
+{
+  "LanguageCode": "EN",
+  "SearchParameters": {},
+  "SearchResult": {
+    "SearchResultCount": 2,
+    "SearchResultCountAll": 2,
+    "SearchResultItems": [
+      {
+        "MatchedObjectId": "812345600",
+        "MatchedObjectDescriptor": {
+          "PositionID": "FDA-26-0123",
+          "PositionTitle": "Microbiologist",
+          "PositionURI": "https://www.usajobs.gov:443/job/812345600",
+          "ApplyURI": ["https://www.usajobs.gov:443/job/812345600"],
+          "PositionLocationDisplay": "Springfield, California",
+          "PositionLocation": [{"LocationName": "Springfield, California", "CountryCode": "United States", "CountrySubDivisionCode": "California", "CityName": "Springfield, California"}],
+          "OrganizationName": "Food and Drug Administration",
+          "DepartmentName": "Department of Health and Human Services",
+          "PositionRemuneration": [{"MinimumRange": "88520.0", "MaximumRange": "115079.0", "RateIntervalCode": "PA", "Description": "Per Year"}],
+          "PublicationStartDate": "2026-11-03T00:00:00.0000",
+          "ApplicationCloseDate": "2026-11-17T23:59:59.9970",
+          "QualificationSummary": "You must have a degree in microbiology or a related science.",
+          "UserArea": {"Details": {"JobSummary": "Join the field laboratory that tests regulated products.",
+                                   "MajorDuties": ["Perform sterility and bioburden testing.", "Write laboratory reports."],
+                                   "Education": "Transcripts are required.", "RemoteIndicator": false}}
+        }
+      },
+      {
+        "MatchedObjectId": "812349999",
+        "MatchedObjectDescriptor": {
+          "PositionID": "VA-26-0456",
+          "PositionTitle": "Biologist",
+          "PositionURI": "https://www.usajobs.gov:443/job/812349999",
+          "PositionLocationDisplay": "Shelbyville, California",
+          "OrganizationName": "Veterans Health Administration",
+          "PublicationStartDate": "2026-11-02T00:00:00.0000",
+          "UserArea": {"Details": {"JobSummary": "Support a research laboratory."}}
+        }
+      }
+    ]
+  }
+}

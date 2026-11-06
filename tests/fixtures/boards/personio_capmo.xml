@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workzag-jobs>
+<position>
+    <id>2268501</id>
+    <office>Munich</office>
+    <additionalOffices>
+        <office>Berlin</office>
+    </additionalOffices>
+    <department>Customer Experience</department>
+    <recruitingCategory>Customer Success</recruitingCategory>
+    <name>(Senior) Customer Success Manager (m/w/*)</name>
+    <jobDescriptions><jobDescription><name>About the role</name><value><![CDATA[<p>Role: this description is trimmed for the fixture.</p><h3>Responsibilities</h3><ul><li>Run assays and keep accurate records.</li><li>Work with the team on lab and data tasks.</li></ul><h3>Qualifications</h3><ul><li>Degree in a related science.</li></ul>]]></value></jobDescription></jobDescriptions>
+    <employmentType>permanent</employmentType>
+    <seniority>experienced</seniority>
+    <schedule>full-time</schedule>
+    <yearsOfExperience>5-7</yearsOfExperience>
+    <occupation>general_and_other_customer_support_and_client_care</occupation>
+    <occupationCategory>customer_support_and_client_care</occupationCategory>
+    <createdAt>2025-07-29T15:16:30+00:00</createdAt>
+</position>
+<position>
+    <id>1989255</id>
+    <office>Munich</office>
+    <additionalOffices>
+        <office>Berlin</office>
+    </additionalOffices>
+    <department>Sales</department>
+    <recruitingCategory>Sales</recruitingCategory>
+    <name>Business Development Representative (m/w/*) - AI-Driven Sales</name>
+    <jobDescriptions><jobDescription><name>About the role</name><value><![CDATA[<p>Role: this description is trimmed for the fixture.</p><h3>Responsibilities</h3><ul><li>Run assays and keep accurate records.</li><li>Work with the team on lab and data tasks.</li></ul><h3>Qualifications</h3><ul><li>Degree in a related science.</li></ul>]]></value></jobDescription></jobDescriptions>
+    <employmentType>permanent</employmentType>
+    <seniority>entry-level</seniority>
+    <schedule>full-time</schedule>
+    <yearsOfExperience>1-2</yearsOfExperience>
+    
+    <occupation>business_development_and_new_accounts</occupation>
+    <occupationCategory>sales_and_business_development</occupationCategory>
+    <createdAt>2025-02-24T15:18:56+00:00</createdAt>
+</position>
+<position>
+    <id>2600744</id>
+    <office>Munich</office>
+    <additionalOffices>
+        <office>Berlin</office>
+    </additionalOffices>
+    <department>Customer Experience</department>
+    <recruitingCategory>Customer Success</recruitingCategory>
+    <name>Customer Success Manager (Construction) (m/w/*)</name>
+    <jobDescriptions><jobDescription><name>About the role</name><value><![CDATA[<p>Role: this description is trimmed for the fixture.</p><h3>Responsibilities</h3><ul><li>Run assays and keep accurate records.</li><li>Work with the team on lab and data tasks.</li></ul><h3>Qualifications</h3><ul><li>Degree in a related science.</li></ul>]]></value></jobDescription></jobDescriptions>
+    <employmentType>permanent</employmentType>
+    <seniority>experienced</seniority>
+    <schedule>full-time</schedule>
+    <yearsOfExperience>5-7</yearsOfExperience>
+    <occupation>general_and_other_customer_support_and_client_care</occupation>
+    <occupationCategory>customer_support_and_client_care</occupationCategory>
+    <createdAt>2026-04-14T11:28:34+00:00</createdAt>
+</position>
+</workzag-jobs>

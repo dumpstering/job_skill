@@ -1,0 +1,26 @@
+# Synthetic test profile for the variant, answer and CV tests.
+version = 1
+
+[home]
+label = "Springfield, IL"
+zip = "00000"
+radius_miles = 40
+places = ["Springfield"]
+remote = "us"
+
+[[knockout]]
+id = "ca_cls"
+name = "Clinical Laboratory Scientist license"
+required_patterns = ['(?i)\bCLS\b.{0,40}(licen[cs]e|required)']
+title_patterns = ['(?i)\bCLS\b']
+
+[[family]]
+id = "qc_micro"
+label = "QC / Microbiology"
+status = "active"
+mode = "industry"
+variant = "qc_micro"
+core_titles = ["QC Microbiologist"]
+title_any = ["microbiolog"]
+terms = ["GMP", "cleanroom", "aseptic technique", "deviation investigations", "mycoplasma", "BSL-2"]
+priority = 1

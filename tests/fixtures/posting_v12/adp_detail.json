@@ -1,0 +1,13 @@
+{
+  "itemID": "9200712345678_1",
+  "requisitionTitle": "Quality Control Analyst",
+  "clientRequisitionID": "QC-1147",
+  "postDate": "2026-10-30T07:00:00.000-07:00",
+  "requisitionLocations": [
+    {"nameCode": {"shortName": "Springfield Plant"},
+     "address": {"cityName": "Springfield", "countrySubdivisionLevel1": {"codeValue": "CA"}, "country": {"codeValue": "US"}}}
+  ],
+  "payGradeRange": {"minimumRate": {"amountValue": 70000, "currencyCode": "USD"},
+                    "maximumRate": {"amountValue": 82000, "currencyCode": "USD"}},
+  "requisitionDescription": "<p>Test incoming raw materials and finished goods.</p><ul><li>HPLC and UV-Vis</li><li>Review batch records</li></ul>"
+}

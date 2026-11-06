@@ -31,6 +31,15 @@ passwords, or answers about criminal history.
 - Desired salary (blank = ask me for each job):
 - Willing to complete a background check / drug screen (yes/no):
 
+## Licenses and claims
+List under the first line each license or certificate a job may require,
+with the year earned, e.g. California Clinical Laboratory Scientist (CLS)
+2019. Blank means none, and jobs that require one are skipped. The claim
+lines take yes or no, and two letters for the state (e.g. CA).
+- Licenses held:
+- Unemployment claim:
+- Claim state:
+
 ## Voluntary self-identification (US forms)
 Blank means "I decline to answer" / "Prefer not to say".
 - Gender:
@@ -47,9 +56,4 @@ Blank means "I decline to answer" / "Prefer not to say".
 - Anything else (career change, employment gap, relocation, etc.):
 
 ## Standard answers
-Answers to application questions that come up again and again. The skill adds
-to this list when you answer one. One per line:
-question | answer | where it applies (any, or a country such as US) | sensitive (yes/no)
-Sensitive means confirmed with you each time before it is used: mark yes for
-salary, visa or immigration status, and anything you want checked first.
-- How did you hear about us? |  | any | no
+Standard answers now live in answers.md, one bank for every application.

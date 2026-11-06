@@ -1,0 +1,9 @@
+id,first,last,company_raw,company_norm,position,connected_on,email,source,strength
+N-0001,Jane,Doe,Acme Bio,acme bio,Senior Scientist,2024-03-27,,rec,rec
+N-0002,Bob,Stone,"Acme Bio, Inc.",acme bio,QC Lead,2023-01-10,,linkedin,connection
+N-0003,Sam,Lee,Globex Labs,globex labs,Lab Manager,2022-05-01,,linkedin,connection
+N-0004,Ana,Ruiz,Initech Bio,initech bio,Scientist,2021-07-15,,linkedin,connection
+N-0005,Kim,Ray,Magnit,magnit,Magnit / Scientist @ Vandelay Bio,2025-02-02,kim.ray@example.com,google,emailed
+N-0006,Lou,Chan,Hooli Health,hooli health,Analyst,2020-09-09,,linkedin,connection
+N-0007,Max,Bell,Northwind Holdings,northwind,Director,2019-01-01,,linkedin,connection
+N-0008,Ivy,Moss,Self-employed,self employed,Consultant,2018-01-01,,linkedin,connection

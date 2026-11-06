@@ -68,9 +68,14 @@ def test_endpoints():
     assert ep(WD_URL.replace("/en-US", "").replace("/apply", "/apply/applyManually")) == ("workday", wd_api)
     assert ep("https://acme.wd5.myworkdayjobs.com/AcmeExternalCareerSite") is None
     assert posting.classify(WD_URL)["id"] == "JR2021886"
-    assert ep(SR_URL) == ("smartrecruiters",
-                          "https://api.smartrecruiters.com/v1/companies/acmerecruiting/postings/744000158320111")
-    assert ep("https://careers.smartrecruiters.com/acmerecruiting/744000158320111") is not None
+    # v1.2: SmartRecruiters is read from its jobs.smartrecruiters.com page; the
+    # api.smartrecruiters.com host (robots: LinkedInBot only) is never a route
+    c = posting.classify(SR_URL)
+    assert ep(SR_URL) is None and c["source"] == "smartrecruiters" and c["id"] == "744000158320111", c
+    assert c["page"] == SR_URL and "api.smartrecruiters.com" not in json.dumps(c), c
+    c = posting.classify("https://careers.smartrecruiters.com/acmerecruiting/744000158320111")
+    assert c["page"] == "https://jobs.smartrecruiters.com/acmerecruiting/744000158320111" and c["api"] is None, c
+    assert posting.classify("https://api.smartrecruiters.com/v1/companies/acmerecruiting/postings/744000158320111") is None
     assert ep(PAGE_URL) is None and ep("") is None
     assert posting.greenhouse_board_from_page(load("page_gh_embed.html")) == "acmeembed"
     assert posting.greenhouse_board_from_page(
@@ -452,10 +457,239 @@ def test_live():
         print("live lever ok:", lines[2])
 
 
+# ---------- v1.2 ----------
+
+V12 = FIX / "posting_v12"
+BAMBOO_URL = "https://acmebio.bamboohr.com/careers/42"
+ADP_URL = ("https://workforcenow.adp.com/mascsr/default/mdf/recruitment/recruitment.html"
+           "?cid=0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0&ccId=19000101_000001&jobId=9200712345678_1&lang=en_US")
+ORACLE_URL = "https://initech.fa.us2.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001/job/300000123456"
+USAJOBS_URL = "https://www.usajobs.gov/job/812345600"
+EMP_URL = "https://careers.acmebio.example/jobs/associate-scientist"
+
+
+def v12_json(source, name, url):
+    c = posting.classify(url) or {}
+    ctx = {"company": c.get("company", ""), "id": c.get("id", "")}
+    return posting.PARSERS[source](json.loads((V12 / name).read_text(encoding="utf-8")), ctx, posting.Report())
+
+
+def test_v12_endpoints():
+    ep = posting.api_endpoint
+    assert ep(BAMBOO_URL) == ("bamboohr", "https://acmebio.bamboohr.com/careers/42/detail")
+    assert ep("https://acmebio.bamboohr.com/jobs/view.php?id=42")[1].endswith("/careers/42/detail")
+    src, api = ep(ADP_URL)
+    assert src == "adp" and api.startswith("https://workforcenow.adp.com/mascsr/default/careercenter/public/events/"
+                                           "staffing/v1/job-requisitions/9200712345678_1?cid=0f1e2d3c-"), api
+    assert "&ccId=19000101_000001&lang=en_US" in api, api
+    assert ep(ORACLE_URL) == ("oracle", "https://initech.fa.us2.oraclecloud.com/hcmRestApi/resources/latest/"
+                              "recruitingCEJobRequisitionDetails?expand=all&onlyData=true"
+                              "&finder=ById;Id=%22300000123456%22,siteNumber=CX_1001")
+    c = posting.classify(USAJOBS_URL)
+    assert c["source"] == "usajobs" and c["api"] is None and c["id"] == "812345600", c  # keyed API: runner only
+
+
+def test_v12_parsers():
+    p = v12_json("bamboohr", "bamboohr_detail.json", BAMBOO_URL)
+    assert (p["company"], p["role"], p["posted"], p["posted_field"]) == (
+        "acmebio", "Research Associate, Cell Biology", "2026-10-28", "datePosted"), p
+    assert p["location"] == "Springfield, California, United States" and p["pay"] == "$85,000 - $100,000 / year", p
+    assert "- Run flow cytometry panels" in p["description"] and p["source"] == "bamboohr-api"
+
+    p = v12_json("adp", "adp_detail.json", ADP_URL)
+    assert (p["role"], p["req"], p["posted"], p["posted_field"]) == (
+        "Quality Control Analyst", "QC-1147", "2026-10-30", "postDate"), p
+    assert p["location"] == "Springfield, CA, US" and p["pay"] == "USD 70,000-82,000", p
+    assert p["salary"] == {"min": 70000.0, "max": 82000.0, "period": None, "currency": "USD"}, p["salary"]
+    assert "- HPLC and UV-Vis" in p["description"]
+
+    p = v12_json("oracle", "oracle_detail.json", ORACLE_URL)
+    assert (p["company"], p["role"], p["req"], p["posted"], p["posted_field"], p["closes"]) == (
+        "initech", "Scientist II, Assay Development", "REQ-55012", "2026-10-29", "ExternalPostedStartDate",
+        "2026-12-31"), p
+    assert p["location"] == "Springfield, CA, United States | Shelbyville, CA, United States" and p["remote"] == "hybrid"
+    d = p["description"]
+    assert d.index("Develop and qualify") < d.index("### Responsibilities") < d.index("### Qualifications"), d
+    assert "- Design ELISA and MSD assays" in d
+
+    p = v12_json("usajobs", "usajobs_search.json", USAJOBS_URL)
+    assert (p["role"], p["req"], p["posted"], p["posted_field"], p["closes"]) == (
+        "Microbiologist", "FDA-26-0123", "2026-11-03", "PublicationStartDate", "2026-11-17"), p
+    assert p["company"] == "Food and Drug Administration, Department of Health and Human Services", p
+    assert p["salary"] == {"min": 88520.0, "max": 115079.0, "period": "pa", "currency": "USD"}, p["salary"]
+    assert p["apply_url"] == "https://www.usajobs.gov:443/job/812345600" and "- Perform sterility" in p["description"]
+    one = json.loads((V12 / "usajobs_search.json").read_text(encoding="utf-8"))["SearchResult"]["SearchResultItems"][1]
+    assert posting.parse_usajobs_item(one, posting.Report())["role"] == "Biologist"
+    try:
+        posting.parse_usajobs(json.loads((V12 / "usajobs_search.json").read_text(encoding="utf-8")),
+                              {"id": "1"}, posting.Report())
+        raise AssertionError("an id not in the response should fail")
+    except posting.FetchError:
+        pass
+
+    # posted_field: Workday's relative postedOn never counts as a date
+    p, _ = parse_json("workday", "workday.json", WD_URL)
+    assert (p["posted"], p["posted_field"]) == ("2026-11-05", "startDate")
+    d = json.loads(load("workday.json"))
+    del d["jobPostingInfo"]["startDate"]
+    p = posting.parse_workday(d, {}, posting.Report())
+    assert p["posted"] == "Posted Today" and posting.iso_posted(p) == "", p
+
+
+def test_v12_posted_and_employer_site():
+    with tempfile.TemporaryDirectory(prefix="posting_v12_") as tmp:
+        out = Path(tmp) / "posting.md"
+        code, lines, err = run_cli(EMP_URL, "--out", str(out), "--html-file", str(V12 / "page_employer_site.html"))
+        assert code == 0, (code, lines, err)
+        assert lines[6] == f"WROTE {out}" and lines[7] == "POSTED 2026-10-28 (datePosted)", lines
+        assert lines[8] == "EMPLOYER SITE https://www.acmebio.example", lines
+        assert "Employer site: https://www.acmebio.example\n" in out.read_text(encoding="utf-8")
+
+        code, lines, _ = run_cli(GH_URL, "--out", str(out), "--json-file", str(FIX / "greenhouse.json"))
+        assert code == 0 and lines[7:9] == ["POSTED 2026-10-01 (first_published)", "EMPLOYER SITE none"], lines
+
+        pasted = Path(tmp) / "p.txt"
+        pasted.write_text("Do the work.", encoding="utf-8")
+        code, lines, _ = run_cli("--out", str(out), "--text-file", str(pasted), "--company", "A", "--role", "B")
+        assert code == 0 and "POSTED none" in lines, lines
+
+    # sameAs is used when url is missing
+    p = posting.parse_html((V12 / "page_sr_jsonld.html").read_text(encoding="utf-8"), SR_URL, posting.Report())
+    assert p["employer_site"] == "https://acmerecruiting.example" and p["source"] == "json-ld", p
+
+
+def test_v12_closed():
+    with tempfile.TemporaryDirectory(prefix="posting_v12_") as tmp:
+        out = Path(tmp) / "posting.md"
+        code, lines, _ = run_cli(GH_URL, "--out", str(out), "--json-file", str(V12 / "greenhouse_closed.json"))
+        assert code == 5 and lines[0].startswith("CLOSED greenhouse:1234567: greenhouse says: Job not found"), lines
+        assert not out.exists()
+
+        d = json.loads(load("workday.json"))
+        d["jobPostingInfo"]["canApply"] = False
+        wd = Path(tmp) / "wd.json"
+        wd.write_text(json.dumps(d), encoding="utf-8")
+        code, lines, _ = run_cli(WD_URL, "--out", str(out), "--json-file", str(wd))
+        assert code == 5 and "canApply is false" in lines[0], lines
+
+    api = "https://boards-api.greenhouse.io/v1/boards/acme/jobs/1234567"
+    # the API's 404 and the page's 404: closed
+    buf, seen = io.StringIO(), []
+    real = patch_net({api: 404, GH_URL: 404}, seen)
+    try:
+        with tempfile.TemporaryDirectory(prefix="posting_v12_") as tmp, redirect_stdout(buf):
+            code = posting.main([GH_URL, "--out", str(Path(tmp) / "posting.md")])
+    finally:
+        unpatch_net(real)
+    assert code == 5 and buf.getvalue().startswith("CLOSED greenhouse:1234567: HTTP 404 from the API and HTTP 404"), buf.getvalue()
+
+    # the API's 404 and a redirect to the board's error page: closed
+    class Redirected(FakeResponse):
+        def geturl(self):
+            return "https://job-boards.greenhouse.io/acme?error=true"
+
+    class RedirectOpener(FakeOpener):
+        def open(self, req, timeout=None):
+            if req.full_url == GH_URL:
+                return Redirected("<html><body><h1>Acme jobs</h1><p>Open roles</p></body></html>")
+            return super().open(req, timeout)
+
+    real = patch_net({api: 404}, [])
+    posting.OPENER = RedirectOpener({api: 404}, [])
+    try:
+        posting.resolve(GH_URL)
+        raise AssertionError("redirect to ?error=true after an API 404 should be CLOSED")
+    except posting.ClosedPosting as e:
+        assert "error=true" in str(e), e
+    finally:
+        unpatch_net(real)
+
+
+def test_v12_smartrecruiters_and_robots():
+    page = (V12 / "page_sr_jsonld.html").read_text(encoding="utf-8")
+    robots_url = "https://jobs.smartrecruiters.com/robots.txt"
+    allow = (FIX / "robots" / "smartrecruiters_jobs_allow.txt").read_text(encoding="utf-8")
+    for robots_body, want in ((allow, "read"), ("User-agent: *\nDisallow: /\n", "robots")):
+        posting.ROBOTS.mem.clear()
+        buf, seen = io.StringIO(), []
+        real = patch_net({robots_url: robots_body, SR_URL: page}, seen)
+        try:
+            with tempfile.TemporaryDirectory(prefix="posting_v12_") as tmp, redirect_stdout(buf):
+                code = posting.main([SR_URL, "--out", str(Path(tmp) / "posting.md")])
+        finally:
+            unpatch_net(real)
+        lines = buf.getvalue().splitlines()
+        urls = [s[0] for s in seen]
+        assert not any("api.smartrecruiters.com" in u for u in urls), urls  # never requested
+        assert urls[0] == robots_url, urls
+        if want == "read":
+            assert code == 0 and lines[0] == "SOURCE json-ld" and lines[1] == "COMPANY Acme Recruiting Inc", lines
+            assert urls == [robots_url, SR_URL], urls
+        else:
+            assert code == 3 and lines[0] == "ROBOTS jobs.smartrecruiters.com", lines
+            assert lines[1].startswith("NEXT open the posting in the browser"), lines
+            assert urls == [robots_url], urls
+    posting.ROBOTS.mem.clear()
+
+    with tempfile.TemporaryDirectory(prefix="posting_v12_") as tmp:
+        out = str(Path(tmp) / "posting.md")
+        # R3 list endpoints are refused like robots: read it in the browser
+        code, lines, _ = run_cli("https://api.smartrecruiters.com/v1/companies/acme/postings/1", "--out", out)
+        assert code == 3 and lines[0] == "ROBOTS api.smartrecruiters.com", lines
+        # the wider job-board list (spec 8.2) keeps the v1.1 JOB BOARD exit 4
+        for board in ("https://uk.indeed.com/viewjob?jk=abc", "https://www.glassdoor.com/job-listing/x",
+                      "https://www.ziprecruiter.com/c/Acme/Job/x"):
+            code, lines, _ = run_cli(board, "--out", out)
+            assert code == 4 and lines[0].startswith("JOB BOARD "), (board, lines)
+
+
+def test_v12_read_posting():
+    off = V12 / "offline"
+    r = posting.read_posting(GH_URL, offline=off, lane="watch", first_seen="2026-11-05")
+    rec = r.posting
+    assert isinstance(rec, posting.jobfs.Posting) and r.source == "greenhouse-api" and not rec.closed
+    assert (rec.job_key, rec.ats, rec.board, rec.company, rec.company_norm) == (
+        "greenhouse:1234567", "greenhouse", "acme", "Acme Robotics", "acme robotics"), rec
+    assert (rec.title, rec.city, rec.state, rec.country, rec.remote, rec.us_eligible) == (
+        "Senior IT Support Engineer", "Austin", "TX", "US", "remote", True), rec
+    assert (rec.posted, rec.posted_field, rec.first_seen, rec.lane) == ("2026-10-01", "first_published", "2026-11-05", "watch")
+    assert "REQ-26-0042" in rec.req_ids and rec.questions is True and len(rec.simhash) == 16, rec
+    assert rec.apply_url == "https://job-boards.greenhouse.io/acme/jobs/1234567" and rec.text.startswith("### About Acme")
+    assert r.markdown.startswith(f"URL: {GH_URL}\n") and set(rec.to_dict()) == {
+        f.name for f in posting.jobfs.fields(posting.jobfs.Posting)}
+
+    # one saved file, no network
+    r2 = posting.read_posting(GH_URL, offline=FIX / "greenhouse.json", first_seen="2026-11-05")
+    assert r2.posting.simhash == rec.simhash and r2.posting.lane == "pasted"
+    # an employer page through the offline fixtures: JSON-LD, employer site, flags
+    r3 = posting.read_posting(EMP_URL, offline=off)
+    assert r3.posting.employer_site == "https://www.acmebio.example" and r3.posting.req_ids == ["AS-3141"], r3.posting
+    assert r3.posting.salary is None and r3.ai_text == [] and r3.posting.posted == "2026-10-28"
+    r4 = posting.read_posting(PAGE_URL, offline=FIX / "page_jsonld.html")
+    assert r4.posting.salary == {"min": 95000.0, "max": 120000.0, "period": "year", "currency": "USD"}
+    assert any("banana" in ln for ln in r4.ai_text) and r4.stripped == 2, r4
+
+    # closed: API 404 and the page redirected to the board's error page
+    closed_url = "https://job-boards.greenhouse.io/acme/jobs/7654321"
+    r5 = posting.read_posting(closed_url, offline=off)
+    assert r5.posting.closed and r5.posting.job_key == "greenhouse:7654321" and r5.source == "closed", r5
+    assert posting.read_posting(GH_URL, offline=V12 / "greenhouse_closed.json").posting.closed
+
+    # refusals: a job board, robots, and a redirect host the runner was not told about
+    for url, want in (("https://www.linkedin.com/jobs/view/123", "job-board linkedin.com"),
+                      ("https://blocked.example/jobs/1", "robots blocked.example")):
+        try:
+            posting.read_posting(url, offline=off)
+            raise AssertionError(f"not refused: {url}")
+        except posting.Denied as e:
+            assert e.reason == want, (url, e.reason)
+
+
 def main():
     for t in (test_endpoints, test_html_to_text, test_parsers, test_html_sources, test_layout,
               test_cli_files, test_bad_arguments, test_network_paths, test_public_only,
-              test_boards_and_text):
+              test_boards_and_text, test_v12_endpoints, test_v12_parsers, test_v12_posted_and_employer_site,
+              test_v12_closed, test_v12_smartrecruiters_and_robots, test_v12_read_posting):
         t()
         print("ok", t.__name__)
     if os.environ.get("JOB_SKILL_LIVE") == "1":

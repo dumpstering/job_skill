@@ -1,0 +1,21 @@
+{
+  "items": [
+    {
+      "Id": "300000123456",
+      "Title": "Scientist II, Assay Development",
+      "RequisitionNumber": "REQ-55012",
+      "PrimaryLocation": "Springfield, CA, United States",
+      "PrimaryLocationCountry": "US",
+      "WorkplaceType": "Hybrid",
+      "ExternalPostedStartDate": "2026-10-29T08:15:00+00:00",
+      "ExternalPostedEndDate": "2026-12-31T00:00:00+00:00",
+      "secondaryLocations": [{"Name": "Shelbyville, CA, United States"}],
+      "ExternalDescriptionStr": "<p>Develop and qualify immunoassays for clinical programs.</p>",
+      "ExternalResponsibilitiesStr": "<ul><li>Design ELISA and MSD assays</li><li>Write qualification reports</li></ul>",
+      "ExternalQualificationsStr": "<ul><li>PhD in a life science</li></ul>",
+      "CorporateDescriptionStr": "<p>Initech Pharma makes medicines.</p>"
+    }
+  ],
+  "count": 1,
+  "hasMore": false
+}

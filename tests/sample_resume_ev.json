@@ -1,0 +1,30 @@
+{
+  "name": "Jordan Avery",
+  "contact": ["Austin, TX", "(555) 555-0142", "jordan.avery@example.com", "linkedin.com/in/jordanavery-example"],
+  "page": {"paper": "letter", "font_size": 10.5, "margin_in": 0.6},
+  "sections": [
+    {"heading": "Summary", "paragraph": "IT operations lead moving toward service desk management. Cut ticket backlog and onboarding time through process changes and automation, and trained the team that runs them."},
+    {"heading": "Experience", "entries": [
+      {"title": "IT Support Lead", "dates": "Mar 2021 - Present", "org": "Northwind Logistics", "location": "Austin, TX",
+       "bullets": [
+         {"text": "Lead a team of 6 technicians supporting about 900 employees across 4 sites, covering hardware, Microsoft 365 and Entra ID accounts.", "ev": ["L-0003", "L-0007"], "keep": true},
+         {"text": "Cut open ticket backlog from 410 to 120 in 5 months by adding triage rules and a daily stand-up (with the service desk manager).", "ev": ["L-0001"]},
+         {"text": "Automated new-hire laptop setup with Intune Autopilot, reducing setup time from about 3 hours to 40 minutes per device.", "ev": ["L-0002"]}
+       ]},
+      {"title": "Desktop Support Technician", "dates": "Jun 2016 - Feb 2021", "org": "Contoso Health", "location": "Round Rock, TX",
+       "bullets": [
+         {"text": "Resolved hardware and software tickets for a 300-bed hospital, averaging 25 tickets a day.", "ev": ["L-0004"]},
+         {"text": "Imaged and deployed Windows 10 workstations during the 2019 refresh (one of 3 technicians).", "ev": ["L-0005"]},
+         {"text": "Trained 12 new hires on the ticketing system and escalation paths.", "ev": ["L-0006"]}
+       ]}
+    ]},
+    {"heading": "Skills", "lines": [
+      {"label": "Platforms", "text": "Microsoft 365, Entra ID, Intune, Active Directory, Jira Service Management"},
+      {"label": "Scripting", "text": "PowerShell (basic scripts for account tasks)"}
+    ]},
+    {"heading": "Education", "entries": [
+      {"title": "A.A.S., Computer Networking", "dates": "May 2016", "org": "Austin Community College", "location": "Austin, TX"}
+    ]},
+    {"heading": "Certifications", "bullets": ["CompTIA A+ (earned 2016)", "ITIL 4 Foundation"]}
+  ]
+}

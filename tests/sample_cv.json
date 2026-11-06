@@ -1,0 +1,72 @@
+{
+  "name": "Jordan Q. Avery",
+  "contact": ["Springfield, IL", "(555) 555-0199", "jordan.q.avery@example.com", "linkedin.com/in/jqavery-example"],
+  "page": {"paper": "letter", "font_size": 11, "margin_in": 1.35},
+  "sections": [
+    {"heading": "Education", "entries": [
+      {"title": "Ph.D., Microbiology", "dates": "Aug 2012", "org": "Springfield State University", "location": "Springfield, IL"},
+      {"title": "B.S., Biology", "dates": "May 2006", "org": "Lakeside College", "location": "Lakeside, IL"}
+    ]},
+    {"heading": "Research Experience", "entries": [
+      {"title": "Postdoctoral Fellow", "dates": "Sep 2012 - Dec 2015", "org": "Contoso Research Institute", "location": "Springfield, IL",
+       "bullets": [
+         {"text": "Built a real-time PCR panel for 8 gut anaerobes, used in 2 published studies.", "ev": ["L-0010"]},
+         {"text": "Ran 16S rRNA amplicon sequencing on about 400 stool samples with the sequencing core.", "ev": ["L-0011"]},
+         {"text": "Mentored 3 graduate students on anaerobic culture.", "ev": ["L-0012"]},
+         {"text": "Wrote the methods section of an R01 renewal; the principal investigator was the applicant.", "ev": ["L-0013"]}
+       ]},
+      {"title": "Graduate Research Assistant", "dates": "May 2007 - Aug 2012", "org": "Springfield State University", "location": "Springfield, IL",
+       "bullets": [
+         {"text": "Studied biofilm formation in Pseudomonas aeruginosa, running real-time PCR on 14 quorum-sensing genes.", "ev": ["L-0014"]},
+         {"text": "Imaged biofilms on 3 surface types by confocal microscopy.", "ev": ["L-0016"]}
+       ]}
+    ]},
+    {"heading": "Professional Experience", "entries": [
+      {"title": "Microbiology Consultant", "dates": "Jun 2023 - Present", "org": "Fabrikam Labs", "location": "Springfield, IL",
+       "bullets": [
+         {"text": "Wrote 12 environmental monitoring SOPs for a client's new cleanroom suite, approved by the client's QA team.", "ev": ["L-0001"]},
+         {"text": "Trained 5 client technicians on aseptic technique and gowning qualification.", "ev": ["L-0002"]}
+       ]},
+      {"title": "Scientist II, QC Microbiology", "dates": "Jan 2016 - Apr 2023", "org": "Northwind Biologics", "location": "Springfield, IL",
+       "bullets": [
+         {"text": "Ran environmental monitoring for 4 ISO 7 cleanrooms and trended results monthly for the site quality review.", "ev": ["L-0003"]},
+         {"text": "Validated 3 real-time PCR assays for mycoplasma release testing with the QC lead, cutting result time from 28 days to 2 days.", "ev": ["L-0004"]},
+         {"text": "Performed LAL kinetic chromogenic endotoxin testing on about 300 water and in-process samples a month.", "ev": ["L-0005"]},
+         {"text": "Led 6 microbial data deviation investigations to closure, each within 30 days.", "ev": ["L-0006"]},
+         {"text": "Worked daily in a BSL-2 lab: culture, Gram stain and identification by MALDI-TOF.", "ev": ["L-0007"]},
+         {"text": "Performed bioburden and sterility testing under GMP for 2 commercial products.", "ev": ["L-0008"]}
+       ]}
+    ]},
+    {"heading": "Publications", "citations": ["P-001", "P-002", "P-003", "P-004", "P-005", "P-006", "P-007", "P-008", "P-009", "P-010", "P-011", "P-012", "P-013", "P-014", "P-026"], "bold_name": true},
+    {"heading": "Presentations", "citations": ["P-015", "P-016", "P-017", "P-018", "P-019", "P-020", "P-021", "P-022", "P-023", "P-024"], "bold_name": true},
+    {"heading": "Patents", "citations": ["P-025"], "bold_name": true},
+    {"heading": "Grants and Fellowships", "entries": [
+      {"title": "Postdoctoral Research Fellowship", "dates": "2013 - 2015", "org": "Contoso Research Institute"},
+      {"title": "Graduate Research Fellowship", "dates": "2009 - 2012", "org": "Springfield State University"}
+    ]},
+    {"heading": "Teaching and Mentoring", "bullets": [
+      {"text": "Taught 4 semesters of the undergraduate microbiology lab, about 24 students each.", "ev": ["L-0015"]},
+      {"text": "Mentored 3 graduate students on anaerobic culture.", "ev": ["L-0012"]},
+      {"text": "Trained 5 client technicians on aseptic technique and gowning qualification.", "ev": ["L-0002"]}
+    ]},
+    {"heading": "Techniques", "lines": [
+      {"label": "Microbiology", "text": "environmental monitoring, endotoxin testing (LAL), bioburden, sterility testing, anaerobic culture, MALDI-TOF identification"},
+      {"label": "Molecular", "text": "real-time PCR, 16S rRNA sequencing, ELISA"},
+      {"label": "Imaging", "text": "confocal microscopy (familiar)"}
+    ]},
+    {"heading": "Awards", "bullets": [
+      "Quality Excellence Award, Northwind Biologics (2019)",
+      "Best Poster Award, Midwest Microbiology Meeting (2014)",
+      "Dissertation Prize, Springfield State University (2012)"
+    ]},
+    {"heading": "Service", "bullets": [
+      "Peer reviewer for the Springfield Journal of Microbiology (2016 - 2022, 9 reviews)",
+      "Judge, Springfield regional science fair (2018 and 2019)",
+      "Volunteer, Lakeside College alumni mentoring program (2020 - 2023)"
+    ]},
+    {"heading": "Memberships", "bullets": [
+      "Society for Example Microbiology (since 2008)",
+      "Parenteral Example Association (since 2017)"
+    ]}
+  ]
+}

@@ -1,0 +1,24 @@
+{
+ "v": 1,
+ "applications": [],
+ "archived": [],
+ "accounts": [],
+ "email_log_ids": [],
+ "employers": [],
+ "activities": [],
+ "settings": {},
+ "refs": {},
+ "applied_ids": [],
+ "pending_rejected": [],
+ "referrals": [
+  {
+   "ID": 1,
+   "Date": "2026-11-09",
+   "Contact": "Sam Lee",
+   "Company": "Globex Labs",
+   "Job key": "greenhouse:4999999",
+   "Channel": "LinkedIn message",
+   "Status": "Sent"
+  }
+ ]
+}

@@ -182,6 +182,201 @@ def test_parse_failures(out):
     print("PASS  parse failures")
 
 
+# ---------- v1.2: EVIDENCE, CITE, LETTER, strict ----------
+
+IT_SOURCES = [HERE / "sample_sources" / "master_resume.md", HERE / "sample_sources" / "achievement_library.md"]
+VX = HERE / "fixtures" / "variant_example"
+EN = chr(0x2013)
+BETA = chr(0x03B2)
+
+
+def strict(args, out, base):
+    r = subprocess.run([sys.executable, str(SCRIPT), *map(str, args), "--out", str(out), "--base", base],
+                       capture_output=True, text=True)
+    return r.returncode, r.stdout + r.stderr
+
+
+def test_ids_are_not_facts():
+    assert checks.strip_ids("- [L-0450] 3 hires [P-120]") == "-   3 hires  "
+    lib_text = (HERE / "sample_sources" / "achievement_library.md").read_text(encoding="utf-8")
+    assert ("plain", D(7)) in checks.source_numbers(lib_text), "the raw text would count L-0007 as 7"
+    assert ("plain", D(7)) not in checks.source_numbers(checks.strip_ids(lib_text))
+    print("ok library IDs never count as facts")
+
+
+def test_evidence_units():
+    entries = {"L-0001": "open tickets went from 410 down to 120 in five months", "L-0002": "a dozen hires"}
+    data = {"name": "A", "contact": [], "sections": [
+        {"heading": "Experience", "entries": [{"title": "Lead", "bullets": [
+            {"text": "Cut backlog from 410 to 120 in 5 months.", "ev": ["L-0001"]},
+            {"text": "Trained 12 new hires.", "ev": ["L-0002"]},
+            {"text": "Trained 13 new hires.", "ev": ["L-0002"]},
+            {"text": "Ran things.", "ev": ["L-0099"]},
+            {"text": "No tag at all."},
+            "A v1.1 string bullet."]}]},
+        {"heading": "Certifications", "bullets": ["ITIL 4 Foundation"]}]}
+    got = checks.evidence_check(data, entries)
+    assert got == ['EVIDENCE number "13" in Experience / Lead bullet 3 is not in L-0002',
+                   "EVIDENCE unknown L-0099 in Experience / Lead bullet 4",
+                   "EVIDENCE missing ev: Experience / Lead bullet 5",
+                   "EVIDENCE missing ev: Experience / Lead bullet 6"], got
+    assert checks.evidence_check(data, None) == ["EVIDENCE skipped: no achievement library with [L-] IDs in --sources"]
+    assert checks.has_ev(data) and not checks.has_ev({"sections": [{"heading": "X", "bullets": ["a"]}]})
+    print("ok EVIDENCE: ids exist, numbers in the cited entry, credential sections exempt")
+
+
+def test_evidence_build(out):
+    base = json.loads((HERE / "sample_resume_ev.json").read_text(encoding="utf-8"))
+    # A number that is in the sources (FACT passes) but not in the cited entry.
+    moved = copy.deepcopy(base)
+    moved["sections"][1]["entries"][0]["bullets"][2]["text"] = (
+        "Automated new-hire laptop setup with Intune Autopilot, reducing setup time from about 3 hours to 25 minutes per device.")
+    path = out / "ev_moved.json"
+    path.write_text(json.dumps(moved), encoding="utf-8")
+    code, log = strict([path, "--sources", *IT_SOURCES, "--strict", "--mode", "industry"], out, "ev")
+    assert code == 6, log
+    fails = [ln for ln in log.splitlines() if ln.startswith("STRICT-FAIL")]
+    assert fails == ['STRICT-FAIL EVIDENCE number "25" in Experience / IT Support Lead bullet 3 is not in L-0002'], fails
+    assert "FACT ok" in log and log.rstrip().endswith("VERDICT fail"), log
+    # A number in no source at all: FACT and EVIDENCE both fail.
+    bad = copy.deepcopy(base)
+    bad["sections"][1]["entries"][1]["bullets"][0]["text"] = (
+        "Resolved hardware and software tickets for a 300-bed hospital, averaging 35 tickets a day.")
+    path = out / "ev_bad.json"
+    path.write_text(json.dumps(bad), encoding="utf-8")
+    code, log = strict([path, "--sources", *IT_SOURCES, "--strict", "--mode", "industry"], out, "ev")
+    assert code == 6 and "STRICT-FAIL EVIDENCE number \"35\"" in log and "STRICT-FAIL FACT number \"35\"" in log, log
+    # Strict with no sources fails closed.
+    code, log = strict([HERE / "sample_resume_ev.json", "--strict"], out, "ev")
+    assert code == 6 and "STRICT-FAIL FACT not run (no --sources)" in log, log
+    assert "STRICT-FAIL EVIDENCE skipped" in log, log
+    # A banned word fails strict; other lint does not.
+    lint = copy.deepcopy(base)
+    lint["sections"][1]["entries"][0]["bullets"][1]["text"] = (
+        "Leveraged triage rules and a daily stand-up to cut open ticket backlog from 410 to 120 in 5 months (with the service desk manager).")
+    path = out / "ev_lint.json"
+    path.write_text(json.dumps(lint), encoding="utf-8")
+    code, log = strict([path, "--sources", *IT_SOURCES, "--strict"], out, "ev")
+    assert code == 6 and 'STRICT-FAIL lint Experience / IT Support Lead bullet 2: "leveraged" is on the banned-word list' in log, log
+    print("ok EVIDENCE under --strict: exit 6 with STRICT-FAIL EVIDENCE")
+
+
+def cite_root(out):
+    """A publications.md with an en-dash page range and a Greek letter (built here, so fixtures stay ASCII)."""
+    text = (
+        "# Publications\n\n"
+        f"- P-001 | journal | Avery JQ, Rivera M. Real-time PCR detection of mycoplasma. *Springfield J Microbiol*. 2020;14(3):112{EN}120.\n"
+        f"- P-002 | journal | Okafor N, Avery JQ. A {BETA}-lactamase reporter for biofilm genes. *Lakeside Microb Methods*. 2011;5:41-49. "
+        "| ascii: Okafor N, Avery JQ. A beta-lactamase reporter for biofilm genes. *Lakeside Microb Methods*. 2011;5:41-49.\n"
+        "- P-003 | journal | Chen L, Avery JQ, Novak T. We leveraged a robust and passionate cleanroom survey of 9999 plates "
+        "across many sites and many years, written long on purpose so that the bullet lint would flag it for length if it ran. "
+        "*J Example Biol*. 2019;9:1-250.\n"
+        f"- P-004 | preprint | Avery JQ. An {BETA}-only title with no rendering. *Example Preprint Server*. 2022.\n")
+    path = out / "publications_cite.md"
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def cite_resume(out, typed, cited, name):
+    data = {"name": "Jordan Q. Avery", "contact": ["Springfield, IL", "jordan.q.avery@example.com"],
+            "sections": [{"heading": "Summary", "paragraph": "Microbiologist (Ph.D.) with 7 years of GMP QC microbiology."},
+                         {"heading": "Publications", "bullets": typed},
+                         {"heading": "Selected Publications", "citations": cited, "bold_name": True}]}
+    path = out / name
+    path.write_text(json.dumps(data), encoding="utf-8")
+    return path
+
+
+def test_cite(out):
+    pubs_path = cite_root(out)
+    pubs = checks.load_publications(pubs_path)
+    assert pubs["P-002"]["ascii"].startswith("Okafor N, Avery JQ. A beta-lactamase"), pubs["P-002"]
+    assert checks.printable(pubs["P-002"]) == pubs["P-002"]["ascii"] and checks.printable(pubs["P-001"]) == pubs["P-001"]["text"]
+    sources = [VX / "master_resume.md", VX / "achievement_library.md"]
+    good = cite_resume(out, [
+        "Avery JQ,  Rivera M. Real-time PCR detection of mycoplasma. *Springfield J Microbiol*. 2020;14(3):112-120.",
+        "Okafor N, Avery JQ. A beta-lactamase reporter for biofilm genes. *Lakeside Microb Methods*. 2011;5:41-49.",
+        pubs["P-003"]["text"]], ["P-002", "P-001", "P-003"], "cite_good.json")
+    code, log = strict([good, "--sources", *sources, "--publications", pubs_path, "--strict"], out, "cite")
+    assert code == 0, log
+    assert "CITE ok (6 citations)" in log and log.rstrip().endswith("VERDICT ok"), log
+    assert not [ln for ln in log.splitlines() if ln.startswith(("WARN", "FACT number", "FACT date"))], \
+        "no lint or FACT line for citation text"
+    txt = (out / "cite.txt").read_text(encoding="utf-8")
+    assert "A beta-lactamase reporter" in txt and BETA not in txt, "the approved ascii rendering is printed"
+
+    changed = cite_resume(out, [pubs["P-003"]["text"].replace("Avery JQ", "Avery JR")], [], "cite_changed.json")
+    code, log = strict([changed, "--sources", *sources, "--publications", pubs_path, "--strict"], out, "cite")
+    assert code == 6, log
+    assert any(ln.startswith("CITE mismatch P-003") for ln in log.splitlines()), log
+    assert any(ln.startswith("STRICT-FAIL CITE mismatch P-003") for ln in log.splitlines()), log
+    assert '"JR," where publications.md has "JQ,"' in log, log
+
+    greek = cite_resume(out, [], ["P-004"], "cite_greek.json")
+    code, log = strict([greek, "--sources", *sources, "--publications", pubs_path, "--strict"], out, "cite")
+    assert code == 6 and "CITE P-004 has characters the PDF font cannot show" in log, log
+    unknown = cite_resume(out, ["Somebody Else. A paper nobody wrote at all. 1999."], [], "cite_unknown.json")
+    code, log = strict([unknown, "--sources", *sources, "--publications", pubs_path, "--strict"], out, "cite")
+    assert code == 6 and 'CITE not in publications.md: "Somebody Else.' in log, log
+    missing = cite_resume(out, [], ["P-009"], "cite_missing.json")
+    code, log = strict([missing, "--publications", pubs_path], out, "cite")
+    assert code == 1 and "ERROR citation P-009 is not in publications.md" in log, log
+    code, log = strict([cite_resume(out, [], ["P-001"], "cite_nopubs.json")], out, "cite")
+    assert code == 1 and "give --publications" in log, log
+    # Without --publications a Publications heading with bullets is a v1.1 section: no CITE.
+    plain = cite_resume(out, ["Avery JQ. Some text."], ["P-001"], "cite_plain.json")
+    data = json.loads(plain.read_text(encoding="utf-8"))
+    data["sections"].pop()
+    plain.write_text(json.dumps(data), encoding="utf-8")
+    code, log = strict([plain], out, "cite")
+    assert code == 0 and "CITE" not in log and "VERDICT" not in log, log
+    # Dashes, spaces and * markup are ignored; letters are not.
+    assert checks.cite_norm(f"a {EN} b *c*") == checks.cite_norm("a-b c")
+    assert checks.cite_norm("Avery JQ") != checks.cite_norm("Avery JR")
+    print("ok CITE: changed initial fails; spacing, dashes and an approved ascii rendering pass")
+
+
+def test_letter(out):
+    posting = (VX / "posting_qpcr.md").read_text(encoding="utf-8")
+    base = json.loads((HERE / "sample_letter.json").read_text(encoding="utf-8"))
+    L = base["letter"]
+    L["paragraphs"][0] = "I am applying for the QC Microbiologist II role at Acme Bio. For the past five years I have led a team of 6 technicians."
+    L["company"], L["role"] = "Acme Bio", "QC Microbiologist II"
+    assert checks.letter_check(base, posting) == ['LETTER ok (company "Acme Bio", role "QC Microbiologist II")']
+    wrong = copy.deepcopy(base)
+    wrong["letter"]["company"] = "Acme"
+    wrong["letter"]["paragraphs"][0] = wrong["letter"]["paragraphs"][0].replace("Acme Bio", "Acme")
+    got = checks.letter_check(wrong, posting)
+    assert 'LETTER company "Acme" is not posting.md\'s "Acme Bio"' in got, got
+    assert 'LETTER company "Acme Bio" (posting.md) is not named in the letter' in got, got
+    slot = copy.deepcopy(base)
+    slot["letter"]["paragraphs"].append("Your focus on {focus} fits my work.")
+    assert "LETTER unfilled slot {focus}" in checks.letter_check(slot, posting)
+    assert checks.letter_check(slot) == ["LETTER unfilled slot {focus}"]
+    path = out / "letter_slot.json"
+    path.write_text(json.dumps(slot), encoding="utf-8")
+    pfile = out / "posting.md"
+    pfile.write_text(posting, encoding="utf-8")
+    code, log = strict([path, "--sources", *SOURCES, "--posting", pfile, "--strict"], out, "letter")
+    assert code == 6 and "STRICT-FAIL LETTER unfilled slot {focus}" in log, log
+    assert "EVIDENCE" not in log, "letters have no bullets to cite"
+    path.write_text(json.dumps(base), encoding="utf-8")
+    code, log = strict([path, "--sources", *SOURCES, "--posting", pfile, "--strict"], out, "letter")
+    assert code == 0 and "LETTER ok" in log and log.rstrip().endswith("VERDICT ok"), log
+    print("ok LETTER: company and role from posting.md, no unfilled slot")
+
+
+def test_verdict():
+    lines = ["PARSE ok (3 checks)", "PARSE WARN 1.0% of the PDF text is unreadable (cid:) glyphs", "FACT ok (2 checked)",
+             'FACT number "9" in Summary is not in your sources', "EVIDENCE ok (1 bullets, 1 entries cited)",
+             "CITE mismatch P-001: x", "LETTER ok (company \"A\", role \"B\")", "KEYWORD not evidenced: Java"]
+    assert checks.strict_failures(lines) == [lines[1], lines[3], lines[5]]
+    assert checks.verdict([], True) == ["VERDICT ok"]
+    assert checks.verdict(["pages 3 > 2"], True) == ["STRICT-FAIL pages 3 > 2", "VERDICT fail"]
+    assert checks.verdict(["pages 3 > 2"], False) == ["VERDICT fail"]
+    print("ok strict failures and VERDICT")
+
+
 def main():
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(tempfile.mkdtemp(prefix="job_skill_checks_"))
     test_numbers()
@@ -189,6 +384,12 @@ def main():
     test_keywords()
     test_end_to_end(out)
     test_parse_failures(out)
+    test_ids_are_not_facts()
+    test_evidence_units()
+    test_evidence_build(out)
+    test_cite(out)
+    test_letter(out)
+    test_verdict()
     print(f"PASS  outputs in {out}")
 
 
