@@ -38,6 +38,13 @@ while it runs (SetThreadExecutionState) and, when it finds a tick holding the
 lock, waits for it (up to 12 minutes). `run.lock` is an OS lock on the open
 file: the OS frees it when its holder ends, however it ends.
 
+Before a request runs, the runner writes `state\request_starts\<id>.json`
+and removes it when the request ends; a request whose run was stopped twice
+(the time limit, a page that hangs the reader) is answered `ok` false and
+never started a third time. One board, lane, lead, liveness item or network
+import that fails is one `ERROR` line in `logs\runner_<date>.log`; the run
+goes on.
+
 ## install_runner.ps1 switches
 
 | Switch | Use |

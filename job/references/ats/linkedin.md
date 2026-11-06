@@ -14,7 +14,8 @@ rules ban AI and agentic data mining and third-party bots for applying. So:
 paste the posting text, or, when the listing says "Apply on company
 website", to paste that employer link instead. The employer's own
 application then goes through the normal steps. Pasted text goes through
-`posting.py --text-file` (SKILL.md step 3). Pass the board link only when
+`posting.py --text-file` (SKILL.md step 3). Pass the board link (as `"_"` in
+`claude/args.json`) only when
 the user pasted a plain `linkedin.com/jobs/view/<id>` link with nothing
 after the id: it becomes the job key for the duplicate check and is never
 fetched. Any other board link, or one with a query string, is left out.

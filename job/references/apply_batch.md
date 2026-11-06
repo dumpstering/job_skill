@@ -29,11 +29,13 @@ at the check lines, clicks Submit, and types `s`.
 
 ## Each item
 
-Commands are shortened (SKILL.md "Scripts"); each takes `--root "<folder>"`.
-Every `events.py emit` gets `--n <n> --job-key <key> --date <date> --session
-<id>` and a `--json` payload `{"reason": "<code>", "question_ids": [...],
-"confirmation": "page|email|none", "proof": "..."}` (only the keys that
-apply).
+Commands are shortened (SKILL.md "Scripts"); each takes `--root "<folder>"`,
+and a company, title, link or email address goes in `claude/args.json` with
+`--args-file claude/args.json`, never inline. Every `events.py emit` gets
+`--n <n> --job-key <key> --date <date> --session <id>` and a `--json` payload
+`{"reason": "<code>", "question_ids": [...], "confirmation":
+"page|email|none", "proof": "..."}` (only the keys that apply; codes, IDs
+and the proof path only, in single quotes).
 
 1. **Next.** `today_view.py next` (`next --short` on a short day, daily.md)
    prints `NEXT #07 <job key>`, `COMPANY`,
@@ -42,15 +44,28 @@ apply).
    built cover letter), `RESUME`, `ANSWERS`, maybe `SENSITIVE`, `DRAFT`,
    `STATE` and `ATTACH`, and the `HANDOVER` lines. It is the same item the
    card's `Starting #<n>` named. `SKIP #NN closed` lines are items the
-   runner found closed. A last `WAIT <n> items with no resume yet` line
-   counts items held for a base resume the user has not approved; never
-   fill them. `NEXT none`: the list is done; give the closing line from
+   runner found closed, `SKIP #NN bad link` items whose link is not a plain
+   http(s) web address (never open those). A `HOLD #<n>: ...` line in
+   place of `OPEN` and `UPLOAD` means its base resume cites a library entry
+   corrected since the build: say that line, open and fill nothing, and on
+   "skip" emit `later` (reason `user`; it comes back tomorrow, rebuilt);
+   after `APPROVED <family> v<N> again` run `next` again. A last `WAIT <n>
+   items with no resume yet` line counts items held for a base resume the
+   user has not approved; never fill them. `NEXT none`: the list is done;
+   give the closing line from
    `today_view.py progress` and offer "more" (with a `WAIT` line, say the
    card's base-resume line instead of "more"). Jobs added from a link today
    (`events.py add`) are in the list at once, after the runner's items.
-2. **Caps.** `caps.py check --company "<Company>" --family <family>
-   --job-key <key> --posting "<folder>/posting.md"` (the posting names the
-   lab or department a university counts by). `CAP DEFER ...`: emit `skipped` (reason
+   An item whose `ANSWERS` line still shows `needs <ids>` that the user has
+   not answered today (the item is not `unparked` in `events.py overlay`)
+   and that no `DRAFT` line answers: emit `parked` at once (reason
+   `unknown_required`, those ids as `question_ids`) and run `next` again,
+   without opening the form or asking for the file. `answers.py unpark`
+   brings it back when the answer comes.
+2. **Caps.** Write `{"company": "<Company>"}` and run `caps.py check
+   --family <family> --job-key <key> --posting "<job folder>/posting.md"
+   --args-file claude/args.json` (the posting names the lab or department
+   a university counts by). `CAP DEFER ...`: emit `skipped` (reason
    `deferred_cap`) and go to the next item; it returns when allowed.
 3. **Claim and open.** Write `<job folder>/.claimed` (the session id and the
    time), emit `started`, and open the `OPEN` URL (a referral link when one
@@ -96,14 +111,16 @@ apply).
    blank, a drafted answer, or a computed answer (years of a technique,
    with its arithmetic). If the user answered the sensitive line
    during this item, run `next` again first, so its lines are current.
-   Save `filled.md` in the job folder. `tracker.py add --company --role
-   --location --url <apply url> --folder "<folder>" --job-key <key>
-   --status "Filled - awaiting submit" --source Runner --tier <A|B>
+   Save `filled.md` in the job folder. Write `{"company": "<Company>",
+   "role": "<Role>", "location": "<Location>", "url": "<apply url>",
+   "folder": "<the FOLDER path>", "job-key": "<key>"}` and run `tracker.py
+   add --status "Filled - awaiting submit" --source Runner --tier <A|B>
    --family <f> --variant <v> --ats <ats> --found-via <lane> --posted <date>
-   --queue-date <date> --account <none|exists|new>`, taking tier, family,
-   variant, posted and account from the item in `queue/<date>/queue.json`
-   and the lane from its `posting.json` (mode L prints `ADDED P-<8hex>
-   (pending)`; keep that ID). A job filled before (a reopened handover)
+   --queue-date <date> --account <none|exists|new> --args-file
+   claude/args.json`, taking tier, family, variant, posted and account from
+   the item in `queue/<date>/queue.json` and the lane from its
+   `posting.json` (mode L prints `ADDED P-<8hex> (pending)`; keep that ID).
+   A job filled before (a reopened handover)
    prints `ADDED <ID> (existing row)`: its one row, kept. `REFUSED <ID>
    already Applied ...`: it was sent; emit `applied` and go on, never a
    second handover. A job added with `/job add <link>` takes
@@ -173,8 +190,9 @@ wait until tomorrow.
    <email>` is the one the user uses most).
 2. Open each tenant's sign-up page. The user creates the account, verifies
    the email and signs in. You never type the password and never retry.
-3. On `done`: `tracker.py account --site <host> --email <email> --employer
-   "<Company>" --ats <ats> --used`. Then fill that tenant's items in order.
+3. On `done`: write `{"email": "<email>", "employer": "<Company>"}` and run
+   `tracker.py account --site <host> --ats <ats> --used --args-file
+   claude/args.json`. Then fill that tenant's items in order.
 - A tenant that locks the account: `blocked` (reason `account_locked`) and
   tell the user; the queue leaves that tenant out for 7 days.
 - "no Workday today": emit `later` (reason `account_needed`) for those items.
@@ -219,7 +237,8 @@ prints `CAP DEFER ashby-open <company>` for a second.
 | prep_failed | no | never filled (`next` holds it in its `WAIT` line); the card's base-resume line names the family and how many jobs wait | none |
 
 A blocked item that has no row yet gets one at that point (`tracker.py add
-... --status "Blocked - login" --block-reason <code>`), so it is not lost.
+--status "Blocked - login" --block-reason <code> --args-file
+claude/args.json`, the file as in step 7), so it is not lost.
 Skipped, parked and deferred items never get a row.
 
 ## Do-yourself list
@@ -229,11 +248,12 @@ items. `today_view.py diy` prints them in the order the runner staged
 them: `DIY E1 | <company> | <title> | <location> | upload/E1_...pdf`, at
 most `[daily] easy_apply_list_max` (5), never a link. Each has an answer
 sheet in `applications/_diy/<date>/`. The user applies in their own browser
-at their own pace. `log e1 e3`: `tracker.py add --company --role --location
---status Applied --applied <date> --source "By hand" --found-via
-alert:linkedin --tier "By hand"` for each, with the company and title
-exactly as listed; they count toward the day, and a logged job leaves the
-list (the others keep their numbers).
+at their own pace. `log e1 e3`: for each, write `{"company": "<company>",
+"role": "<title>", "location": "<location>"}` exactly as listed and run
+`tracker.py add --status Applied --applied <date> --source "By hand"
+--found-via alert:linkedin --tier "By hand" --args-file claude/args.json`;
+they count toward the day, and a logged job leaves the list (the others
+keep their numbers).
 
 ## Rounds (experiment, off)
 
@@ -246,5 +266,6 @@ filling stay off.
 ## Without a browser tool
 
 Say so in one line. For each item write `filled.md` with every answer you
-can source, list the files, and `tracker.py add ... --status "Answers ready -
-fill by hand"` (`browser_unavailable`).
+can source, list the files, and `tracker.py add --status "Answers ready -
+fill by hand" --args-file claude/args.json` (the file as in step 7;
+`browser_unavailable`).

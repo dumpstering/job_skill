@@ -19,7 +19,10 @@ python job\scripts\jobrunner.py daily --root <tmp>\JobSearch --offline tests\fix
 Expected: `DAILY ok queue=30 pool_left=41 discards=141 tier_b_built=30
 prep_failed=0`. Then set `JOB_SKILL_NOW=2026-11-06T17:00:00Z` (09:00 local),
 the time the user types `/job`. Below, `P` is `python job\scripts` and `R`
-is `--root <tmp>\JobSearch`.
+is `--root <tmp>\JobSearch`. `A` is `--args-file claude\args.json`, after
+writing that file (in the JobSearch folder) with the JSON shown: a company,
+title, link or answer never goes on the command line (SKILL.md "Scripts"),
+and the script removes the file once read.
 
 ## Part A: `/job` (SKILL.md routing -> daily.md -> apply_batch.md)
 
@@ -68,7 +71,8 @@ is `--root <tmp>\JobSearch`.
       `P\today_view.py card R --short` without the file prints
       `Short day: I'll do the quick ones.`, the sensitive line once, and
       `Starting #2 now. Say "stop" any time.`
-- [ ] **A5 caps.** `P\caps.py check R --company "Ivy Bio" --family qc_micro --job-key workable:ivybio:B00008C` -> `CAP ok`.
+- [ ] **A5 caps.** `{"company": "Ivy Bio"}`, then
+      `P\caps.py check R --family qc_micro --job-key workable:ivybio:B00008C A` -> `CAP ok`.
 - [ ] **A6 claim and start.** Create `<job folder>\.claimed`;
       `P\events.py emit R --type started --n 1 --job-key workable:ivybio:B00008C --date 2026-11-06 --session walk-1 --json "{}"`
       -> `EVENT 20261106T170000Z_...`.
@@ -77,7 +81,8 @@ is `--root <tmp>\JobSearch`.
       JobSearch\upload, then type ok."), fill from `fill_plan.json` with
       the `SENSITIVE` line's values, read back.
 - [ ] **A8 handover.** Print the HANDOVER lines; save `filled.md`;
-      `P\tracker.py add R --company "Ivy Bio" --role "QC Microbiologist II" --url https://apply.workable.com/ivybio/j/B00008C/ --folder "applications/2026-11-06 Ivy Bio - QC Microbiologist II" --job-key workable:ivybio:B00008C --status "Filled - awaiting submit" --source Runner --tier B --family qc_micro --variant qc_micro@v1 --ats workable --found-via watch --queue-date 2026-11-06 --account none`
+      `{"company": "Ivy Bio", "role": "QC Microbiologist II", "url": "https://apply.workable.com/ivybio/j/B00008C/", "folder": "applications/2026-11-06 Ivy Bio - QC Microbiologist II", "job-key": "workable:ivybio:B00008C"}`, then
+      `P\tracker.py add R --status "Filled - awaiting submit" --source Runner --tier B --family qc_micro --variant qc_micro@v1 --ats workable --found-via watch --queue-date 2026-11-06 --account none A`
       -> `ADDED P-3b43e5e5 (pending)` (a tracker event, not an xlsx write);
       then `events.py emit ... --type handed_over`.
 - [ ] **A9 `s`.** Save `submitted\confirmation.txt` and the sent file;
@@ -101,16 +106,21 @@ Set `JOB_SKILL_NOW=2026-11-06T18:00:00Z`. The fixture is
 - [ ] **B1 step 1.** `P\tracker.py due R` -> `NONE`.
 - [ ] **B2 step 3, read.** No network in a dry run, so the `TRY`/`RERUN`
       path is taken with the saved API response:
-      `P\posting.py <link> --json-file tests\fixtures\greenhouse.json --out <...>\applications\_incoming\posting.md`
+      `{"_": "<link>"}`, then
+      `P\posting.py R --json-file tests\fixtures\greenhouse.json --out <...>\applications\_incoming\posting.md A`
       -> `SOURCE greenhouse-api`, `COMPANY Acme Robotics`, `ROLE Senior IT Support Engineer`,
       `JOB KEY greenhouse:1234567`, `QUESTIONS 4`, `WROTE ...`, `POSTED 2026-10-01 (first_published)`,
-      `EMPLOYER SITE none`, `WARN short description (140 chars)` (the fixture is short; in real
+      `EMPLOYER SITE none`, `FOLDER applications/2026-11-06 Acme Robotics - Senior IT Support Engineer`,
+      `WARN short description (140 chars)` (the fixture is short; in real
       use the WARN sends you to the browser read).
-- [ ] **B3 duplicate check.** `P\tracker.py check R --company "Acme Robotics" --title "Senior IT Support Engineer" --url <link> --posting <...>\_incoming\posting.md`
+- [ ] **B3 duplicate check.** `{"company": "Acme Robotics", "title": "Senior IT Support Engineer", "url": "<link>"}`, then
+      `P\tracker.py check R --posting <...>\_incoming\posting.md A`
       -> `JOB KEY greenhouse:1234567`, `NO MATCH`.
-- [ ] **B4 caps.** `P\caps.py check R --company "Acme Robotics" --url <link> --posting <...>\posting.md` -> `CAP ok`.
-- [ ] **B5 folder and row.** Move `_incoming` to `applications\2026-11-06 Acme Robotics - Senior IT Support Engineer`;
-      `P\tracker.py add R --company "Acme Robotics" --role "Senior IT Support Engineer" --location "Austin, TX" --url <link> --folder "applications/2026-11-06 Acme Robotics - Senior IT Support Engineer" --status Started --tier A --found-via pasted --ats greenhouse --posted 2026-10-01`
+- [ ] **B4 caps.** `{"company": "Acme Robotics", "url": "<link>"}`, then
+      `P\caps.py check R --posting <...>\posting.md A` -> `CAP ok`.
+- [ ] **B5 folder and row.** Move `_incoming` to the `FOLDER` path, exactly as printed;
+      `{"company": "Acme Robotics", "role": "Senior IT Support Engineer", "location": "Austin, TX", "url": "<link>", "folder": "applications/2026-11-06 Acme Robotics - Senior IT Support Engineer"}`, then
+      `P\tracker.py add R --status Started --tier A --found-via pasted --ats greenhouse --posted 2026-10-01 A`
       -> `ADDED P-fc153b11 (pending)`. Then
       `P\events.py add R --folder "applications/2026-11-06 Acme Robotics - Senior IT Support Engineer" --via pasted`
       -> `ADDED #31 greenhouse:1234567 (addendum_user)`: `P\today_view.py progress R`
@@ -140,16 +150,19 @@ Set `JOB_SKILL_NOW=2026-11-06T18:00:00Z`. The fixture is
       `P\today_view.py progress R` -> `PROGRESS applied=2 ... left=29 of 31`, `Today: 2 applications sent.`
       After `P\jobrunner.py tick R --offline tests\fixtures\boards` (it prints
       `ADDENDUM addendum_user.json items=31`),
-      `tracker.py show R --company "Acme Robotics"` shows row 2, Good Fit, Applied, follow-up 2026-11-13.
+      `{"company": "Acme Robotics"}`, then `tracker.py show R A` shows row 2, Good Fit, Applied, follow-up 2026-11-13.
 
 ## Part C: the IN QUEUE note
 
 - [ ] **C1.** Paste item #2's link (`https://job-boards.greenhouse.io/cedartherapeutics/jobs/7100052`)
-      as text: `P\posting.py <link> --text-file "<job #2 folder>\posting.md" --company "Cedar Therapeutics" --role "QC Microbiologist I" --out <scratch>\posting.md`,
-      then `P\tracker.py check R --company "Cedar Therapeutics" --title "QC Microbiologist I" --url <link> --posting <scratch>\posting.md`
+      as text: `{"_": "<link>", "company": "Cedar Therapeutics", "role": "QC Microbiologist I"}`, then
+      `P\posting.py R --text-file "<job #2 folder>\posting.md" --out <scratch>\posting.md A`,
+      then `{"company": "Cedar Therapeutics", "title": "QC Microbiologist I", "url": "<link>"}` and
+      `P\tracker.py check R --posting <scratch>\posting.md A`
       -> `JOB KEY greenhouse:7100052`, `IN QUEUE 2026-11-06 #2`, `NO MATCH`.
       SKILL.md step 3: use item #2's prepared folder, do not make a new one.
-- [ ] **C2.** `P\caps.py check R --company "Cedar Therapeutics" --family qc_micro --url <link>` -> `CAP ok`;
+- [ ] **C2.** `{"company": "Cedar Therapeutics", "url": "<link>"}`, then
+      `P\caps.py check R --family qc_micro A` -> `CAP ok`;
       `P\variants.py check R --family qc_micro` -> `APPROVED qc_micro v1 (on 2026-11-05)` (offered as the start).
 
 ## Part D: the live supervised day (not dry; on the user's PC)

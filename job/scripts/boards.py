@@ -33,20 +33,28 @@ Output lines, one per board:
     BOARD <ats>:<board> EMPTY pages=<p>        (an empty list is "unknown", never gone)
     BOARD <ats>:<board> GONE <why>             (tenant gone: redirect off the ATS host, 404)
     BOARD <ats>:<board> ERROR <why> | DENY <reason> | SKIP <why>
+    BOARD <ats>:<board> SKIP crawl-delay <host>   (robots.txt asks for more than 10 s)
     WARN offline: no board answered (<n> tried); board errors not counted today
 stop is one of one-call, empty, short, total, seen-ids, page-cap, next-none,
 no-local, stale, search-cap.
 
+Fail soft: anything odd inside one board (a null row, a number where a list
+belongs, JSON nested thousands deep, a reader bug) is that board's ERROR line,
+naming the exception type; a row that is not an object is skipped; a posting
+whose link is not http(s) is skipped and named. The poll always finishes.
+
 poll reads config/watchlist.csv and state/watchlist_auto.csv, polls the
 active rows, never makes a list call for R3 or lead-only rows, and updates
 state/board_health.csv: errors count once a day, a run where no board
-answered counts none, and a Workday tenant that lists 0 jobs on 3 polls
-becomes check_site (polled on the weekly day, like paused). Exit codes: 0 ok (fetch: OK or EMPTY), 1 bad input,
-3 nothing usable (GONE or ERROR), 7 DENY.
+answered counts none, a crawl-delay skip is noted (last_error) and counts
+nothing, and a Workday tenant that lists 0 jobs on 3 polls becomes check_site
+(polled on the weekly day, like paused). Exit codes: 0 ok (fetch: OK or
+EMPTY), 1 bad input, 3 nothing usable (GONE or ERROR), 7 DENY.
 Stdlib only.
 """
 import argparse
 import csv
+import html
 import json
 import re
 import sys
@@ -242,6 +250,12 @@ class Ctx:
 
 # ---------- small helpers ----------
 
+def dicts(v):
+    """The dict rows of a list from a response; a null, a number or a string
+    in the list is skipped (one odd row never costs the board)."""
+    return [x for x in v if isinstance(x, dict)] if isinstance(v, list) else []
+
+
 def body_json(r, what):
     r.check()
     try:
@@ -252,7 +266,7 @@ def body_json(r, what):
 
 def check_gone(r, ats, host):
     """Gone markers (ats A28): a 404/410, or a final URL off the tenant host."""
-    final = netfetch.host_of(r.url)
+    final = netfetch.host_or_blank(r.url)
     if r.status in (404, 410):
         raise Gone(f"HTTP {r.status}")
     if host and final and final != host:
@@ -297,12 +311,12 @@ def new_item(spec, url, source, role, location="", req=""):
 
 def balanced_json(text, marker):
     """The JSON value that follows `marker =` in a page script, or None."""
-    m = re.search(re.escape(marker) + r"\s*=\s*", text or "")
+    m = re.search(re.escape(marker) + r"[ \t\r\n]{0,200}=[ \t\r\n]{0,200}", text or "")
     if not m:
         return None
     try:
         return json.JSONDecoder().raw_decode(text, m.end())[0]
-    except ValueError:
+    except (ValueError, RecursionError):  # RecursionError: a value nested thousands deep
         return None
 
 
@@ -339,18 +353,31 @@ def sitemap_entries(text):
 PAGE_LINK = re.compile(r'<a\b[^<>]{0,300}?href="([^"<>]{1,1000})"[^<>]{0,300}>(.{0,500}?)</a>', re.S | re.I)
 
 
+def web_link(url):
+    """url (stripped) when it is an http(s) link whose host netfetch accepts,
+    else ''. Every link a reader takes from a response passes here (to_reading),
+    so a file://, javascript: or lookalike-host link never reaches the queue."""
+    if not isinstance(url, str):
+        return ""
+    u = url.strip()
+    if not u or len(u) > 2000 or not re.match(r"https?://", u, re.I) or re.search(r"\s", u):
+        return ""
+    return u if netfetch.host_or_blank(u) else ""
+
+
 def page_links(page, pattern, base):
-    """(absolute url, anchor text) per unique link whose href matches pattern."""
+    """(absolute url, anchor text) per unique http(s) link whose href matches
+    pattern. Anchor text has its HTML entities decoded (&amp; -> &)."""
     out, seen = [], set()
     for m in PAGE_LINK.finditer(page or ""):
-        href = m.group(1).split("?")[0]
+        href = html.unescape(m.group(1)).split("?")[0]
         if not re.search(pattern, href):
             continue
-        url = urljoin(base, href)
-        if url in seen:
+        url = web_link(urljoin(base, href))
+        if not url or url in seen:
             continue
         seen.add(url)
-        out.append((url, posting.one_line(re.sub(r"<[^>]+>", " ", m.group(2)))))
+        out.append((url, posting.one_line(html.unescape(re.sub(r"<[^>]+>", " ", m.group(2))))))
     return out
 
 
@@ -365,7 +392,7 @@ def read_greenhouse(ctx):
     if not isinstance(d, dict) or not isinstance(d.get("jobs"), list):
         raise FetchError("greenhouse: no jobs list")
     items = []
-    for j in d["jobs"]:
+    for j in dicts(d["jobs"]):
         jid = str(j.get("id", ""))
         if not jid or not ctx.fresh(jid):
             continue
@@ -415,7 +442,7 @@ def read_lever(ctx, eu=False):
         rows = body_json(r, "lever")
         if not isinstance(rows, list):
             raise FetchError("lever: not a postings list")
-        new = [j for j in rows if j.get("id") and ctx.fresh(j["id"])]
+        new = [j for j in dicts(rows) if j.get("id") and ctx.fresh(j["id"])]
         for j in new:
             url = posting.web_url(j.get("hostedUrl")) or f"https://jobs.lever.co/{s.board}/{j['id']}"
             it = Item(url, {})
@@ -443,7 +470,7 @@ def read_ashby(ctx):
     if not isinstance(d, dict) or not isinstance(d.get("jobs"), list):
         raise FetchError("ashby: no jobs list")
     items = []
-    for j in d["jobs"]:
+    for j in dicts(d["jobs"]):
         if j.get("isListed") is False or not j.get("id") or not ctx.fresh(j["id"]):
             continue
         url = posting.web_url(j.get("jobUrl")) or f"https://jobs.ashbyhq.com/{s.board}/{j['id']}"
@@ -673,7 +700,7 @@ def read_bamboohr(ctx):
     if not isinstance(d, dict) or not isinstance(d.get("result"), list):
         raise FetchError("bamboohr: no result list")
     items = []
-    for j in d["result"]:
+    for j in dicts(d["result"]):
         jid = str(j.get("id", ""))
         if not jid or not ctx.fresh(jid):
             continue
@@ -707,7 +734,7 @@ def read_breezy(ctx):
     if not isinstance(rows, list):
         raise FetchError("breezy: not a list")
     items = []
-    for j in rows:
+    for j in dicts(rows):
         jid = str(j.get("id", ""))
         if not jid or not ctx.fresh(jid):
             continue
@@ -736,7 +763,7 @@ def read_workable(ctx):
     if not isinstance(d, dict) or not isinstance(d.get("jobs"), list):
         raise FetchError("workable: no jobs list")
     items = []
-    for j in d["jobs"]:
+    for j in dicts(d["jobs"]):
         code = str(j.get("shortcode", ""))
         if not code or not ctx.fresh(code):
             continue
@@ -763,7 +790,7 @@ def read_rippling(ctx):
     if not isinstance(rows, list):
         raise FetchError("rippling: not a list")
     items = []
-    for j in rows:
+    for j in dicts(rows):
         uid = str(j.get("uuid", ""))
         if not uid or not ctx.fresh(uid):
             continue
@@ -795,7 +822,7 @@ def read_pinpoint(ctx):
     if not isinstance(rows, list):
         raise FetchError("pinpoint: no data list")
     items = []
-    for j in rows:
+    for j in dicts(rows):
         jid = str(j.get("id", ""))
         if not jid or not ctx.fresh(jid):
             continue
@@ -830,7 +857,7 @@ def read_teamtailor(ctx):
         rows = d.get("items") if isinstance(d, dict) else None
         if not isinstance(rows, list):
             raise FetchError("teamtailor: not a JSON Feed")
-        new = [j for j in rows if j.get("url") and ctx.fresh(j.get("id") or j["url"])]
+        new = [j for j in dicts(rows) if isinstance(j.get("url"), str) and ctx.fresh(j.get("id") or j["url"])]
         for j in new:
             it = Item(j["url"], {})
             jp = j.get("_jobposting") if isinstance(j.get("_jobposting"), dict) else {}
@@ -894,7 +921,7 @@ def read_recruitee(ctx):
     if not isinstance(rows, list):
         raise FetchError("recruitee: no offers list")
     items = []
-    for j in rows:
+    for j in dicts(rows):
         jid = str(j.get("id", ""))
         if not jid or not ctx.fresh(jid):
             continue
@@ -933,7 +960,7 @@ def read_adp(ctx):
             raise FetchError("adp: no jobRequisitions")
         if total is None:
             total = int(((d.get("meta") or {}).get("totalNumber")) or 0)
-        new = [j for j in rows if j.get("itemID") and ctx.fresh(j["itemID"])]
+        new = [j for j in dicts(rows) if j.get("itemID") and ctx.fresh(j["itemID"])]
         for j in new:
             cc = s.extra.get("ccid") or s.site
             url = ("https://workforcenow.adp.com/mascsr/default/mdf/recruitment/recruitment.html?"
@@ -987,12 +1014,12 @@ def read_oracle(ctx):
                 finder += f",selectedLocationsFacet={quote(s.extra['facet'])}"
             r = ctx.get(f"{api}?onlyData=true&expand=requisitionList.secondaryLocations&finder={finder}")
             d = body_json(r, "oracle")
-            block = (d.get("items") or [{}])[0] if isinstance(d, dict) else {}
+            block = next(iter(dicts(d.get("items"))), {}) if isinstance(d, dict) else {}
             rows = block.get("requisitionList") or []
             if total is None:
                 total = int(block.get("TotalJobsCount") or 0)
                 ctx.total = total if ctx.total is None else ctx.total + total
-            new = [j for j in rows if j.get("Id") and ctx.fresh(j["Id"])]
+            new = [j for j in dicts(rows) if j.get("Id") and ctx.fresh(j["Id"])]
             for j in new:
                 url = f"https://{host}/hcmUI/CandidateExperience/en/sites/{s.site}/job/{j['Id']}"
                 others = [x.get("Name", "") for x in j.get("secondaryLocations") or [] if isinstance(x, dict)]
@@ -1043,7 +1070,7 @@ def read_paylocity(ctx):
     if not isinstance(data, dict) or not isinstance(data.get("Jobs"), list):
         raise FetchError("paylocity: no window.pageData.Jobs")
     items = []
-    for j in data["Jobs"]:
+    for j in dicts(data["Jobs"]):
         jid = str(j.get("JobId", ""))
         if not jid or j.get("IsInternal") or not ctx.fresh(jid):
             continue
@@ -1085,7 +1112,7 @@ def read_dayforce(ctx):
         rows = d.get("jobPostings") or []
         if total is None:
             total = int(d.get("maxCount") or 0)
-        new = [j for j in rows if j.get("jobPostingId") and ctx.fresh(j["jobPostingId"])]
+        new = [j for j in dicts(rows) if j.get("jobPostingId") and ctx.fresh(j["jobPostingId"])]
         for j in new:
             locs = j.get("postingLocations") or []
             loc = locs[0] if locs else {}
@@ -1155,7 +1182,7 @@ def read_phenom(ctx):
     r.check()
     kind, rows = sitemap_entries(r.body)
     if kind == "sitemapindex":
-        children = [loc for loc, _ in rows if netfetch.host_of(loc) == host]
+        children = [loc for loc, _ in rows if web_link(loc) and netfetch.host_or_blank(loc) == host]
         jobish = [c for c in children if re.search(r"job|vacanc|posting", c, re.I)] or children
         rows = []
         for child in jobish[:SITEMAP_CHILDREN]:
@@ -1164,7 +1191,8 @@ def read_phenom(ctx):
             c = ctx.get(child, accept="application/xml,text/xml")
             c.check()
             rows += sitemap_entries(c.body)[1]
-    jobs = [(loc, mod) for loc, mod in rows if "/job/" in urlparse(loc).path and netfetch.host_of(loc) == host]
+    jobs = [(loc, mod) for loc, mod in rows
+            if web_link(loc) and netfetch.host_or_blank(loc) == host and "/job/" in urlparse(loc).path]
     items = []
     for loc, mod in sorted(jobs, key=lambda x: x[1], reverse=True)[:PHENOM_MAX]:
         if ctx.fresh(loc):
@@ -1217,7 +1245,7 @@ def read_comeet(ctx):
     if not isinstance(rows, list):
         raise FetchError("comeet: no COMPANY_POSITIONS_DATA")
     items = []
-    for j in rows:
+    for j in dicts(rows):
         uid = str(j.get("uid", ""))
         if not uid or not ctx.fresh(uid):
             continue
@@ -1246,7 +1274,7 @@ def read_manatal(ctx):
         rows = d.get("results") if isinstance(d, dict) else None
         if not isinstance(rows, list):
             raise FetchError("manatal: no results list")
-        new = [j for j in rows if j.get("id") and ctx.fresh(j["id"])]
+        new = [j for j in dicts(rows) if j.get("id") and ctx.fresh(j["id"])]
         for j in new:
             page = f"https://www.careers-page.com/{s.board}/job/{j.get('hash') or j['id']}"
             it = new_item(s, page, "manatal", j.get("position_name"),
@@ -1254,7 +1282,7 @@ def read_manatal(ctx):
             it.p["description"] = html_text(j.get("description"), it)
             items.append(it)
         nxt = d.get("next")
-        url = nxt if isinstance(nxt, str) and netfetch.host_of(nxt) == "www.careers-page.com" and new else None
+        url = nxt if isinstance(nxt, str) and netfetch.host_or_blank(nxt) == "www.careers-page.com" and new else None
         ctx.stop = "next-none" if not nxt else ("seen-ids" if not new else ctx.stop)
     return items
 
@@ -1269,7 +1297,7 @@ def read_hireology(ctx):
     if not isinstance(rows, list):
         raise FetchError("hireology: no data list")
     items = []
-    for j in rows:
+    for j in dicts(rows):
         jid = str(j.get("id", ""))
         if not jid or not ctx.fresh(jid):
             continue
@@ -1312,20 +1340,33 @@ def close(it, why):
 
 
 US_STATE_NAMES = posting.US_STATE_NAMES
-US_DASHED = re.compile(r"^\s*(?:united states(?: of america)?|usa|us)\s*-\s*([a-z .]+?)\s*-\s*(.+?)\s*$", re.I)
-US_CODED = re.compile(r"^\s*US\s*-\s*([A-Z]{2})\s*-\s*(.+?)\s*$")
+US_WORDS = {"united states", "united states of america", "usa", "us"}
+PLACE_MAX = 300  # a location longer than this is not a place line; only its start is read
+
+
+def us_dashed(first):
+    """(state code, city) from 'United States - California - Foster City' or
+    'US-CA-Menlo Park', else None. A split, not a regex: the old pattern's
+    overlapping \\s* and [a-z .] parts took cubic time on a run of spaces."""
+    parts = [p.strip() for p in first[:PLACE_MAX].split("-", 2)]
+    if len(parts) != 3 or parts[0].lower() not in US_WORDS or not parts[2]:
+        return None
+    name = parts[1]
+    if re.fullmatch(r"[A-Za-z .]{1,40}", name) and name.lower() in US_STATE_NAMES:
+        return US_STATE_NAMES[name.lower()], parts[2]
+    if parts[0] == "US" and re.fullmatch(r"[A-Z]{2}", name):
+        return name, parts[2]
+    return None
 
 
 def fix_place(rec):
     """Workday and Oracle write 'United States - California - Foster City' or
     'US-CA-Menlo Park'; split_place does not read those, so fix city/state."""
-    first = (posting.place_parts(rec.location) or [""])[0]
-    m = US_DASHED.match(first)
-    if m and m.group(1).lower() in US_STATE_NAMES:
-        rec.city, rec.state, rec.country = m.group(2), US_STATE_NAMES[m.group(1).lower()], "US"
-    elif US_CODED.match(first):
-        m = US_CODED.match(first)
-        rec.city, rec.state, rec.country = m.group(2), m.group(1), "US"
+    first = (posting.place_parts(rec.location) or [""])[0][:PLACE_MAX]
+    got = us_dashed(first)
+    if got:
+        rec.state, rec.city = got
+        rec.country = "US"
     else:
         parts = [x.strip() for x in first.split(",")]
         if len(parts) >= 2 and parts[1].lower() in US_STATE_NAMES:  # 'San Carlos, California, United States'
@@ -1337,15 +1378,22 @@ def fix_place(rec):
 
 
 def to_reading(it, spec, first_seen):
-    """posting.Reading for one item (list-level or after its detail)."""
+    """posting.Reading for one item (list-level or after its detail). The
+    posting's own link must be http(s) on a host netfetch accepts (ValueError
+    otherwise: read_board skips that posting and names it); an apply link that
+    is not falls back to the posting's own link (SEC-11)."""
     p = it.p
+    url = web_link(it.url)
+    if not url:
+        raise ValueError(f"not an http(s) link: {netfetch.shown(it.url, 60)}")
     if not p.get("company"):
         p["company"] = spec.employer or spec.board
+    p["apply_url"] = web_link(p.get("apply_url")) or url
     posting.clean_fields(p, it.report)
     ats = RECORD_ATS.get(spec.ats, spec.ats)
-    rec = posting.to_record(p, it.url, lane="watch", first_seen=first_seen, ats=ats)
+    rec = posting.to_record(p, url, lane="watch", first_seen=first_seen, ats=ats)
     rec.board = spec.board
-    rec.apply_url = p.get("apply_url") or it.url
+    rec.apply_url = web_link(p.get("apply_url")) or url
     fix_place(rec)
     if it.data.get("closed"):
         rec.closed = True
@@ -1360,8 +1408,10 @@ def read_board(spec, fetcher, *, searches=(), places=(), keep=None, details=True
     """List one board, then read details for the records keep() accepts.
 
     keep(posting) -> bool sees list-level jobfs.Posting records (the runner
-    passes its list gates); None keeps everything. Never raises for network
-    trouble: the result's status says what happened.
+    passes its list gates); None keeps everything. Never raises: network
+    trouble and odd answers are the result's status (ERROR names the
+    exception type), and a host whose robots.txt asks for a Crawl-delay over
+    10 s is SKIP crawl-delay <host>.
     """
     res = BoardResult(spec)
     first_seen = first_seen or jobfs.today().isoformat()
@@ -1369,19 +1419,26 @@ def read_board(spec, fetcher, *, searches=(), places=(), keep=None, details=True
     if spec.ats in LEAD_ONLY_ATS or reader is None:
         res.status, res.why = "SKIP", "lead-only" if spec.ats in LEAD_ONLY_ATS else f"no reader for {spec.ats}"
         return res
-    ctx = Ctx(fetcher, spec, searches, places, max_pages, fallback=fallback, home_states=home_states,
-              remote_us=remote_us, today=to_day(first_seen))
+    ctx = None
     try:
+        ctx = Ctx(fetcher, spec, searches, places, max_pages, fallback=fallback, home_states=home_states,
+                  remote_us=remote_us, today=to_day(first_seen))
         items = reader(ctx)
     except Gone as e:
         res.status, res.why = "GONE", str(e)
     except Denied as e:
-        res.status, res.why = ("GONE", f"redirect {e.reason.split()[-1]}") if denied_gone(e, spec.ats) else ("DENY", e.reason)
-    except (FetchError, ValueError) as e:
+        if e.reason.startswith("crawl-delay"):
+            res.status, res.why = "SKIP", e.reason  # skipped for the run, noted in board_health, no strike
+        elif denied_gone(e, spec.ats):
+            res.status, res.why = "GONE", f"redirect {(e.reason.split() + [''])[-1]}"
+        else:
+            res.status, res.why = "DENY", e.reason
+    except FetchError as e:  # network trouble: the reason says it (HTTP 500 from host, a timeout)
         res.status, res.why = "ERROR", str(e)[:200]
     except Exception as e:  # noqa: BLE001  a board's odd answer ({"jobs": [null]}) is that board's error only
         res.status, res.why = "ERROR", f"unreadable answer ({type(e).__name__}: {str(e)[:120]})"
-    res.pages, res.stop, res.total = ctx.pages, ctx.stop, ctx.total
+    if ctx is not None:
+        res.pages, res.stop, res.total = ctx.pages, ctx.stop, ctx.total
     if res.status != "OK":
         return res
     if not items:
@@ -1393,12 +1450,14 @@ def read_board(spec, fetcher, *, searches=(), places=(), keep=None, details=True
                 try:
                     it.detail(ctx, it)
                 except Denied as e:
-                    res.detail_errors.append(f"{it.url}: denied {e.reason}")
-                except (FetchError, ValueError, KeyError, TypeError, AttributeError, RecursionError) as e:
-                    res.detail_errors.append(f"{it.url}: {str(e)[:120]}")
+                    res.detail_errors.append(f"{netfetch.shown(it.url, 200)}: denied {e.reason}")
+                except Exception as e:  # noqa: BLE001  a detail page that fails keeps the list-level record
+                    res.detail_errors.append(f"{netfetch.shown(it.url, 200)}: {type(e).__name__}: "
+                                             f"{netfetch.shown(e, 120)}")
             res.readings.append(to_reading(it, spec, first_seen))
         except Exception as e:  # noqa: BLE001  one odd posting is skipped and named, never the whole run
-            res.detail_errors.append(f"{str(it.url)[:200]}: skipped ({type(e).__name__}: {str(e)[:100]})")
+            res.detail_errors.append(f"{netfetch.shown(it.url, 200)}: skipped ({type(e).__name__}: "
+                                     f"{netfetch.shown(e, 100)})")
     return res
 
 
@@ -1420,7 +1479,7 @@ def read_csv(path):
     try:
         with open(path, encoding="utf-8-sig", newline="") as f:
             return [dict(r) for r in csv.DictReader(f)]
-    except OSError:
+    except (OSError, csv.Error, UnicodeDecodeError):
         return []
 
 
@@ -1467,6 +1526,14 @@ def no_network(results):
     return len(tried) >= 2 and all(no_answer(r) for r in tried)
 
 
+def whole(v):
+    """A count from board_health.csv; 0 for a blank or a cell someone edited."""
+    try:
+        return max(0, int(str(v or "0").strip() or 0))
+    except ValueError:
+        return 0
+
+
 def update_health(health, res, today, counted=True):
     """3.7: 3 consecutive errors pause a board; a gone marker twice makes it
     gone; an empty list is unknown and never counts toward gone. Errors and
@@ -1474,15 +1541,20 @@ def update_health(health, res, today, counted=True):
     strike); counted=False (a run where no board answered) records the error
     and counts nothing. A Workday tenant that lists 0 jobs (total 0, not just
     none nearby) on EMPTY_RUNS polls becomes check_site: its site name in the
-    watch list is probably wrong."""
+    watch list is probably wrong. A crawl-delay skip (SKIP crawl-delay
+    <host>) is noted in last_error and changes nothing else."""
     key = res.spec.key
     row = health.get(key) or {"key": key, "status": "active", "last_ok": "", "last_count": "",
                               "last_error": "", "consecutive_errors": "0", "error_day": "", "empty_runs": "0"}
-    errors = int(row.get("consecutive_errors") or 0)
+    errors = whole(row.get("consecutive_errors"))
     again = row.get("error_day") == today  # this board already took a strike today
-    if res.status in ("OK", "EMPTY"):
+    if res.status == "SKIP":
+        if res.why.startswith("crawl-delay"):
+            row["last_error"] = f"skip: {res.why} (its robots.txt asks for more than " \
+                                f"{netfetch.MAX_CRAWL_DELAY:.0f} s between requests)"
+    elif res.status in ("OK", "EMPTY"):
         site_empty = res.status == "EMPTY" and res.total == 0
-        runs = int(row.get("empty_runs") or 0)
+        runs = whole(row.get("empty_runs"))
         runs = (runs if row.get("last_ok") == today and runs else runs + 1) if site_empty else 0
         status = row.get("status") or "active"
         if site_empty and runs >= EMPTY_RUNS:
@@ -1597,27 +1669,34 @@ def poll_skip(spec, health, settings, today, root):
 
 def poll(root, fetcher=None, offline=None, keep=None, details=True, max_pages=MAX_PAGES, emit=print):
     """Poll every active watch-list board. Returns the BoardResults and writes
-    state/board_health.csv. The runner passes keep (the list gates)."""
+    state/board_health.csv. The runner passes keep (the list gates). Fail
+    soft: a failure inside one board is that board's ERROR line, and a
+    board_health.csv that cannot be read or written (Excel holding it) is a
+    WARN line; the poll always returns."""
     root = Path(root)
     settings = jobfs.settings(root)
     profile = jobfs.search_profile(root)
     today = jobfs.today(root)
     fetcher = fetcher or netfetch.Fetcher(root=root, offline=offline, cookies=True)
-    fallback = family_searches(profile)
-    places, state, remote = home_area(root, profile)
+    try:
+        fallback = family_searches(profile)
+        places, state, remote = home_area(root, profile)
+    except Exception as e:  # noqa: BLE001  an odd search profile value: read without the home filter
+        emit(f"ERROR poll search profile: {type(e).__name__}")
+        fallback, places, state, remote = [], [], (), False
     health = load_health(root)
     results = []
     for spec in watchlist_rows(root):
-        why = poll_skip(spec, health, settings, today, root)
-        if why:
-            res = BoardResult(spec, "SKIP", why)
-        else:
-            try:
+        try:
+            why = poll_skip(spec, health, settings, today, root)
+            if why:
+                res = BoardResult(spec, "SKIP", why)
+            else:
                 res = read_board(spec, fetcher, places=places, keep=keep, details=details, max_pages=max_pages,
                                  first_seen=today.isoformat(), fallback=fallback, home_states=state,
                                  remote_us=remote)
-            except Exception as e:  # noqa: BLE001  never let one board stop the daily
-                res = BoardResult(spec, "ERROR", f"reader failed ({type(e).__name__}: {str(e)[:120]})")
+        except Exception as e:  # noqa: BLE001  never let one board stop the daily
+            res = BoardResult(spec, "ERROR", f"reader failed ({type(e).__name__}: {netfetch.shown(e, 120)})")
         emit(res.line())
         for err in res.detail_errors[:3]:
             emit(f"WARN detail {err}")
@@ -1627,9 +1706,15 @@ def poll(root, fetcher=None, offline=None, keep=None, details=True, max_pages=MA
         emit(f"WARN offline: no board answered ({sum(1 for r in results if r.status != 'SKIP')} tried); "
              "board errors not counted today")
     for res in results:
-        if res.status != "SKIP":
-            update_health(health, res, today.isoformat(), counted=counted)
-    save_health(root, health)
+        if res.status != "SKIP" or res.why.startswith("crawl-delay"):
+            try:
+                update_health(health, res, today.isoformat(), counted=counted)
+            except Exception as e:  # noqa: BLE001  an edited health row: that board's note waits a day
+                emit(f"ERROR board_health {res.spec.label}: {type(e).__name__}")
+    try:
+        save_health(root, health)
+    except OSError as e:
+        emit(f"WARN board_health.csv not saved ({type(e).__name__}); it is written again on the next poll")
     return results
 
 

@@ -559,13 +559,19 @@ def test_final_json(out):
     assert final["verdict"] == "ok" and final["built_at"], final
     assert (job / "Jordan Avery Resume.pdf").exists() and not list(job.glob(".build_*")), list(job.iterdir())
     assert 'FINAL final.json: resume "Jordan Avery Resume.pdf", letter none' in log, log
+    # Shared decision 5: final.json records the hash of every library entry the resume cites.
+    import library
+    lib = library.load(next(p for p in IT_SOURCES if p.name == "achievement_library.md")).by_id
+    cited = library.cited_ids(good)
+    assert cited and final["entries"] == {i: library.entry_hash(lib[i]) for i in cited}, final.get("entries")
     # A letter beside it.
     letter = json.loads((HERE / "sample_letter.json").read_text(encoding="utf-8"))
     lpath = job / "cover_letter.json"
     lpath.write_text(json.dumps(letter), encoding="utf-8")
     code, log = strict([lpath, "--sources", *IT_SOURCES, "--strict"], job, "Jordan Avery Cover Letter")
     assert code == 0, log
-    assert json.loads((job / "final.json").read_text(encoding="utf-8"))["letter"] == "Jordan Avery Cover Letter.pdf"
+    after = json.loads((job / "final.json").read_text(encoding="utf-8"))
+    assert after["letter"] == "Jordan Avery Cover Letter.pdf" and after["entries"] == final["entries"], after
     # A failing rebuild: nothing under the final names, final.json gone.
     bad = copy.deepcopy(good)
     bad["sections"][0]["paragraph"] = "IT lead with 15 years of service desk work."

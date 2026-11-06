@@ -312,8 +312,10 @@ def test_add_from_link():
         out = run(EVENTS, "add", "--root", root, *args, code=1)
         assert out.startswith(why), (args, out)
     out = run(EVENTS, "emit", "--root", root, "--type", "added", "--n", "10", "--job-key", "x:1", "--json",
-              json.dumps({"via": "pasted", "item": {"folder": "state"}}), code=1)
-    assert out.startswith("ERROR payload.item.folder must be a job folder"), out
+              json.dumps({"via": "pasted", "item": {"applications/x": 1}}), code=1)
+    assert out.startswith("ERROR argument --type: invalid choice: 'added'"), out  # SEC-14: only `add` writes it
+    ev = events.make(root, "added", {"via": "pasted", "item": {"folder": "state"}}, job_key="x:1", n=10)
+    assert events.validate(ev, root).startswith("payload.item.folder must be a job folder"), events.validate(ev, root)
     board = job_folder(root, f"{TODAY} Board Co - Analyst", POSTING_MD.replace(
         "https://job-boards.greenhouse.io/acme/jobs/1234567", "https://www.linkedin.com/jobs/view/1234").replace(
         "Job key: greenhouse:1234567\n", ""))
@@ -325,12 +327,76 @@ def test_add_from_link():
     assert out.strip() == f"NO LIST {TODAY} (mode M): the tracker row is the record", out
 
 
+def test_added_trust():
+    """SEC-14 and shared decision 1: an added event is trusted for nothing it
+    could turn against another item. `emit` cannot write one; a hand-written
+    one with another number's upload name, a refused link or a host that is
+    not its link's fails validation; one that reuses a number a queue file
+    gave is never used; and the tick takes the link, its host and the upload
+    name from posting.md and the item's own number, never from the event."""
+    import jobqueue
+    root = new_root()
+    f = jobfs.Folder(root)
+    f.config.mkdir(parents=True)
+    f.settings_toml.write_text('[runner]\nmode = "L"\n', encoding="ascii")
+    first = {"n": 1, "job_key": "lever:item-1", "company": "Genentech", "role": "Scientist",
+             "folder": f"applications/{TODAY} Genentech - Scientist", "upload": "upload/01_Avery_Resume_Genentech.pdf"}
+    jobfs.atomic_write_json(f.queue_json(TODAY), {"v": 1, "date": TODAY, "items": [first]})
+    rel = job_folder(root, f"{TODAY} Acme Robotics - Senior Lab Scientist").relative_to(root).as_posix()
+
+    def hand(n, item, key="greenhouse:1234567"):
+        ev = events.make(root, "added", {"via": "add", "item": dict({"folder": rel}, **item)}, job_key=key, n=n)
+        return ev, events.validate(ev, root, events.file_name(ev))
+
+    _, why = hand(5, {"upload": "upload/01_Avery_Resume_Genentech.pdf"})
+    assert why and why.startswith("payload.item.upload must be upload/05_"), why
+    for url in ("https://www.link" + chr(0xAD) + "edin.com/jobs/view/1", "https://lnkd.in/abc",
+                "https://uk.indeed.com/viewjob?jk=1", "https://ex" + chr(0xE0) + "mple.com/jobs/1",
+                "http://192.168.1.10/jobs/1"):
+        _, why = hand(5, {"apply_url": url})
+        assert why and why.startswith("payload.item.apply_url refused:"), (ascii(url), why)
+    _, why = hand(5, {"apply_url": "https://job-boards.greenhouse.io/acme/jobs/1234567",
+                      "host": "tracking.example.net"})
+    assert why == "payload.item.host must be the apply_url's host", why
+    # A hand-written event reusing #1 and its upload name is well formed, but #1 is queue.json's.
+    reuse, why = hand(1, {"upload": "upload/01_Avery_Resume_Genentech.pdf"}, key="url:careers.example.com/jobs/9")
+    assert why is None, why
+    jobfs.create_only(f.event(reuse["id"], "added"), json.dumps(reuse) + "\n")
+    # One with its own number but a tracking link, host and upload of its choosing.
+    odd, why = hand(5, {"apply_url": "https://tracking.example.net/r/1", "host": "tracking.example.net",
+                        "upload": "upload/05_Avery_Resume_Tracking.pdf"})
+    assert why is None, why
+    jobfs.create_only(f.event(odd["id"], "added"), json.dumps(odd) + "\n")
+    items = jobqueue.day_items(root, TODAY)
+    assert [(it["n"], it["job_key"]) for it in items] == [(1, "lever:item-1"), (5, "greenhouse:1234567")], items
+    # every reader of the added jobs (today_view, tracker.py check, the overlay) sees one #1 only
+    assert [it["n"] for it in events.user_items(root, TODAY)] == [5], events.user_items(root, TODAY)
+    path = jobqueue.user_addendum(root, jobfs.today(), emit=lambda _l: None)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    assert [it["n"] for it in data["items"]] == [5], data["items"]
+    it = data["items"][0]
+    assert (it["apply_url"], it["host"], it["upload"]) == (
+        "https://job-boards.greenhouse.io/acme/jobs/1234567", "job-boards.greenhouse.io",
+        "upload/05_Applicant_Resume_AcmeRobotics.pdf"), it
+    # events.py add: a link netfetch refuses never joins the list (shared decision 1)
+    for url, why in (("https://www.link" + chr(0xAD) + "edin.com/jobs/view/1", "ERROR posting.md's URL is a job board"),
+                     ("https://ex" + chr(0xE0) + "mple.com/jobs/1", "ERROR posting.md's URL is refused (bad-url")):
+        folder = Path(root) / "applications" / f"{TODAY} Odd {len(why)} - Analyst"
+        folder.mkdir(parents=True)
+        (folder / "posting.md").write_text(POSTING_MD.format(day=TODAY).replace(
+            "https://job-boards.greenhouse.io/acme/jobs/1234567", url).replace("Job key: greenhouse:1234567\n", ""),
+            encoding="utf-8")
+        out = run(EVENTS, "add", "--root", root, "--folder", folder.relative_to(root).as_posix(), "--via", "add",
+                  code=1)
+        assert out.startswith(why), (ascii(url), out)
+
+
 def main():
     b = test_parity()
     print("ok parity")
     test_overlay_reads_done(b)
     print("ok overlay_reads_done")
-    for fn in (test_rejections, test_emit_and_overlay, test_add_from_link):
+    for fn in (test_rejections, test_emit_and_overlay, test_add_from_link, test_added_trust):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

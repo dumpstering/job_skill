@@ -1,6 +1,6 @@
 # Job sources: board readers and aggregator lanes
 
-The runner reads employer boards (`scripts/boards.py`) and aggregators (`scripts/aggregators.py`). Both go through `netfetch` only: host allowlist, https, robots.txt, one request per second per host, 20 MB and 20 s limits. Nothing here runs in the cloud sandbox unless the selftest passed (mode S).
+The runner reads employer boards (`scripts/boards.py`) and aggregators (`scripts/aggregators.py`). Both go through `netfetch` only: host allowlist, https, robots.txt, one request per second per host, 20 MB, 20 s per socket read and 60 s per fetch. Nothing here runs in the cloud sandbox unless the selftest passed (mode S).
 
 ## Watch-list rows
 
@@ -65,7 +65,8 @@ JSONL lines are `jobfs.Posting` dicts plus `ai_text` and `hidden` lists (G11 rea
 
 `state/board_health.csv`: `key,status,last_ok,last_count,last_error,consecutive_errors,error_day,empty_runs`. The key is `ats:board/site@host`.
 - OK or EMPTY: active, errors reset.
-- 3 errors in a row: paused. Errors count once a day, so a rerun the same morning is not another strike. A run in which no board answered at all (the PC had no network yet) counts none and prints `WARN offline: no board answered (<n> tried); board errors not counted today`. A robots disallow, or a Crawl-delay over 30 seconds: robots_blocked.
+- 3 errors in a row: paused. Errors count once a day, so a rerun the same morning is not another strike. A run in which no board answered at all (the PC had no network yet) counts none and prints `WARN offline: no board answered (<n> tried); board errors not counted today`. A robots disallow: robots_blocked. A Crawl-delay that is not a number from 0 to 10 seconds: that run prints `BOARD <ats>:<board> SKIP crawl-delay <host>`, writes `skip: crawl-delay <host> ...` in `last_error`, and counts no strike.
+- One odd answer (a null row, a number where a list belongs, JSON nested thousands deep) is that board's `ERROR` line naming the error type, or a skipped row; the poll always finishes.
 - A Workday tenant that lists 0 jobs even unfiltered on 3 polls (3 days): check_site. Its `site` in the watch list is probably wrong; open the employer's careers page and copy the site from the real Workday URL. A tenant with jobs but none at home is healthy.
 - A gone marker twice in a row: gone (never polled again until the row is edited).
 - Paused, robots_blocked, check_site and dormant boards are retried on `[schedule] weekly_day`.
@@ -88,3 +89,5 @@ JSONL lines are `jobfs.Posting` dicts plus `ai_text` and `hidden` lists (G11 rea
 ## Presets
 
 `templates/watchlist.csv` and `templates/boards.csv` hold the header only. `templates/presets/lifesci_bayarea/` holds the research-run-2 lists for San Francisco Bay Area life-science employers and boards. Setup offers it when the field and region match. `ref` points into the research files (`employers#<n>`, finding IDs).
+
+A row's `city` is the employer's main site. G3 uses it when a posting names an office or lab instead of a place ('MBC Lab', a street address, the employer's own name): that posting counts as being in the row's city, and as unknown when the row has no city. Rows in `second_ring` places (Novato, San Rafael) are polled every day; their postings wait until the user widens (discovery.md).

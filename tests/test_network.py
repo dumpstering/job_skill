@@ -274,9 +274,81 @@ def test_fact_words():
     assert bad and any("twelve" in ln.lower() or "12" in ln for ln in bad), bad
 
 
+def test_zip_limits():
+    """SEC-10: members are read straight from the zip (nothing written to
+    disk), one per base name; the whole import stops at MAX_TOTAL bytes
+    (counted as data unpacks); a corrupt member is one ERROR line naming it
+    and its error type while the other files are still read; any other
+    failure is one ERROR line and exit 1, never a traceback."""
+    head = b"First Name,Last Name,URL,Email Address,Company,Position,Connected On\n"
+    row = b"Ann,Lee,,,Acme Bio,Scientist,01 Jan 2026\n"
+    # 40 copies of Connections.csv in one zip: one is read, none is written anywhere
+    root = new_root()
+    with zipfile.ZipFile(root / "network" / "raw" / "many.zip", "w", zipfile.ZIP_DEFLATED) as z:
+        for i in range(40):
+            z.writestr(f"d{i}/Connections.csv", head + row * 25_000)  # about 1 MB each
+    writes = []
+    real_open = builtins.open
+
+    def spy(file, mode="r", *a, **k):
+        if any(c in str(mode) for c in "wax"):
+            writes.append(str(file))
+        return real_open(file, mode, *a, **k)
+    builtins.open = spy
+    try:
+        code, out = call("import", "--root", root)
+    finally:
+        builtins.open = real_open
+    assert code == 0 and sum(ln.startswith("READ Connections.csv (from many.zip)") for ln in out) == 1, out
+    assert sum("another copy in this zip was read" in ln for ln in out) == 39, out
+    assert not [w for w in writes if w.lower().endswith("connections.csv")], writes
+    # the total cap: distinct allowlisted members, each under the file cap, together over the total
+    root = new_root()
+    names = ["Connections.csv", "Recommendations_Received.csv", "contacts.csv", "Google.csv", "Other Contacts.csv"]
+    with zipfile.ZipFile(root / "network" / "raw" / "big.zip", "w", zipfile.ZIP_DEFLATED) as z:
+        for name in names:
+            z.writestr(name, head + row * 22_000)  # about 0.9 MB each
+    saved = network.MAX_TOTAL
+    network.MAX_TOTAL = 2 * 1024 * 1024
+    try:
+        code, out = call("import", "--root", root)
+    finally:
+        network.MAX_TOTAL = saved
+    assert code == 0 and sum(ln.startswith("READ ") for ln in out) == 2, out
+    assert any(ln.startswith("WARN ") and "2 MB total" in ln for ln in out), out
+    # a corrupt member: named with its error type; the loose file beside it is still read
+    root = new_root()
+    zp = root / "network" / "raw" / "bad.zip"
+    with zipfile.ZipFile(zp, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("Connections.csv", head + row * 2000)
+    with zipfile.ZipFile(zp) as z:
+        info = z.infolist()[0]
+    data = bytearray(zp.read_bytes())
+    start = info.header_offset + 30 + len(info.filename.encode()) + len(info.extra)
+    data[start + 10:start + 40] = b"\xff" * 30
+    zp.write_bytes(bytes(data))
+    shutil.copy(FIX / "old" / "Connections.csv", root / "network" / "raw" / "Connections.csv")
+    (root / "network" / "raw" / "junk.zip").write_bytes(b"PK\x03\x04 not a zip")
+    code, out = call("import", "--root", root)
+    assert code == 0, out
+    err = [ln for ln in out if ln.startswith("ERROR Connections.csv (from bad.zip): not read (")]
+    assert len(err) == 1, out
+    assert any(ln.startswith("ERROR junk.zip: not a readable zip (") for ln in out), out
+    assert "READ Connections.csv: 2 rows" in out and "IMPORTED 2 people: 2 connections, 0 recommendations, " \
+        "0 contacts" in out, out
+    # anything else that goes wrong is one ERROR line and exit 1 (the runner records the drop and moves on)
+    real = network.cmd_import
+    network.cmd_import = lambda a: (_ for _ in ()).throw(RuntimeError("odd"))  # build_parser reads the name
+    try:
+        code, out = call("import", "--root", root)
+    finally:
+        network.cmd_import = real
+    assert code == 1 and out == ["ERROR network import stopped: RuntimeError"], (code, out)
+
+
 def main():
     for fn in (test_import_zip, test_import_old_layout, test_zip_traversal, test_matching, test_match_cli,
-               test_asks, test_same_text_guard, test_fact_words):
+               test_asks, test_same_text_guard, test_fact_words, test_zip_limits):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

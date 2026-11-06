@@ -4,7 +4,8 @@ is allowed today, or must wait (DEFER, never a discard).
 Usage:
     python caps.py check --root R --company C [--family F] [--job-key K | --url U]
         [--req-id ID ...] [--host H] [--posting posting.md] [--title T] [--date YYYY-MM-DD]
-        [--transport auto|events|direct]
+        [--transport auto|events|direct] [--args-file <R>/claude/<name>.json]
+(the company and link come in that JSON file, never on the command line; argfile.py)
 
 Prints one line:
     CAP ok
@@ -55,6 +56,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import argfile  # noqa: E402
 import jobfs  # noqa: E402
 import jobkey  # noqa: E402
 import tracker  # noqa: E402
@@ -518,7 +520,7 @@ def main(argv=None):
             stream.reconfigure(encoding="utf-8", errors="replace")
         except (AttributeError, ValueError):
             pass
-    args = build_parser().parse_args(argv)
+    args = argfile.parse(build_parser(), argv)  # outside text arrives in a JSON file, never inline
     try:
         return args.func(args)
     except tracker.TrackerError as e:

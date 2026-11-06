@@ -50,7 +50,8 @@ import jobfs  # noqa: E402
 
 LIMITS = {"company": 80, "title": 120, "location": 80}
 SOURCE_RE = re.compile(r"^[a-z][a-z0-9_]{1,39}$")
-URLISH = re.compile(r"https?:|www\.|\b[a-z0-9-]+\.(?:com|net|org|io|co|gov|edu|ly|me|jobs|ai|us)\b|[a-z]+://", re.I)
+URLISH = re.compile(r"https?:|www\.|\b[a-z0-9-]+\.(?:com|net|org|io|co|gov|edu|ly|me|jobs|ai|us)\b|[a-z]+://"
+                    r"|\blnkd\.in\b|\blicdn\b", re.I)
 EMAILISH = re.compile(r"@")
 # "assistant" alone is a job title word (Research Assistant, Assistant Professor),
 # so it counts only as a role marker ("assistant:") or after an AI word.
@@ -201,8 +202,8 @@ def cmd_validate(a):
     except Refused as e:
         print(str(e))
         return 1
-    except ValueError as e:
-        print(f"ERROR --in is not a cards file: {e}")
+    except (ValueError, RecursionError) as e:  # RecursionError: JSON nested thousands deep
+        print(f"ERROR --in is not a cards file: {type(e).__name__}: {str(e)[:120]}")
         return 1
     print(f"LEADS kept={len(leads)} dropped={dropped}")
     if leads:

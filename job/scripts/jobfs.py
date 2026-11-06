@@ -435,8 +435,8 @@ def append_jsonl(path, record):
 
 
 def read_jsonl(path):
-    """Every parseable record in a JSONL file; malformed lines (a cut last line)
-    are skipped. A missing file is an empty list."""
+    """Every parseable record in a JSONL file; malformed lines (a cut last line,
+    or one nested too deep to parse) are skipped. A missing file is an empty list."""
     try:
         raw = Path(path).read_text(encoding="utf-8-sig", errors="replace")
     except FileNotFoundError:
@@ -447,7 +447,7 @@ def read_jsonl(path):
             continue
         try:
             rec = json.loads(line)
-        except ValueError:
+        except (ValueError, RecursionError):
             continue
         if isinstance(rec, dict):
             out.append(rec)
@@ -638,7 +638,9 @@ class Posting:
 
 # ---------- names ----------
 
-UNSAFE_NAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+# Windows-unsafe characters, plus $ and ` so a job folder path stays inert inside
+# double quotes on a command line (bash and PowerShell expand only those there).
+UNSAFE_NAME = re.compile(r'[<>:"/\\|?*$`\x00-\x1f]')
 RESERVED = {"con", "prn", "aux", "nul"} | {f"com{i}" for i in range(1, 10)} | {f"lpt{i}" for i in range(1, 10)}
 
 

@@ -24,7 +24,8 @@ radius_miles = 40
 states = []                 # US state codes of the places, e.g. ["CA"]; "Newark, NJ" then
                             # does not count for a Newark in the places
 places = []                 # accepted city names, confirmed once
-second_ring = []            # used only by the widen step "second_ring"
+second_ring = []            # nearby places used once you widen; until then their jobs are set
+                            # aside and counted in the weekly summary
 remote = "us"               # none | us
 relocate = false
 
@@ -54,8 +55,10 @@ undated_policy = "first_seen_after_2_polls"
 # adjacent_titles = []      # approved neighbors, title match 0.6
 # title_any = []            # title terms; one hit is enough
 # title_none = []           # title terms that rule the family out
-# require_any = []          # description terms; at least one must hit
-# terms = []                # vocabulary for KEYWORD, tuning and fit coverage
+# require_any = []          # requirements terms; at least one must hit
+# avoid_any = []            # other fields' requirements terms: 2 or more, and more than the
+#                           # require_any hits, rule the job out (another field's training)
+# terms = []                # vocabulary for KEYWORD, tuning and fit (the day's order)
 # seniority_ok = []         # level words that fit (senior, ii, associate, ...)
 # needs_license = []        # knockout ids this family requires (only when held)
 # priority = 1              # 1-3

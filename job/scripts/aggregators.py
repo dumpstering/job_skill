@@ -60,13 +60,14 @@ class Lane:
 
     def __init__(self, name):
         self.name, self.status, self.why = name, "OK", ""
-        self.postings, self.leads, self.requests = [], [], 0
+        self.postings, self.leads, self.requests, self.skipped = [], [], 0, 0
 
     def line(self):
         if self.status == "OK":
             kind = "leads" if self.name in ("adzuna", "muse") else "postings"
             n = len(self.leads) if kind == "leads" else len(self.postings)
-            return f"SOURCE {self.name} OK {n} {kind} requests={self.requests}"
+            odd = f" skipped={self.skipped}" if self.skipped else ""
+            return f"SOURCE {self.name} OK {n} {kind} requests={self.requests}{odd}"
         return f"SOURCE {self.name} {self.status} {self.why}".rstrip()
 
 
@@ -164,13 +165,32 @@ def run_usajobs(fetcher, keys, profile, first_seen):
     for params in usajobs_queries(profile):
         lane.requests += 1
         r = fetcher.request("GET", usajobs_url(params), None, headers).check()
-        items = ((r.json().get("SearchResult") or {}).get("SearchResultItems")) or []
-        for item in items:
-            reading = usajobs_reading(item, first_seen)
-            if reading and reading.posting.job_key not in seen:
+        d = r.json()
+        result = d.get("SearchResult") if isinstance(d, dict) else None
+        items = result.get("SearchResultItems") if isinstance(result, dict) else None
+        for reading in each(lane, items, lambda item: usajobs_reading(item, first_seen)):
+            if reading.posting.job_key not in seen:
                 seen.add(reading.posting.job_key)
                 lane.postings.append(reading)
     return lane
+
+
+def each(lane, rows, fn):
+    """fn(row) for each object in rows, skipping None results. A row that is
+    not an object, or one fn fails on, is skipped and counted (lane.skipped):
+    one odd item never costs the lane."""
+    out = []
+    if isinstance(rows, list):
+        lane.skipped += sum(1 for row in rows if not isinstance(row, dict))
+    for row in boards.dicts(rows):
+        try:
+            got = fn(row)
+        except Exception:  # noqa: BLE001  one odd item is skipped and counted
+            lane.skipped += 1
+            continue
+        if got is not None:
+            out.append(got)
+    return out
 
 
 def usajobs_reading(item, first_seen):
@@ -181,8 +201,9 @@ def usajobs_reading(item, first_seen):
     except FetchError:
         return None
     m = item.get("MatchedObjectDescriptor", item)
-    url = posting.web_url(m.get("PositionURI")) or p.get("apply_url")
-    if not url:
+    m = m if isinstance(m, dict) else item
+    url = posting.web_url(m.get("PositionURI")) or boards.web_link(p.get("apply_url"))
+    if not url or not boards.web_link(url):
         return None
     posting.clean_fields(p, report)
     rec = posting.to_record(p, url, lane="usajobs", first_seen=first_seen, ats="usajobs")
@@ -219,13 +240,20 @@ def run_adzuna(fetcher, keys, profile, today, salt=""):
     for params in adzuna_queries(profile, keys):
         lane.requests += 1
         r = fetcher.get(f"{ADZUNA_URL}?{urlencode(params)}", accept="application/json").check()
-        for job in r.json().get("results") or []:
-            lead = make_lead("adzuna", (job.get("company") or {}).get("display_name"), job.get("title"),
-                             (job.get("location") or {}).get("display_name"), today, salt)
-            if lead and lead["lead_id"] not in seen:
+        d = r.json()
+        for lead in each(lane, d.get("results") if isinstance(d, dict) else None,
+                         lambda job: make_lead("adzuna", obj(job.get("company")).get("display_name"),
+                                               job.get("title"), obj(job.get("location")).get("display_name"),
+                                               today, salt)):
+            if lead["lead_id"] not in seen:
                 seen.add(lead["lead_id"])
                 lane.leads.append(lead)
     return lane
+
+
+def obj(v):
+    """v when it is a dict, else {} (a field a feed sent as a string or a list)."""
+    return v if isinstance(v, dict) else {}
 
 
 # ---------- Workable cross-search (off) and The Muse (off) ----------
@@ -242,9 +270,10 @@ def run_workable(fetcher, profile, first_seen):
             params["location"] = profile["home"]["label"]
         lane.requests += 1
         r = fetcher.get(f"{WORKABLE_URL}?{urlencode(params)}", accept="application/json").check()
-        for j in r.json().get("jobs") or []:
-            reading = workable_reading(j, first_seen)
-            if reading and reading.posting.job_key not in seen:
+        d = r.json()
+        for reading in each(lane, d.get("jobs") if isinstance(d, dict) else None,
+                            lambda j: workable_reading(j, first_seen)):
+            if reading.posting.job_key not in seen:
                 seen.add(reading.posting.job_key)
                 lane.postings.append(reading)
     return lane
@@ -282,15 +311,16 @@ def run_muse(fetcher, keys, profile, today, salt=""):
     lane.requests += 1
     r = fetcher.get(f"{MUSE_URL}?{urlencode(params)}", accept="application/json").check()
     cutoff = (date.fromisoformat(today) - timedelta(days=MUSE_MAX_AGE)).isoformat()
-    for j in r.json().get("results") or []:
+
+    def one(j):
         day = posting.short_date(j.get("publication_date") or "")
-        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day or "") or day < cutoff:
-            continue
-        locs = [x.get("name", "") for x in j.get("locations") or [] if isinstance(x, dict)]
-        lead = make_lead("muse", (j.get("company") or {}).get("name"), j.get("name"), locs[0] if locs else "",
+        if not isinstance(day, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day or "") or day < cutoff:
+            return None
+        locs = [x.get("name", "") for x in boards.dicts(j.get("locations"))]
+        return make_lead("muse", obj(j.get("company")).get("name"), j.get("name"), locs[0] if locs else "",
                          today, salt)
-        if lead:
-            lane.leads.append(lead)
+    d = r.json()
+    lane.leads += each(lane, d.get("results") if isinstance(d, dict) else None, one)
     return lane
 
 
@@ -303,7 +333,7 @@ def guarded(lane_fn, name):
     except Denied as e:
         lane = Lane(name)
         lane.status, lane.why = "DENY", e.reason
-    except (FetchError, ValueError, KeyError, TypeError, AttributeError) as e:
+    except FetchError as e:  # network trouble: the reason says it
         lane = Lane(name)
         lane.status, lane.why = "ERROR", str(e)[:160]
     except Exception as e:  # noqa: BLE001  an odd answer (JSON nested thousands deep) stops this lane only

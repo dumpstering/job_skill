@@ -179,6 +179,35 @@ def test_page_count_in_memory(out):
     print("ok in-memory page count")
 
 
+def test_default_base(out):
+    """Shared decision 4: the user's name never has to go on a command line.
+    With no --base the files are named from the JSON's name (Resume, CV in cv
+    mode, Cover Letter for a letter), shell and path characters dropped; a
+    --base of one's own arrives through --args-file."""
+    cases = [("sample_resume.json", [], "Resume"), ("sample_resume.json", ["--mode", "cv"], "CV"),
+             ("sample_letter.json", [], "Cover Letter")]
+    for name, flags, kind in cases:
+        data = json.loads((HERE / name).read_text(encoding="utf-8"))
+        d = out / f"default_{kind.replace(' ', '_')}"
+        r = subprocess.run([sys.executable, str(SCRIPT), str(HERE / name), "--out", str(d), *flags],
+                           capture_output=True, text=True)
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert (d / f"{data['name']} {kind}.pdf").exists(), (kind, sorted(p.name for p in d.iterdir()))
+    data = json.loads((HERE / "sample_resume.json").read_text(encoding="utf-8"))
+    data["name"] = 'Jordan $(x) `y` "Q" Avery/..\\'
+    assert build_resume.default_base(data, "industry") == "Jordan (x) y Q Avery Resume", \
+        build_resume.default_base(data, "industry")
+    root = out / "root_args"
+    (root / "claude").mkdir(parents=True, exist_ok=True)
+    (root / "claude" / "args.json").write_text(json.dumps({"base": "Jordan Avery $(x) Resume"}), encoding="utf-8")
+    d = out / "from_args"
+    r = subprocess.run([sys.executable, str(SCRIPT), str(HERE / "sample_resume.json"), "--out", str(d), "--root",
+                        str(root), "--args-file", "claude/args.json"], capture_output=True, text=True)
+    assert r.returncode == 0 and (d / "Jordan Avery $(x) Resume.pdf").exists(), r.stdout + r.stderr
+    assert not (root / "claude" / "args.json").exists()
+    print("ok no --base: named from the JSON's name (Resume, CV, Cover Letter); --base through --args-file")
+
+
 def main():
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(tempfile.mkdtemp(prefix="job_skill_test_"))
     from docx import Document
@@ -212,6 +241,7 @@ def main():
     test_cv_warning_and_order(out)
     test_citation_rendering(out)
     test_page_count_in_memory(out)
+    test_default_base(out)
     print(f"PASS  outputs in {out}")
 
 

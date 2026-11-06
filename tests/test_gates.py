@@ -376,6 +376,151 @@ def test_live_day_corpus():
           f"({share:.0%}); queued alone {q_share:.0%}")
 
 
+LABELED = FIX / "labeled_2026-11-06.json"
+WATCHLIST = PRESET.parent / "watchlist.csv"
+
+
+def preset_root(tmp, widen=None):
+    """Rules over the life-science preset and its real watch list (segments
+    and cities), with a made-up California home."""
+    root = Path(tmp)
+    preset_rules(tmp)
+    shutil.copyfile(WATCHLIST, root / "config" / "watchlist.csv")
+    return gates.Rules(root, DAY, widen=widen or [])
+
+
+def test_labeled_pool_d6():
+    """D6 on live day 2 (2026-11-06): the 271 postings the round-2 gates
+    pooled, each labeled by the question 'could a microbiology PhD, casting
+    a wide net in the Bay Area, plausibly be hired for it?' (borderline is
+    yes). Round 2 kept all 271 (150 yes, 121 no; the 30-item queue held 19
+    yes and 11 no). Title and place rules alone (G3, G4: what this fixture
+    can show without the texts) must keep every yes and now drop 71 of the
+    no; G9, judged on the texts, drops 14 more (85 of 121; see
+    test_g9_avoid). The queue keeps 19 of 19 yes and drops 6 of its 11 no
+    here (10 with G9)."""
+    data = json.loads(LABELED.read_text(encoding="ascii"))
+    items = data["items"]
+    assert len(items) == 271 and sum(1 for it in items if it["label"] == "yes") == 150
+    assert sorted(it["queue"] for it in items if "queue" in it) == list(range(1, 31))
+    with tempfile.TemporaryDirectory() as tmp:
+        rules = preset_root(tmp)
+        kept = [list_verdict(rules, it["company"], it["title"], it["location"], i)[0] for i, it in enumerate(items)]
+    lost = [it["title"] for it, k in zip(items, kept) if it["label"] == "yes" and not k]
+    assert not lost, lost
+    no_kept = sum(1 for it, k in zip(items, kept) if it["label"] == "no" and k)
+    q = [(it, k) for it, k in zip(items, kept) if "queue" in it]
+    q_yes = sum(1 for it, k in q if it["label"] == "yes" and k)
+    q_no = sum(1 for it, k in q if it["label"] == "no" and k)
+    assert (no_kept, q_yes, q_no) == (50, 19, 5), (no_kept, q_yes, q_no)
+    # left for G9 on the texts: Chai (machine learning), Prolific (analytical chemistry), Xaira
+    # (SPR/BLI biophysics) and Nurix (LC-MS bioanalysis); #5 (Nurix, 5+ years in one niche) stays
+    left = sorted(it["queue"] for it, k in q if it["label"] == "no" and k)
+    assert left == [2, 5, 10, 20, 27], left
+    print(f"   labeled pool: yes kept 150 of 150, no kept {no_kept} of 121 by title and place; "
+          f"queue yes {q_yes} of 19, no {q_no} of 11")
+
+
+def test_d6_title_rules():
+    """L2-02, L2-03 and the seniority words: a business-development title is
+    out (not assay development), 'formulation*' also drops 'Formulations',
+    'Reference Materials' no longer reads as materials science, and the
+    other-field scientist titles are out; round 2's false negatives pass."""
+    with tempfile.TemporaryDirectory() as tmp:
+        rules = preset_root(tmp)
+
+        def fam(title):
+            p = jobfs.Posting(job_key="k", title=title, company="Acme Bio", company_norm="acme bio")
+            v = gates.Verdict()
+            return None if gates.g4_title(p, v, rules) else v.info["family"]
+        want = {
+            "CSD Diagnostic Partner - Business Development": None,
+            "Senior Manager, Business Development, Diagnostics": None,
+            "Scientist - Formulations, Drug Delivery": None, "Scientist, Formulation": None,
+            "Senior Scientist, Immunoassay Development, Antibody Critical Reagents & Reference Materials":
+                "assay_development",
+            "Scientist, Materials Science": None, "Materials Scientist II": None,
+            "Scientist II, Developability": None, "Scientist- Delivery Sciences-targeted LNPs (tLNPs)": None,
+            "Scientist, FPD": None, "Packaging Scientist II": None, "Senior Scientist- Translational PKPD": None,
+            "Associate Scientist - SSRL HAXPES Beamline": None, "SVP, Regulatory Affairs": None,
+            "Senior Regulatory Affairs Specialist": None, "Regulatory Affairs Associate": "regulatory_affairs",
+            "Senior Clinical Trial Manager": None, "Clinical Research Coordinator 2": "clinical_research",
+            "Senior Medical Science Liaison - Rare Disease": None,
+            "Sr. Staff Medical Science Liaison": "medical_science_liaison",
+            "Research Associate I, Analytical Chemistry": None, "Social Science Research Assistant": None,
+            "Scientist 1, Vector Engineering": "industry_rd_scientist",
+            "Scientist, Process Engineering": None, "Scientist, Biomolecular Characterization": None,
+            "Sr QA Reviewer, Biologics Approval": "quality_validation",
+            "QC Supervisor, Sample Management and Stability Administration": "quality_validation",
+            "Scientist II, Analytical Development": "industry_rd_scientist",
+            "Scientist, Microglia Therapeutics Team": "industry_rd_scientist",
+        }
+        for title, family in want.items():
+            assert fam(title) == family, (title, fam(title), family)
+
+
+def test_g9_avoid():
+    """D6 on the texts: when the requirements name at least two other-field
+    words (avoid_any) and more of them than wet-lab words (require_any), the
+    job's core training is another field's. A wet-lab job that also asks for
+    HPLC or names a company culture keeps its place."""
+    with tempfile.TemporaryDirectory() as tmp:
+        rules = preset_root(tmp)
+    fam = next(f for f in rules.families if f["id"] == "industry_rd_scientist")
+    blurb = "About us: a biology company with a great culture, curing disease with cell therapies. " * 3
+
+    def req(body):
+        return blurb + "\n\nRequirements\n" + body + "\n\nBenefits\nHealth plan.\n"
+    cases = {
+        "bioanalytical LC-MS": (req("Develop quantitative LC-MS/MS assays for small molecules in plasma; extensive "
+                                    "UPLC and mass spectrometry experience; support PK studies. " * 3), False),
+        "machine learning": (req("Train and evaluate foundation models with PyTorch; deep learning research and "
+                                 "machine learning engineering; work with the wet lab team on assay data. " * 3),
+                             False),
+        "biophysics": (req("Characterize antibody binding by SPR and BLI (Biacore, Carterra); DLS and DSF "
+                           "stability; developability ranking of leads. " * 3), False),
+        "formulation": (req("Formulation development of drug product in our lab; lyophilization cycles and "
+                            "excipient screening; lipid nanoparticle work a plus. " * 3), False),
+        "wet lab with HPLC": (req("Mammalian cell culture, qPCR and ELISA assay development; flow cytometry; "
+                                  "HPLC and LC-MS experience is a plus. " * 3), True),
+        "analytical biochemistry": (req("Protein biochemistry and enzymology; ELISA and CE-SDS in a GMP lab; "
+                                        "good documentation practices. " * 3), True),
+    }
+    for name, (text, ok) in cases.items():
+        p = jobfs.Posting(job_key="k", title="Scientist", text=text)
+        v = gates.Verdict()
+        assert (gates.g9_words(p, v, fam) is None) == ok, (name, v.lines)
+        if not ok:
+            assert v.reason == "title" and "another field" in v.lines[-1], v.lines
+
+
+def test_fit_overlap():
+    """D6 order: fit counts the user's terms a posting names (hands-on
+    techniques 1, familiar 0.5, family terms 1 when the library names them
+    and 0.5 when not), so a posting naming the user's methods ranks above one
+    naming none, whatever the share of hands-on terms."""
+    import library
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "techniques.md"
+        path.write_text("# Techniques\n\n"
+                        "- real-time PCR | aliases: qPCR | level: hands-on | years_ok: yes | evidence: L-0001\n"
+                        "- ELISA | level: hands-on | years_ok: no | evidence: L-0002\n"
+                        "- confocal microscopy | level: familiar | years_ok: no | evidence: L-0003\n",
+                        encoding="ascii")
+        techniques = library.load_techniques(path)
+    assert len(techniques) == 3, techniques
+    fam = {"terms": ["aseptic technique", "GMP", "qPCR"]}
+    rich = "Requirements: qPCR and ELISA; confocal microscopy; aseptic technique; GMP."
+    bare = "Requirements: a PhD and good communication."
+    lib = "- [L-0001] Daily aseptic technique in a BSL-2 lab."
+    n_rich = gates.overlap(rich, fam, techniques, lib)
+    assert n_rich == 1 + 1 + 0.5 + 1 + 0.5, n_rich  # qPCR counted once, as the technique
+    assert gates.overlap(bare, fam, techniques, lib) == 0
+    f_rich = gates.fit_of(rich, "Scientist", fam, 0.6, techniques, lib)[0]
+    f_bare = gates.fit_of(bare, "Scientist", fam, 0.6, techniques, lib)[0]
+    assert f_rich > f_bare, (f_rich, f_bare)
+
+
 def test_place_rules():
     """G3 (LIVE-02, LIVE-04): any listed place counts, a place name needs no
     other state or country beside it, foreign remote is out, and 'N Locations'
@@ -391,18 +536,92 @@ def test_place_rules():
             "TWN - Remote": False, "Remote (US)": True, "USA - Remote": True, "Remote, California, USA": True,
             "Remote, Florida, USA": False, "San Rafael, California, United States": False,
             "US - California - South San Francisco": True, "Boston, MA | South San Francisco, CA": True,
-            "London, United Kingdom | South San Francisco, CA": True, "Vizag": False, "": "unknown"}
+            "London, United Kingdom | South San Francisco, CA": True, "Vizag": False, "": "unknown",
+            # L2-01: 'City ST' with no comma names its state (posting.region_of)
+            "Dublin OH": False, "Newark DE": False, "Albany NY": False, "Richmond VA": False,
+            "San Carlos CA": True, "Dublin CA": True}
         for loc, want in cases.items():
             ok, v = list_verdict(rules, "Acme Bio", "QC Microbiologist", loc)
             unknown = "location_unknown" in (v.info.get("flags") or [])
             got = "unknown" if ok and unknown else ok
             assert got == want, (loc, got, want, v.lines)
+        # L2-01: a home place named Dublin, Newark or Albany does not pull in
+        # the same name in another state; the verdict names that state
+        for loc, st in (("Dublin OH", "OH"), ("Newark DE", "DE"), ("Albany NY", "NY")):
+            assert gates.place_verdict(loc, rules) == ("out", f"state {st}"), (loc, gates.place_verdict(loc, rules))
+        assert gates.place_verdict("Dublin CA", rules)[0] == "in"
     import posting
     assert posting.split_place("Jersey City, NJ; Millbrae, CA") == ("Jersey City", "NJ", "US")
     assert posting.split_place("Novato, California") == ("Novato", "CA", "US")
     assert posting.us_eligible("TWN - Remote", "", "remote") is False
     assert posting.us_eligible("Remote (Vienna, Austria)", "", "remote") is False
     assert posting.us_eligible("Remote", "", "remote") is None
+
+
+def test_office_labels():
+    """L2-08: a location that names an office or lab instead of a place ('MBC
+    Lab', a street address, the employer's own name) is judged by the watch
+    list's city for that employer: in when it is a home place, out when it
+    is another, unknown when the row has none. Without a watch-list row it
+    stays 'not a home place', and a city name alone is never an office label."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        preset_rules(tmp)
+        rows = ["employer,employer_norm,parent,ats,board,host,site,extra,careers_url,main_website,segment,city,"
+                "families,priority,status,added_on,added_by,ref,notes",
+                "Acme Bio,,,greenhouse,acme,,,,,,biotech,San Francisco,,1,active,2026-11-01,test,,",
+                "Bayside Bio,,,greenhouse,bayside,,,,,,biotech,Boston,,1,active,2026-11-01,test,,",
+                "Museum of Natural Science,,,greenhouse,msm,,,,,,institute,,,1,active,2026-11-01,test,,"]
+        (root / "config" / "watchlist.csv").write_text("\n".join(rows) + "\n", encoding="ascii")
+        rules = gates.Rules(root, DAY, widen=[])
+        cases = [("Acme Bio", "MBC Lab", True), ("Acme Bio", "300 Pasteur Dr - 12K Yard - Floor 01", True),
+                 ("Bayside Bio", "MBC Lab", False), ("Museum of Natural Science", "MBC Lab", "unknown"),
+                 ("Museum of Natural Science", "Museum of Natural Science", "unknown"),
+                 ("Other Co", "MBC Lab", False), ("Acme Bio", "Salt Lake City", False),
+                 ("Acme Bio", "Zurich", False), ("Acme Bio", "Boston Lab, MA", False)]
+        for company, loc, want in cases:
+            ok, v = list_verdict(rules, company, "QC Microbiologist", loc)
+            got = "unknown" if ok and "location_unknown" in (v.info.get("flags") or []) else ok
+            assert got == want, (company, loc, got, want, v.lines)
+
+
+def test_second_ring_set_aside():
+    """D8 and L2-05: a watch-list employer in a second_ring place (Novato) is
+    still polled; its posting is set aside with reason location:second_ring
+    when its title and age would pass (location when they would not), and
+    pooled once the widen step is on. The weekly summary counts those and
+    says how to include them."""
+    import report
+    with tempfile.TemporaryDirectory() as tmp:
+        root = copy_root(tmp)
+        toml = (root / "config" / "search_profile.toml").read_text(encoding="utf-8")
+        assert 'second_ring = ["Ogdenville"]' in toml
+        toml = toml.replace('second_ring = ["Ogdenville"]', 'second_ring = ["Ogdenville", "North Haverbrook"]')
+        (root / "config" / "search_profile.toml").write_text(toml, encoding="utf-8")
+        mk = make_gates_root.posting
+        a = mk("greenhouse:900401", "QC Microbiologist", make_gates_root.gh(900401), location="Ogdenville, IL",
+               city="Ogdenville")
+        b = mk("greenhouse:900402", "Sales Manager", make_gates_root.gh(900402), location="Ogdenville, IL",
+               city="Ogdenville")
+        c = mk("greenhouse:900403", "Microbiologist II", make_gates_root.gh(900403),
+               location="North Haverbrook, Illinois, United States", city="North Haverbrook")
+        run_all(root, postings=[a, b, c])
+        rows = {r["job_key"]: r for r in discards(root)}
+        assert rows["greenhouse:900401"]["reason"] == "location:second_ring", rows["greenhouse:900401"]
+        assert rows["greenhouse:900402"]["reason"] == "location", rows["greenhouse:900402"]
+        assert rows["greenhouse:900403"]["reason"] == "location:second_ring"
+        assert gates.is_filter("location:second_ring")
+        line = report.second_ring_line(root, DAY - __import__("datetime").timedelta(days=6), DAY, [])
+        assert line == ("2 jobs were set aside for the place alone: they are in your wider ring "
+                        "(Ogdenville 1, North Haverbrook 1). Say widen to include them."), line
+        assert not report.check_wording(line)
+        assert report.second_ring_line(root, DAY, DAY, ["second_ring"]) is None
+        # widened: the same postings are judged again and pooled
+        run = gates.GateRun(root, DAY, widen=["second_ring"])
+        for p in (a, c):
+            run.detail_gates(p)
+        run.save()
+        assert {"greenhouse:900401", "greenhouse:900403"} <= set(pool(root)), sorted(pool(root))
 
 
 def detail_reading(base, **kw):
@@ -501,14 +720,14 @@ def test_pass_stops_halfway():
         def boom(p, v):
             calls.append(p.job_key)
             if len(calls) == 2:
-                raise RuntimeError("stopped halfway")
+                raise KeyboardInterrupt("stopped halfway")  # a kill: not caught per posting
             return real(p, v)
         gates.g12_route = boom
         try:
             run = gates.GateRun(root, DAY)
             try:
                 run.process(batch)
-            except RuntimeError:
+            except KeyboardInterrupt:
                 pass
         finally:
             gates.g12_route = real
@@ -538,6 +757,60 @@ def test_pass_stops_halfway():
             assert len(discards(root)) == before + 1 and discards(root)[-1]["job_key"] == "greenhouse:900014"
 
 
+def test_one_bad_posting():
+    """D2: a posting whose gating raises (odd data, a refused host) is skipped
+    with one ERROR line naming it and the error type; the other postings are
+    pooled, keep() answers False, and nothing is recorded for the bad one, so
+    the next run judges it again."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = copy_root(tmp)
+        allp = {p["job_key"]: p for p, _ in make_gates_root.postings()}
+        real = gates.g9_words
+
+        def odd(p, v, fam):
+            if p.job_key == "greenhouse:900016":
+                raise ValueError("odd record")
+            return real(p, v, fam)
+        lines = []
+        gates.g9_words = odd
+        try:
+            run = gates.GateRun(root, DAY, emit=lines.append)
+            run.process([allp["greenhouse:900002"], allp["greenhouse:900016"], object()])
+            assert run.keep(object()) is False  # boards.poll's hook: a broken record gets no detail call
+            run.save()
+        finally:
+            gates.g9_words = real
+        assert "ERROR gate greenhouse:900016: ValueError" in lines, lines
+        assert lines.count("ERROR gate (no job key): AttributeError") == 2, lines
+        assert list(pool(root)) == ["greenhouse:900002"], list(pool(root))
+        seen = [r["job_key"] for p in (root / "state" / "seen").glob("*.jsonl") for r in jobfs.read_jsonl(p)]
+        assert "greenhouse:900016" not in seen, seen
+        run2 = gates.GateRun(root, DAY, emit=lines.append)
+        run2.process([allp["greenhouse:900016"]])
+        run2.save()
+        assert "greenhouse:900016" in pool(root)
+
+
+def test_requirement_scan_bounded():
+    """D3: the requirements scan reads a bounded slice and never copies the
+    rest of the text per heading, so a posting made of thousands of headings
+    is judged in well under a second."""
+    import time
+    text = "Requirements 1\n" * 60000 + "x" * 400000
+    t0 = time.perf_counter()
+    gates.requirement_text(text)
+    gates.requirement_section(text)
+    p = jobfs.Posting(job_key="k", title="Scientist", text=text)
+    gates.g9_words(p, gates.Verdict(), {"require_any": ["assay*"], "avoid_any": ["lc ms"]})
+    took = time.perf_counter() - t0
+    assert took < 1.5, took
+    # the sections it finds are what the old scan found
+    doc = ("About us\nWe make tests.\n\nRequirements\n" + "PhD in microbiology and cell culture work. " * 8 +
+           "\n\nBenefits\nHealth plan.\n")
+    assert gates.requirement_text(doc).strip().startswith("PhD in microbiology") and "Health" not in \
+        gates.requirement_text(doc)
+
+
 def hold_open(path):
     """Open a file the way Excel holds a CSV: others may read, not write."""
     import ctypes
@@ -558,8 +831,8 @@ def close_handle(h):
 
 def test_g1_lookalike_host():
     """A posting or apply URL on a lookalike host (a soft hyphen in
-    'linkedin', or any non-ASCII host) is discarded at G1, never pooled as a
-    browser read for the user to open."""
+    'linkedin', or any host netfetch's canonical form refuses) is discarded at
+    G1, never pooled as a browser read for the user to open."""
     with tempfile.TemporaryDirectory() as tmp:
         root = copy_root(tmp)
         mk = make_gates_root.posting
@@ -570,8 +843,61 @@ def test_g1_lookalike_host():
                apply_url="https://careers.exam" + shy + "ple.com/apply/1")
         run_all(root, postings=[a, b])
         rows = {r["job_key"]: r["reason"] for r in discards(root)}
-        assert rows == {a["job_key"]: "host:linkedin.com", "greenhouse:900301": "host:not-ascii"}, rows
+        assert rows == {a["job_key"]: "host:linkedin.com", "greenhouse:900301": "host:bad-url"}, rows
         assert not pool(root)
+
+
+def test_link_schemes_and_canonical_hosts():
+    """SEC-11 and D1 (gates side): a posting or apply link that is not http(s)
+    (file://, smb://, ftp://), names a host netfetch refuses (a soft hyphen,
+    a fullwidth letter, a sharp s), or is a job board by any spelling (lnkd.in,
+    linkedin.de, a trailing dot) is discarded at G1 and at G12, never raising.
+    G12 judges the detail record, so an apply link that only the detail
+    carries is caught there too. An http apply link from a board is opened as
+    https; a pasted link keeps its own form."""
+    shy, fw, sharp = chr(0xAD), chr(0xFF49), chr(0xDF)
+    gh = "https://boards.greenhouse.io/acmebio/jobs/1"
+    refused = {
+        "https://www.link" + shy + "edin.com/jobs/view/1": "linkedin.com",
+        "https://www.l" + fw + "nkedin.com/jobs/view/2": "linkedin.com",
+        "https://stra" + sharp + "e.example.com/apply": "bad-url",
+        "file://files.example.com/share/apply.html": "not-web",
+        "smb://files.example.com/share": "not-web",
+        "ftp://files.example.com/job.html": "not-web",
+        "https://lnkd.in/abc": "lnkd.in",
+        "https://de.linkedin.de/jobs/view/9": "linkedin.de",
+        "https://www.linkedin.com./jobs/view/10": "linkedin.com",
+        "https://[::1/x": "bad-url",
+    }
+    for link, why in refused.items():
+        assert gates.url_refusal(link) == why, (link, gates.url_refusal(link), why)
+        for url, apply in ((gh, link), (link, "")):
+            p = jobfs.Posting(job_key="greenhouse:1", title="Microbiologist", company="Acme Bio", url=url,
+                              apply_url=apply, lane="watch", ats="greenhouse")
+            v = gates.Verdict()
+            assert gates.g1_host(p, v, None) is not None and v.reason == f"host:{why}", (link, v.lines)
+            v = gates.Verdict()
+            assert gates.g12_route(p, v) is not None and v.reason == "apply_route", (link, v.lines)
+    assert gates.url_refusal("https://careers.example.com/apply/1") is None
+    p = jobfs.Posting(job_key="greenhouse:2", title="Microbiologist", url=gh, lane="watch", ats="greenhouse",
+                      apply_url="http://www.example.com/careers/?gh_jid=2")
+    v = gates.Verdict()
+    assert gates.g1_host(p, v, None) is None and gates.g12_route(p, v) is None, v.lines
+    assert p.apply_url == "https://www.example.com/careers/?gh_jid=2", p.apply_url
+    pasted = jobfs.Posting(job_key="url:example.com/jobs/3", title="Microbiologist", lane="pasted",
+                           url="http://example.com/jobs/3", apply_url="http://example.com/jobs/3")
+    assert gates.g12_route(pasted, gates.Verdict()) is None and pasted.apply_url == "http://example.com/jobs/3"
+    # discards.csv names no host for a refused one, and the pass never stops
+    with tempfile.TemporaryDirectory() as tmp:
+        root = copy_root(tmp)
+        mk = make_gates_root.posting
+        bad = mk("greenhouse:900311", "Microbiologist II", make_gates_root.gh(900311),
+                 apply_url="file://files.example.com/share/apply.html")
+        good = mk("greenhouse:900312", "QC Microbiologist", make_gates_root.gh(900312))
+        run_all(root, postings=[bad, good])
+        rows = {r["job_key"]: r for r in discards(root)}
+        assert rows["greenhouse:900311"]["reason"] == "host:not-web", rows
+        assert "greenhouse:900312" in pool(root)
 
 
 def test_g9_requirements():
@@ -624,7 +950,9 @@ def main():
                test_ai_text_parked_once, test_profile_edit_reopens, test_two_stage_keep, test_dormant_board, test_explain, test_terms,
                test_preset, test_live_day_corpus, test_place_rules, test_detail_rejudged, test_untitled_list_records,
                test_pass_stops_halfway, test_g9_requirements, test_pool_age_basis, test_g1_lookalike_host,
-               test_two_openings_one_title):
+               test_two_openings_one_title, test_link_schemes_and_canonical_hosts, test_one_bad_posting,
+               test_requirement_scan_bounded, test_labeled_pool_d6, test_d6_title_rules, test_g9_avoid,
+               test_fit_overlap, test_office_labels, test_second_ring_set_aside):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

@@ -46,6 +46,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import argfile  # noqa: E402
 import jobfs  # noqa: E402
 import jobkey  # noqa: E402
 
@@ -619,8 +620,9 @@ def cmd_employers(a):
             n += 1
             print(f"MISSING {r['employer_name']} | {', '.join(gaps)}")
     if n:
-        print('NEXT ask the user once per employer, then: tracker.py employer-set --employer "<name>" '
-              '--street ... --city ... --state ... --zip ... --phone ... --main-website ... --source user')
+        print('NEXT ask the user once per employer, then write {"employer", "street", "city", "state", "zip", '
+              '"phone", "main-website", "source": "user"} to claude/args.json and run tracker.py employer-set '
+              '--args-file claude/args.json')
     else:
         print("EMPLOYERS ok")
     return 0
@@ -669,7 +671,7 @@ def main(argv=None):
             stream.reconfigure(encoding="utf-8", errors="replace")
         except (AttributeError, ValueError):
             pass
-    args = build_parser().parse_args(argv)
+    args = argfile.parse(build_parser(), argv)  # outside text arrives in a JSON file, never inline
     try:
         return args.func(args)
     except (WsError, jobfs.ConfigError) as e:

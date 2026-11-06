@@ -19,7 +19,7 @@ daily (05:30): every watch-list board and aggregator lane (one shared
 netfetch.Fetcher, list gates before detail calls), the lead resolver, the
 detail gates into state/pool.json, the queue (jobqueue.build), per item the
 Tier B build (variants.tier_b) and the fill plan (answers.plan), upload
-staging, the do-yourself files (upload/E<n>_... and applications/_diy/<date>/),
+staging, the do-yourself files (upload/E<n>_... and applications/_diy/<date>/E<n>_<Company>.md),
 network import (when network/raw changed) and match, today.md, review.html,
 reports/funnel.csv, family weights on the weekly day, and
 runner/out/status.json. It prints the BOARD, SOURCE, RESOLVE, GATES, QUEUE,
@@ -49,8 +49,9 @@ a fresh fill plan (REPLAN), answers the short requests in runner/in/requests
 runner/out/results/<id>.json), moves upload files of applied items, stages
 late files (an addendum's new numbers; during a session too), and re-reads
 the next 3 items' postings once a day (LIVENESS, CLOSED;
-runner/out/liveness.json; only on a job-site host or the posting's own
-host). It never runs a daily or a long request (resolve_leads, probe_url,
+runner/out/liveness.json; only through the URL discovery read, when the
+unattended policy allows it or its ATS API endpoint; an item that fails is
+its own ERROR line). It never runs a daily or a long request (resolve_leads, probe_url,
 rebuild_queue) itself: when today has no ok daily after 05:30 (missed,
 failed, or waited for a session that ended), a long request waits, or this
 morning's discovery had no network and one job site's robots.txt answers
@@ -71,8 +72,17 @@ Excel on funnel.csv) is a WARN line; it is retried later.
 Requests (spec 2.5): resolve_leads, probe_url {url, company, title, location},
 fetch_posting {url | n | job_key}, build {folder, json}, stage_tier_a
 {folder | n}, more {limit}, import_network, rebuild_queue. Arguments are
-company names, URLs (netfetch policy) and folders inside the root; anything
-else is rejected with ok=false.
+company names, URLs (netfetch policy on the canonical host: bad-url, job
+boards, R3 list endpoints and non-public links are refused) and folders
+inside the root; anything else is rejected with ok=false. A request's own
+url is allowed for that request only. Before a request runs, an attempt
+marker goes to state/request_starts/<id>.json (removed when it ends); a
+request started twice without finishing is answered ok=false (REJECTED
+started 2 times, never finished), never run a third time.
+
+The daily fails soft per unit (shared decision 2): a board, lane, the lead
+resolver, the gates or the network import that raises is one ERROR line
+naming it and the exception type, and the daily still builds the queue.
 
 selftest prints PASS or FAIL lines for python, packages, tzdata, folder
 write, robots and build, plus the reach checks with --net (a site that does
@@ -108,6 +118,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))  # the app folder only, never the JobSearch folder (8.6)
+import argfile  # noqa: E402
 import events  # noqa: E402
 import jobfs  # noqa: E402
 
@@ -133,6 +144,7 @@ BEAT_MINUTES = 20
 REQUEST_MAX = 64 * 1024
 REQUEST_YOUNG = 5
 REQUEST_TRIES = 3
+REQUEST_STARTS_MAX = 2   # a request started this often without finishing is answered ok=false (decision 3)
 NAME_MAX = 120
 URL_MAX = 2000
 FUNNEL_COLUMNS = ["date", "seen_by_lane", "discarded_by_gate", "pool", "queued", "started", "submitted",
@@ -268,6 +280,19 @@ def optional(run, name, fn, *args):
         return None
 
 
+def unit(run, name, fn, *args, default=None):
+    """One unit of work that fails soft (shared decision 2): an exception
+    becomes one ERROR line naming the unit and the exception type, and the
+    run goes on with `default` (a daily always reaches the queue build)."""
+    try:
+        return fn(*args)
+    except Exception as e:  # one unit's bug or bad data never stops the run
+        line = f"{name}: {type(e).__name__}: {str(e)[:160]}"
+        run.out(f"ERROR {line}")
+        run.errors.append(line)
+        return default
+
+
 def quiet_call(fn, *args, **kw):
     """Run a v1.1-style main() that prints; returns (code, lines)."""
     buf = io.StringIO()
@@ -311,6 +336,10 @@ class Run:
         line = redact(line)
         print(line)
         self.log(line)
+
+    def echo(self, line):
+        """Print a line that is already in the log (no second log line)."""
+        print(redact(line))
 
     def log(self, line):
         """logs/runner_<date>.log, one line as it happens with its own time, so a
@@ -608,37 +637,51 @@ def load_keys(run):
     return aggregators.load_keys()
 
 
+GATE_COUNTS = ("seen", "passed", "discarded", "parked", "diy", "skipped")
+
+
 def discover(run):
-    """Boards, aggregators, the resolver and the gates. Returns (counts, results, lanes)."""
+    """Boards, aggregators, the resolver and the gates. Returns (counts, results, lanes).
+    Each stage fails soft (shared decision 2): one that raises is one ERROR
+    line naming it, the others still run, and the daily goes on to the
+    queue build with what was found (the pool from earlier days included)."""
     import aggregators
     import boards
     import gates
     import leads
     import resolve
     f = run.fetcher()
-    gate_run = gates.GateRun(run.root, run.day, fetcher=f)
-    results = boards.poll(run.root, fetcher=f, keep=gate_run.keep, emit=run.out)
-    offline = boards.no_network(results)
+    gate_run = unit(run, "gates", lambda: gates.GateRun(run.root, run.day, fetcher=f, emit=run.out))
+    keep = gate_run.keep if gate_run is not None else None
+    results = unit(run, "boards", lambda: boards.poll(run.root, fetcher=f, keep=keep, emit=run.out), default=[])
+    offline = bool(results) and boards.no_network(results)
     if offline:  # the PC had no network yet: say so, never a silent day
         run.errors.append(f"offline {run.day.isoformat()}: no job board answered this morning")
     # A tick retries discovery once a job site answers (offline_retry); a run
     # that reached the boards clears the flag.
     run.write_status(discovery_offline=run.day.isoformat() if offline else None)
-    lanes = aggregators.run(run.root, fetcher=f, keys=load_keys(run), salt=leads.salt(run.root), emit=run.out)
+    lanes = unit(run, "aggregators", lambda: aggregators.run(run.root, fetcher=f, keys=load_keys(run),
+                                                            salt=leads.salt(run.root), emit=run.out), default=[])
     readings = [rd for res in results for rd in res.readings] + [rd for ln in lanes for rd in ln.postings]
     extra = [ld for ln in lanes for ld in ln.leads]
-    out = resolve.Resolver(run.root, run.day, f, emit=run.log).run(readings=readings, extra_leads=extra)
-    run.out(next((ln for ln in reversed(run.log_lines) if ln.startswith("RESOLVE ")), "RESOLVE leads=0"))
-    new = gate_run.process(readings + out.readings) or []
-    run.new_finds = [it for it in new if not it.get("parked") and not it.get("diy")]
-    counts = gate_run.save()
+    out = unit(run, "leads", lambda: resolve.Resolver(run.root, run.day, f, emit=run.log).run(
+        readings=readings, extra_leads=extra), default=resolve.Outcome())
+    # resolve logged its RESOLVE line itself: print it, never log it twice (L2-07)
+    run.echo(next((ln for ln in reversed(run.log_lines) if ln.startswith("RESOLVE ")), "RESOLVE leads=0"))
+    counts = dict.fromkeys(GATE_COUNTS, 0)
+    if gate_run is not None:
+        new = unit(run, "gates", gate_run.process, readings + out.readings, default=[]) or []
+        run.new_finds = [it for it in new if not it.get("parked") and not it.get("diy")]
+        counts = unit(run, "pool", gate_run.save, default=counts)
     if out.discarded:  # unresolved leads are discards too (3.6 step 6, 3.13)
-        counts["discarded"] += len(out.discarded)
-        counts["seen"] += len(out.discarded)
-        pool = gates.load_pool(run.root)
-        gates.save_pool(run.root, pool["items"], counts=counts, needs_you=pool.get("needs_you"), date_=run.day)
-    run.out("GATES " + " ".join(f"{k}={counts[k]}" for k in ("seen", "passed", "discarded", "parked", "diy",
-                                                             "skipped")))
+        counts["discarded"] = counts.get("discarded", 0) + len(out.discarded)
+        counts["seen"] = counts.get("seen", 0) + len(out.discarded)
+
+        def note_discards():
+            pool = gates.load_pool(run.root)
+            gates.save_pool(run.root, pool["items"], counts=counts, needs_you=pool.get("needs_you"), date_=run.day)
+        unit(run, "pool", note_discards)
+    run.out("GATES " + " ".join(f"{k}={counts.get(k, 0)}" for k in GATE_COUNTS))
     return counts, results, lanes
 
 
@@ -647,7 +690,7 @@ def gate_new(run, readings):
     import gates
     if not readings:
         return []
-    gate_run = gates.GateRun(run.root, run.day, fetcher=run.fetcher())
+    gate_run = gates.GateRun(run.root, run.day, fetcher=run.fetcher(), emit=run.out)
     new = gate_run.process(readings)
     gate_run.save()
     return [it for it in new if not it.get("parked") and not it.get("diy")]
@@ -709,12 +752,22 @@ def network_import(run, force=False):
     fp = raw_fingerprint(run.folder)
     if not fp or (not force and read_json(path, {}).get("fingerprint") == fp):
         return None
-    code, lines = quiet_call(network.main, ["import", "--root", str(run.root)])
+    code, lines, failed = 1, [], ""
+    try:
+        code, lines = quiet_call(network.main, ["import", "--root", str(run.root)])
+    except Exception as e:  # a corrupt or odd zip (zlib.error, csv.Error, ...): one ERROR line (shared decision 2)
+        failed = f"network import: {type(e).__name__}: {str(e)[:160]}"
+    finally:
+        # Recorded on any outcome, so a bad file is not retried every tick
+        # (idle() stays true); a new drop changes the fingerprint.
+        jobfs.atomic_write_text(path, json.dumps({"fingerprint": fp, "on": run.day.isoformat(),
+                                                  "exit": code}) + "\n")
     for line in lines:
         run.log(line)
-    # Recorded even after a failure, so a bad file is not retried every tick;
-    # a new drop changes the fingerprint.
-    jobfs.atomic_write_text(path, json.dumps({"fingerprint": fp, "on": run.day.isoformat(), "exit": code}) + "\n")
+    if failed:
+        run.out(f"ERROR {failed}")
+        run.errors.append(failed)
+        return code
     run.out(next((ln for ln in reversed(lines) if ln.startswith(("WROTE", "NONE", "IMPORTED"))),
                  f"NETWORK import exit {code}"))
     return code
@@ -1006,7 +1059,8 @@ def stage_tier_a(run, item):
     folder = run.root / str(item.get("folder", ""))
     built = jobqueue.final_files(folder)
     if not built[0]:
-        raise RequestError(f"no Tier A build passed its checks in {item.get('folder')} (no final.json)")
+        raise RequestError(f"no Tier A build passed its checks in {item.get('folder')} (no final.json, or "
+                           "it cites a library entry corrected since the build: build it again)")
     name = Path(item.get("upload", "")).name
     if not name:
         raise RequestError(f"#{item.get('n')} has no upload name")
@@ -1085,7 +1139,7 @@ def base_pdf(run, family, cache):
 
 
 def diy_sheet(run, company, title, location, upload):
-    """applications/_diy/<date>/<Company>.md: what the user types, from the profile and the bank. No link (R2)."""
+    """applications/_diy/<date>/E<n>_<Company>.md: what the user types, from the profile and the bank. No link (R2)."""
     import answers
     values, _ = answers.load_profile(run.folder.profile)
     lines = [f"# {company} - {title}", ""]
@@ -1126,7 +1180,9 @@ def stage_diy(run):
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(pdf, dest)
             staged += 1
-        sheet = run.folder.diy_dir(run.day) / f"{jobfs.ascii_name(company or 'Employer', 40)}.md"
+        # E<n>_<Company>.md, the same n as its upload file: two do-it-yourself
+        # jobs at one employer get two sheets (SEC-12)
+        sheet = run.folder.diy_dir(run.day) / f"E{i}_{jobfs.ascii_name(company or 'Employer', 40)}.md"
         jobfs.atomic_write_text(sheet, diy_sheet(run, company, title, location,
                                                  f"upload\\{dest.name}" if pdf else ""))
     run.out(f"DIY {listed} item{'s' if listed != 1 else ''}, {staged} file{'s' if staged != 1 else ''} staged"
@@ -1169,7 +1225,9 @@ def daily(run):
             run.out(f"DAILY ok queue={q.get('size', 0)} unchanged")
             return 0
         return finish_daily(run, q, prep, last.get("counts") or {})
-    counts, results, _ = discover(run)
+    # Discovery fails soft (shared decision 2): the queue is built either way,
+    # from the pool earlier days left when nothing new came in.
+    counts, results, _ = unit(run, "discovery", discover, run, default=(dict.fromkeys(GATE_COUNTS, 0), [], []))
     optional(run, "network import", network_import, run)
     lines = []
     written = jobqueue.build(run.root, run.day, prep=prep.item, emit=lines.append)
@@ -1205,7 +1263,7 @@ def rediscover(run, prep):
     rerun that is offline again keeps the flag for a later tick. Returns 1:
     the day's status is rewritten either way."""
     import boards
-    _, results, _ = discover(run)
+    _, results, _ = unit(run, "discovery", discover, run, default=(dict.fromkeys(GATE_COUNTS, 0), [], []))
     if boards.no_network(results):
         run.out("REDISCOVER offline again: the next tick tries once a job site answers")
         return 1
@@ -1416,7 +1474,7 @@ def offline_retry(run):
     except (netfetch.FetchError, OSError):
         up = False
     run.write_status(offline_probe={"date": run.day.isoformat(), "at": jobfs.now_iso(run.root), "ok": up})
-    run.log(f"OFFLINE probe {netfetch.host_of(url)}: {'answered' if up else 'no answer'}")
+    run.log(f"OFFLINE probe {netfetch.host_or_blank(url) or '-'}: {'answered' if up else 'no answer'}")
     if up:
         start_daily(run, "offline")
     return True
@@ -1549,25 +1607,26 @@ def user_addendum(run):
 
 
 def liveness_url(run, it, f):
-    """(url, None) for an item's posting the runner may re-read unattended, or
-    (None, why). The URL's host must be one the unattended policy allows (the
-    ATS hosts, the watch-list careers hosts) or the host of the posting's own
-    url (where the board listed it); a board-supplied apply_url on any other
-    host (an ad or tracking link) is never fetched."""
+    """(url, None) for the URL the runner may re-read an item's posting
+    through unattended, or (None, why). Only the URL discovery read is used
+    (SEC-05): the posting's own url in posting.json (the runner wrote it),
+    read when the unattended policy allows it as it stands or allows its ATS
+    API endpoint (posting.classify; resolve reads that first). A job from a
+    link has no posting.json: its link is read only when the policy allows it
+    as it stands. No host is ever added to the policy here, so an apply_url
+    from board data (an ad or tracking host) is never fetched."""
     import netfetch
+    import posting
     own = str(read_json(run.root / str(it.get("folder", "")) / "posting.json", {}).get("url") or "")
-    own_host = netfetch.host_of(own) if own else ""
-    for url in (str(it.get("apply_url") or ""), own):
-        host = netfetch.host_of(url) if url else ""
-        if not host:
-            continue
-        if f.policy.reason(url) is None:
-            return url, None
-        if host == own_host:
-            f.policy.allow_host(host)
-            if f.policy.reason(url) is None:
-                return url, None
-    return None, f"skip host {netfetch.host_of(str(it.get('apply_url') or '')) or 'none'}: not a job-site host"
+    url = own or (str(it.get("apply_url") or "") if it.get("added_by") else "")
+    if not url:
+        return None, "skip: no posting url from discovery"
+    if f.policy.reason(url) is None:
+        return url, None
+    api = (posting.classify(url) or {}).get("api")
+    if api and f.policy.reason(api) is None:
+        return url, None
+    return None, f"skip host {netfetch.host_or_blank(url) or 'bad-url'}: not a job-site host"
 
 
 def liveness(run, items):
@@ -1580,25 +1639,31 @@ def liveness(run, items):
     live = data.setdefault("items", {})
     closed = []
     for it in items:
+        key = str(it.get("job_key") or f"#{it.get('n')}")
         rec = {"checked": jobfs.now_iso(run.root), "n": it.get("n"), "closed": False, "why": ""}
         try:
             f = run.fetcher()
             url, why = liveness_url(run, it, f)
             if url is None:
                 rec["why"] = why
-                live[it["job_key"]] = rec
+                live[key] = rec
                 continue
             reading = posting.read_posting(url, fetcher=f, root=run.root, lane="liveness",
                                            first_seen=run.day.isoformat(), ats=it.get("ats") or None)
             rec["closed"] = bool(reading.posting.closed)
         except netfetch.Denied as e:
             rec["why"] = f"deny {e.reason}"
-        except (netfetch.FetchError, OSError, ValueError) as e:
+        except (netfetch.FetchError, OSError) as e:  # the site did not answer: tried again tomorrow
             rec["why"] = f"error {str(e)[:120]}"
-        live[it["job_key"]] = rec
+        except Exception as e:  # odd page data: this item's ERROR line, the rest still run (decision 2)
+            rec["why"] = f"error {type(e).__name__}"
+            line = f"liveness #{int(it.get('n') or 0):02d} {key}: {type(e).__name__}: {str(e)[:120]}"
+            run.out(f"ERROR {line}")
+            run.errors.append(line)
+        live[key] = rec
         if rec["closed"]:
-            closed.append(it["job_key"])
-            run.out(f"CLOSED #{int(it.get('n') or 0):02d} {it['job_key']}")
+            closed.append(key)
+            run.out(f"CLOSED #{int(it.get('n') or 0):02d} {key}")
     jobfs.atomic_write_text(path, json.dumps(data, indent=1, sort_keys=True) + "\n")
     if closed:
         pool = gates.load_pool(run.root)
@@ -1676,7 +1741,10 @@ def check_arg(run, op, key, kind, value):
         import netfetch
         if len(value) > URL_MAX or not re.match(r"^https?://", value, re.I):
             raise RequestError(f"{key} is not an http(s) URL")
-        deny = netfetch.hard_deny(value)
+        # The attended policy on netfetch's canonical host (shared decision 1):
+        # bad-url (a host that is not plain a-z 0-9 . -), job-board, r3-list and
+        # non-public links are refused when the file is written and when read.
+        deny = netfetch.Policy(unattended=False).reason(value)
         if deny:
             raise RequestError(f"DENY {deny}")
         return value
@@ -1776,10 +1844,24 @@ def handle_request(run, path, in_tick=False):
     if in_tick and op in LONG_OPS:
         run.log(f"REQUEST {req_id} {op} waits for the daily (a long request never runs inside a tick)")
         return False
+    # The attempt marker (shared decision 3): written before the work starts
+    # and removed when it ends, so a request whose run was stopped twice (a
+    # time limit, a page that hangs the reader) is answered, not retried forever.
+    starts = request_starts(run, req_id)
+    if starts >= REQUEST_STARTS_MAX:
+        why = (f"this request was started {starts} times and never finished (the runner was stopped while "
+               "working on it), so it is not tried again")
+        write_result(run, req_id, op, False, [f"REJECTED {why}"])
+        run.out(f"REQUEST {req_id} {op} REJECTED started {starts} times, never finished")
+        finish_request(run, path)
+        clear_request_start(run, req_id)
+        return True
+    note_request_start(run, req_id, op, starts + 1)
     lines = []
     start = len(run.log_lines)
     try:
-        ok, result = REQUEST_HANDLERS[op](run, req["args"], lines)
+        with request_scope(run):
+            ok, result = REQUEST_HANDLERS[op](run, req["args"], lines)
     except RequestError as e:
         ok, result = False, {}
         lines.append(f"ERROR {e}")
@@ -1790,7 +1872,57 @@ def handle_request(run, path, in_tick=False):
     write_result(run, req_id, op, ok, lines, result)
     run.out(f"REQUEST {req_id} {op} {'ok' if ok else 'failed'}")
     finish_request(run, path)
+    clear_request_start(run, req_id)
     return True
+
+
+def request_start_path(run, req_id):
+    return run.folder.state / "request_starts" / f"{req_id}.json"
+
+
+def request_starts(run, req_id):
+    """How many times this request was started and did not finish."""
+    data = read_json(request_start_path(run, req_id), {})
+    try:
+        return max(0, int(data.get("starts") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def note_request_start(run, req_id, op, starts):
+    path = request_start_path(run, req_id)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        jobfs.atomic_write_text(path, json.dumps({"id": req_id, "op": op, "starts": starts,
+                                                  "at": jobfs.now_iso(run.root)}) + "\n")
+    except OSError as e:  # the request still runs; only its stop count is lost
+        run.log(f"WARN request {req_id}: attempt marker not written ({type(e).__name__})")
+
+
+def clear_request_start(run, req_id):
+    try:
+        request_start_path(run, req_id).unlink(missing_ok=True)
+    except OSError:
+        pass  # a leftover marker only counts if the same request id comes back
+
+
+@contextlib.contextmanager
+def request_scope(run):
+    """The run's shared fetcher with a copy of its policy for one request: a
+    host a request allows (its own url: probe_url, fetch_posting) holds for
+    that request only and never for the rest of the run (SEC-05)."""
+    import copy
+    f = run.fetcher()
+    shared = f.policy
+    try:
+        f.policy = copy.deepcopy(shared)
+    except Exception:  # a policy that cannot be copied: a fresh one for this folder
+        import netfetch
+        f.policy = netfetch.Policy(run.root)
+    try:
+        yield f
+    finally:
+        f.policy = shared
 
 
 def find_item(run, args):
@@ -1834,11 +1966,13 @@ def req_fetch_posting(run, args, lines):
     f = run.fetcher()
     if not url:
         item = find_item(run, args)
-        url, why = liveness_url(run, item, f)  # the board's apply_url: the same host rule as liveness
+        url, why = liveness_url(run, item, f)  # the URL discovery read: the same rule as liveness
         if url is None:
             return False, {"deny": why}
     else:
-        f.policy.allow_host(netfetch.host_of(url))  # a link the session named, checked by check_arg
+        # A link the session named (check_arg refused bad-url and job boards):
+        # allowed on this request's policy copy only (request_scope).
+        f.policy.allow_host(netfetch.host_of(url))
     try:
         reading = posting.read_posting(url, fetcher=f, root=run.root, lane="liveness",
                                        first_seen=run.day.isoformat(), ats=(item or {}).get("ats") or None)
@@ -1847,7 +1981,7 @@ def req_fetch_posting(run, args, lines):
     except netfetch.FetchError as e:
         return False, {"error": str(e)[:200]}
     p = reading.posting
-    if item:
+    if item and item.get("job_key"):
         live = read_json(run.folder.runner_out / "liveness.json", {})
         live.setdefault("items", {})[item["job_key"]] = {"checked": jobfs.now_iso(run.root), "n": item.get("n"),
                                                          "closed": bool(p.closed), "why": "request"}
@@ -2135,7 +2269,10 @@ def build_parser():
     p = sub.add_parser("request", help="Write a request file for the runner (Claude's side).", allow_abbrev=False)
     p.add_argument("op", choices=sorted(OPS))
     p.add_argument("--root")
-    p.add_argument("--json", default="{}", help="the request arguments as a JSON object")
+    src = p.add_mutually_exclusive_group()
+    src.add_argument("--json", default="{}", help="the request arguments as a JSON object (codes and numbers only)")
+    src.add_argument("--json-file", help="the request arguments from a JSON file under <folder>/claude/ "
+                                         "(argfile.py; read once, then removed): text from outside goes here")
     p.set_defaults(cmd="request")
     return ap
 
@@ -2179,10 +2316,16 @@ def watchdog(run, seconds):
 
 def cmd_request(args):
     try:
-        req_args = json.loads(args.json)
+        if args.json_file:
+            req_args = argfile.load(args.json_file, args.root)
+        else:
+            req_args = json.loads(args.json)
         if not isinstance(req_args, dict):
             raise ValueError("not an object")
         req_id, path = make_request(args.root, args.op, req_args)
+    except argfile.ArgfileError as e:
+        print(f"ERROR --json-file {e}")
+        return 1
     except ValueError as e:
         print(f"ERROR --json: {e}")
         return 1
@@ -2199,7 +2342,7 @@ def main(argv=None):
             stream.reconfigure(encoding="utf-8", errors="replace")
         except (AttributeError, ValueError):
             pass
-    args = build_parser().parse_args(argv)
+    args = argfile.parse(build_parser(), argv)  # outside text arrives in a JSON file, never inline
     if not resolve_root(args):
         return 1
     if args.cmd == "request":

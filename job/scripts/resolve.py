@@ -82,7 +82,9 @@ INDUSTRY_WORDS = {"bio", "biosciences", "bioscience", "biotherapeutics", "therap
                   "pharma", "labs", "laboratories", "sciences", "science", "technologies", "technology",
                   "diagnostics", "genomics", "health", "medical", "biologics", "biotech", "systems"}
 LANE_OF = {"linkedin_alert": "alert:linkedin", "adzuna": "adzuna", "muse": "muse", "usajobs": "usajobs"}
-HTML_SCAN_MAX = 2_000_000
+HTML_SCAN_MAX = 512_000   # detect and the iframe scan read at most the first 512 KB of a page
+DETECT_TOKENS_MAX = 400   # URL-like tokens around ATS host names, per page
+TOKEN_BACK, TOKEN_AHEAD = 200, 600
 
 # ATS detect patterns over a careers page's HTML and iframe URLs (ats sources
 # "detect"). Groups give board, then site and host where the ATS has them.
@@ -159,7 +161,7 @@ def read_csv(path):
     try:
         with open(path, encoding="utf-8-sig", newline="") as f:
             return [dict(r) for r in csv.DictReader(f)]
-    except OSError:
+    except (OSError, csv.Error, UnicodeDecodeError):
         return []
 
 
@@ -176,7 +178,7 @@ def read_json(path, default):
     try:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         return data if isinstance(data, type(default)) else default
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):
         return default
 
 
@@ -212,15 +214,51 @@ def matches(lead, readings, places):
 
 # ---------- detection ----------
 
+# The ATS host names DETECT looks for. detect() finds these literals in one
+# pass, cuts the URL-like token around each (bounded on both sides at a quote,
+# space or angle bracket) and runs the DETECT patterns on those tokens only,
+# so a hostile page costs linear time whatever it holds.
+ATS_HOSTS = re.compile(r"greenhouse\.io|lever\.co|ashbyhq\.com|myworkdayjobs\.com|myworkdaysite\.com|bamboohr\.com"
+                       r"|breezy\.hr|workable\.com|applytojob\.com|pinpointhq\.com|jobs\.personio\.(?:de|com)"
+                       r"|teamtailor\.com|rippling\.com|recruitee\.com|jobvite\.com|smartrecruiters\.com|icims\.com"
+                       r"|ultipro\.com|oraclecloud\.com|paylocity\.com|dayforcehcm\.com|workforcenow\.adp\.com"
+                       r"|paycomonline\.net", re.I)
+TOKEN_END = re.compile(r"[\s\"'<>()\[\]{}`]")
+
+
+def url_tokens(text):
+    """(start, token) for each URL-like token holding an ATS host name, in page
+    order, from the first HTML_SCAN_MAX characters; at most DETECT_TOKENS_MAX."""
+    text = (text or "")[:HTML_SCAN_MAX]
+    out, last_end = [], -1
+    for m in ATS_HOSTS.finditer(text):
+        if m.start() < last_end:
+            continue  # inside the token already taken
+        lo = max(0, m.start() - TOKEN_BACK, last_end)
+        back = text[lo:m.start()]
+        cut = max((back.rfind(c) for c in " \t\r\n\"'<>()[]{}`"), default=-1)
+        start = lo + cut + 1
+        ahead = TOKEN_END.search(text, m.end(), min(len(text), m.end() + TOKEN_AHEAD))
+        end = ahead.start() if ahead else min(len(text), m.end() + TOKEN_AHEAD)
+        out.append((start, text[start:end]))
+        last_end = end
+        if len(out) >= DETECT_TOKENS_MAX:
+            break
+    return out
+
+
 def detect(text):
-    """[{ats, board, site, host}] found in HTML or a URL, first occurrence order."""
+    """[{ats, board, site, host}] found in HTML or a URL, first occurrence order.
+    Scans only the URL-like tokens around ATS host names (url_tokens), with
+    bounded patterns; JSON's escaped slashes (https:\\/\\/...) read as '/'."""
     found, seen = [], set()
-    for ats, rx in DETECT:
-        for m in rx.finditer(text or ""):
-            spec = spec_of_match(ats, m)
-            if spec and (spec["ats"], spec["board"].lower()) not in seen:
-                seen.add((spec["ats"], spec["board"].lower()))
-                found.append(dict(spec, at=m.start()))
+    for start, token in url_tokens((text or "")[:HTML_SCAN_MAX].replace("\\/", "/")):
+        for ats, rx in DETECT:
+            for m in rx.finditer(token):
+                spec = spec_of_match(ats, m)
+                if spec and (spec["ats"], spec["board"].lower()) not in seen:
+                    seen.add((spec["ats"], spec["board"].lower()))
+                    found.append(dict(spec, at=start + m.start()))
     return [{k: v for k, v in s.items() if k != "at"} for s in sorted(found, key=lambda s: s["at"])]
 
 
@@ -271,11 +309,17 @@ class Resolver:
         self.emit = emit
         self.places = [str(p) for p in (jobfs.search_profile(root).get("home") or {}).get("places") or []]
         self.state = read_json(self.folder.state / "leads_state.json", {})
-        self.state.setdefault("leads", {})
+        if not isinstance(self.state.get("leads"), dict):
+            self.state["leads"] = {}
+        self.state["leads"] = {k: v for k, v in self.state["leads"].items()
+                               if isinstance(v, dict) and isinstance(v.get("status"), str)
+                               and isinstance(v.get("company"), str) and isinstance(v.get("title"), str)
+                               and isinstance(v.get("tries"), list) and isinstance(v.get("job_keys"), list)}
         self.company_ats = read_json(self.folder.company_ats_json, {})
         self.company_ats.pop("_rev", None)
         self.company_ats.pop("_sha256", None)
-        self.cache = read_csv(self.folder.probe_cache_csv)
+        self.cache = [r for r in read_csv(self.folder.probe_cache_csv)
+                      if all(isinstance(r.get(c), str) for c in PROBE_CACHE_COLUMNS)]
         self.auto = read_csv(self.folder.watchlist_auto_csv)
         self.recruitee = boards.recruitee_enabled(root)
 
@@ -286,11 +330,15 @@ class Resolver:
         rows = []
         if self.folder.leads.exists():
             for path in sorted(self.folder.leads.glob("*.jsonl")):
-                rows += jobfs.read_jsonl(path)
+                try:
+                    rows += jobfs.read_jsonl(path)
+                except Exception as e:  # noqa: BLE001  a locked or odd lead file is skipped this run, named
+                    self.emit(f"ERROR leads file {path.name[:80]}: {type(e).__name__}")
         rows += list(extra)
         leads = self.state["leads"]
         for ld in rows:
-            if not isinstance(ld, dict) or not ld.get("lead_id") or ld["lead_id"] in leads:
+            if not isinstance(ld, dict) or not isinstance(ld.get("lead_id"), str) or not ld["lead_id"] \
+                    or ld["lead_id"] in leads:
                 continue
             fields, why = leadslib.check_card(ld)
             if why or "linkedin.com" in json.dumps(ld).lower():
@@ -399,7 +447,11 @@ class Resolver:
                 self.emit(f"UNRESOLVED {lead['lead_id']} {lead['company']} day={len(lead['tries'])} expired")
                 self.give_up(group, out)
                 continue
-            found, why = self.resolve_group(lead, cnorm, list(readings), out)
+            try:
+                found, why = self.resolve_group(lead, cnorm, list(readings), out)
+            except Exception as e:  # noqa: BLE001  one lead's odd board or record never stops the run
+                self.emit(f"ERROR lead {lead['lead_id']} {lead['company'][:60]}: {type(e).__name__}")
+                continue  # not a try: the lead stays pending, and expires after LEAD_MAX_AGE days at worst
             ids = [g["lead_id"] for g in group]
             if found:
                 for r in found:
@@ -488,7 +540,7 @@ class Resolver:
         f = self.folder
         jobfs.atomic_write_text(f.state / "leads_state.json", json.dumps(self.state, indent=1, sort_keys=True) + "\n")
         jobfs.atomic_write_json(f.company_ats_json, dict(self.company_ats))
-        keep = [r for r in self.cache if r["result"] != "miss" or
+        keep = [r for r in self.cache if r.get("result") != "miss" or
                 (gates.to_date(r.get("date")) and (self.today - gates.to_date(r["date"])).days < MISS_DAYS)]
         write_csv(f.probe_cache_csv, PROBE_CACHE_COLUMNS, keep[-5000:])
         if self.auto:
@@ -561,7 +613,7 @@ def probe_url(root, url, company="", title="", location="", fetcher=None, offlin
             result["readings"].append(reading)
             emit(f"READ {reading.posting.job_key}")
         except Denied as e:
-            if not e.reason.startswith("robots"):
+            if not e.reason.startswith(("robots", "crawl-delay")):
                 result["deny"] = e.reason
                 emit(f"DENY {e.reason}")
                 return result

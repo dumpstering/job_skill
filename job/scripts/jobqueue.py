@@ -24,8 +24,8 @@ re-approval. They fill only slots nothing else can, queued last as Tier B with
 resume_status prep_failed (the card's re-approval line), and counts.variant_wait
 holds {family: jobs waiting}. The order: an item handed over on an earlier
 day with no `s` first (flag `unsubmitted`: ask whether it went through), then
-batch 1 (no-account Tier B items by score), the account block (new-account
-tenants grouped by tenant), the rest by score, and the prep_failed items
+batch 1 (no-account Tier B items by fit, best first), the account block
+(new-account tenants grouped by tenant), the rest by fit, and the prep_failed items
 last; never the same employer twice in a row and at most 3 in a row on one
 ATS host. Job folders get posting.md, posting.json and .runner_files. Folders
 of jobs that got no tracker row within 30 days move to
@@ -228,14 +228,16 @@ def day_items(root, day):
     """Every item of the day in number order: queue.json, its addenda, and the
     jobs from links whose added event the runner has not written into
     addendum_user.json yet."""
-    items, keys = [], set()
+    items, keys, numbers = [], set(), set()
     for p in queue_files(root, day):
         if p.exists():
             for it in read_json(p, {}).get("items") or []:
                 if isinstance(it, dict):
                     items.append(it)
                     keys.add(it.get("job_key"))
-    items += [it for it in events.user_items(root, day) if it["job_key"] not in keys]
+                    numbers.add(it.get("n"))
+    # A job from a link never takes a number a queue file gave (SEC-14).
+    items += [it for it in events.user_items(root, day) if it["job_key"] not in keys and it["n"] not in numbers]
     return sorted(items, key=lambda it: int(it.get("n") or 0))
 
 
@@ -308,7 +310,7 @@ class Context:
         out = set()
         for r in rows:
             s = str(r.get("Site") or "").strip().lower()
-            s = (netfetch.host_of(s) if "://" in s else s).removeprefix("www.")
+            s = (netfetch.host_or_blank(s) if "://" in s else s).removeprefix("www.")
             if s:
                 out.add(s)
         return out
@@ -345,7 +347,7 @@ class Context:
 def tenant_of(it):
     if (it.get("ats") or "") == "usajobs" or it.get("lane") == "usajobs":
         return "usajobs.gov"
-    return netfetch.host_of(it.get("apply_url") or it.get("url") or "")
+    return netfetch.host_or_blank(it.get("apply_url") or it.get("url") or "")
 
 
 # ---------- scoring ----------
@@ -396,6 +398,14 @@ def gone_for_good(st, reason, user_skips):
         (st == "skipped" and reason in PERMANENT_SKIPS) or user_skips >= USER_SKIP_DROP
 
 
+def refused_route(it):
+    """True when an item's apply link is one shared decision 1 refuses: a job
+    board, or a host that is not a plain web address. Such an item is never
+    queued, so no OPEN line points the browser at it."""
+    url = str(it.get("apply_url") or it.get("url") or "")
+    return bool(url) and bool(events.url_refusal(url))
+
+
 def eligible(pool, ctx, keys_taken=()):
     """Pool items that may be queued today, and the ones that leave the pool.
     Caps are not judged here: every build checks them again (a stored
@@ -418,6 +428,8 @@ def eligible(pool, ctx, keys_taken=()):
             continue
         if key in taken or it.get("parked") or it.get("diy"):
             continue
+        if refused_route(it):
+            continue  # a job-board or bad-url apply link (G12 discards these; an older pool may hold one)
         if st in DAY_ONLY_STATES and day == ctx.today:
             continue
         if st == "skipped" and reason == "user" and day and ctx.today < day + timedelta(days=USER_SKIP_HOLD_DAYS):
@@ -463,7 +475,7 @@ class Assembly:
         cn = jobkey.norm_company(it.get("company", ""))
         unit = caps.hiring_unit(it.get("title", ""), it.get("text") or "", cn) if caps.unit_mode(ctx.rules, cn) else ""
         v = caps.caps_verdict(ctx.index, cn, it.get("family", ""), it["job_key"], set(it.get("req_ids") or []),
-                              netfetch.host_of(it.get("apply_url") or it.get("url") or ""), ctx.today, ctx.rules,
+                              netfetch.host_or_blank(it.get("apply_url") or it.get("url") or ""), ctx.today, ctx.rules,
                               simhash=it.get("simhash") or None, unit=unit)
         if v[0] == "DEFER":
             self.deferred[it["job_key"]] = (it, v)
@@ -570,13 +582,14 @@ def take(out, primary, fillers):
 
 def sequence(picked, batch_size):
     """Jobs handed over on an earlier day with no `s` (to ask about), batch 1
-    (no-account Tier B by score), the account block (new-account tenants
-    grouped by tenant), the rest by score, and last the items waiting for a
-    variant approval (prep_failed)."""
+    (no-account Tier B by fit, then score), the account block (new-account
+    tenants grouped by tenant), the rest by fit, and last the items waiting
+    for a variant approval (prep_failed)."""
     for it in picked:
         it["_cn"] = caps.group({}, jobkey.norm_company(it.get("company", "")))
-        it["_host"] = netfetch.host_of(it.get("apply_url") or it.get("url") or "")
-    by_score = sorted(picked, key=lambda it: (-it["_score"], it["job_key"]))
+        it["_host"] = netfetch.host_or_blank(it.get("apply_url") or it.get("url") or "")
+    # best first (D6): the score picked them; fit (the TERMS overlap) orders them
+    by_score = sorted(picked, key=lambda it: (-float(it.get("fit") or 0), -it["_score"], it["job_key"]))
     first = [it for it in by_score if it.get("_carried")]
     last = [it for it in by_score if it.get("_held") and not it.get("_carried")]
     by_score = [it for it in by_score if it not in first and it not in last]
@@ -590,7 +603,7 @@ def sequence(picked, batch_size):
         take(out, batch1, rest)
     while len(out) < batch_size and rest:  # fewer than batch_size no-account items
         take(out, rest, [])
-    rest = sorted(batch1 + rest, key=lambda it: (-it["_score"], it["job_key"]))
+    rest = sorted(batch1 + rest, key=lambda it: (-float(it.get("fit") or 0), -it["_score"], it["job_key"]))
     after = len(out)
     tenants = list(dict.fromkeys(tenant_of(it) for it in block_items))
     groups = {t: [it for it in block_items if tenant_of(it) == t] for t in tenants}
@@ -683,10 +696,15 @@ def final_files(folder):
     """(resume, letter) Paths a strict Tier A build passed, from the job
     folder's final.json (shared decision 1: {"v": 1, "resume", "letter",
     "built_at", "verdict": "ok"}); None for a name that is not a plain file
-    name in the folder or is missing."""
+    name in the folder or is missing. (None, None) when the build cites a
+    library entry the user corrected since (shared decision 5): the item
+    keeps its Tier B files."""
+    import library
     folder = Path(folder)
     data = read_json(folder / "final.json", {})
     if data.get("v") != 1 or str(data.get("verdict", "")).lower() != "ok":
+        return None, None
+    if library.final_stale(folder, data):
         return None, None
 
     def one(name):
@@ -719,7 +737,7 @@ def queue_item(ctx, it, n, folder_rel):
     return {
         "n": n, "job_key": it["job_key"], "company": it.get("company", ""), "role": it.get("title", ""),
         "location": it.get("location", ""), "ats": it.get("ats", "") or "other",
-        "host": netfetch.host_of(it.get("apply_url") or it.get("url") or ""),
+        "host": netfetch.host_or_blank(it.get("apply_url") or it.get("url") or ""),
         "apply_url": it.get("apply_url") or it.get("url") or "",
         "referral_url": it.get("referral_url") or ctx.referral_urls.get(it["job_key"], ""),
         "folder": folder_rel, "family": it.get("family", ""), "mode": it.get("mode") or "industry",
@@ -775,7 +793,7 @@ def usable_supply(ctx, cands, tier_a):
         cn = jobkey.norm_company(it.get("company", ""))
         unit = caps.hiring_unit(it.get("title", ""), it.get("text") or "", cn) if caps.unit_mode(rules, cn) else ""
         v = caps.caps_verdict(index, cn, it.get("family", ""), it["job_key"], set(it.get("req_ids") or []),
-                              netfetch.host_of(it.get("apply_url") or it.get("url") or ""), ctx.today, rules,
+                              netfetch.host_or_blank(it.get("apply_url") or it.get("url") or ""), ctx.today, rules,
                               simhash=it.get("simhash") or None, unit=unit)
         if v[0] != "ALLOW":
             continue
@@ -1093,10 +1111,10 @@ def account_for(root, ats, url, store=None):
     sites = set()
     for r in (store.accounts.rows() if store is not None and getattr(store, "accounts", None) is not None else []):
         s = str(r.get("Site") or "").strip().lower()
-        s = (netfetch.host_of(s) if "://" in s else s).removeprefix("www.")
+        s = (netfetch.host_or_blank(s) if "://" in s else s).removeprefix("www.")
         if s:
             sites.add(s)
-    host = "usajobs.gov" if ats == "usajobs" else netfetch.host_of(url or "")
+    host = "usajobs.gov" if ats == "usajobs" else netfetch.host_or_blank(url or "")
     return "exists" if host and any(host == s or host.endswith("." + s) or s in host for s in sites) else "new"
 
 
@@ -1129,10 +1147,12 @@ def user_item(root, n, job_key, folder_rel, via, family="", store=None):
     ats = prefix if prefix in ATS_PROFILES else "other"
     prof = profile_of(ats)
     url = head.get("URL", "")
+    if url and events.url_refusal(url):
+        url = ""  # a job-board or bad-url link is never recorded as the apply link (shared decision 1)
     company = head.get("Company", "") or "Employer"
     account = account_for(root, ats, url, store)
     it = {"n": n, "job_key": job_key, "company": company, "role": head.get("Role", ""),
-          "location": head.get("Location", ""), "ats": ats, "host": netfetch.host_of(url) if url else "",
+          "location": head.get("Location", ""), "ats": ats, "host": netfetch.host_or_blank(url) if url else "",
           "apply_url": url, "referral_url": "", "folder": folder_rel, "family": family or "", "mode": "industry",
           "tier": "A", "tier_reason": "user", "variant": "", "posted": head.get("Posted") or None,
           "age_days": None, "band": "", "repost_of": None, "score": 0, "score_parts": {k: 0 for k in SCORE_PARTS},
@@ -1154,14 +1174,24 @@ def user_addendum(root, today=None, emit=print):
     path = f.queue_dir(today) / "addendum_user.json"
     old = read_json(path, {})
     items = {it["job_key"]: it for it in old.get("items") or [] if isinstance(it, dict) and it.get("job_key")}
+    # Numbers and keys the runner's own files gave today: an added event never takes one (SEC-14).
+    given_n, given_keys = set(), set()
+    for p in queue_files(root, today):
+        if p.name != path.name and p.exists():
+            for it in read_json(p, {}).get("items") or []:
+                if isinstance(it, dict):
+                    given_n.add(it.get("n"))
+                    given_keys.add(it.get("job_key"))
     for ev_it in events.user_items(root, today):
-        if ev_it["job_key"] in items:
+        if ev_it["job_key"] in items or ev_it["job_key"] in given_keys or ev_it["n"] in given_n:
             continue
-        # The full 2.5 item, with what the session recorded at the add kept as it was.
+        # The full 2.5 item, with what the session recorded at the add kept as it
+        # was; the link, its host and the upload name always come from the job
+        # folder's posting.md and the item's own number, never from the event.
         full = user_item(root, ev_it["n"], ev_it["job_key"], ev_it.get("folder", ""), ev_it["added_by"],
                          ev_it.get("family", ""))
-        full.update({k: ev_it[k] for k in ("company", "role", "location", "ats", "host", "apply_url", "account",
-                                           "attach", "upload") if ev_it.get(k)})
+        full.update({k: ev_it[k] for k in ("company", "role", "location", "ats", "account", "attach")
+                     if ev_it.get(k)})
         items[ev_it["job_key"]] = full
     if not items:
         return None

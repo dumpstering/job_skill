@@ -10,6 +10,8 @@ Usage:
     python answers.py list      --root R
     python answers.py unpark    --root R --date YYYY-MM-DD [--session ID]
     python answers.py migrate   --root R
+Any command also takes --args-file <R>/claude/<name>.json (argfile.py): a question,
+an answer or a technique as one JSON object, never on the command line.
 
 answers.md lines (one per answer):
     - ANS-012 | <question> | <answer> | <kind> | <scope> | <sensitive yes|no> | <source> | <last confirmed> [| also: <a>; <b>]
@@ -68,6 +70,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import argfile  # noqa: E402
 import checks  # noqa: E402
 import jobfs  # noqa: E402
 import library  # noqa: E402
@@ -1104,7 +1107,7 @@ def main(argv=None):
     a.add_argument("--sensitive", choices=["yes", "no"])
     a.add_argument("--source")
     a.add_argument("--also", default="", help="aliases separated by ;")
-    args = ap.parse_args(argv)
+    args = argfile.parse(ap, argv)  # outside text arrives in a JSON file, never inline
     root = Path(args.root)
     for stream in (sys.stdout, sys.stderr):  # list prints the user's own answers as written
         try:

@@ -32,12 +32,13 @@ files, and never write the runner's files.
 | `queue/<date>/today.md`, `review.html`, `discards.csv`, `diy.md` | the user's optional reading; the do-yourself list |
 | `applications/<job>/posting.md`, `posting.json`, `fill_plan.json`, `resume_B.*`, `terms.json`, `tune_log.json`, `.runner_files` | per job; the runner never writes a file missing from `.runner_files`, and never in a folder holding `.claimed` |
 | `upload/NN_<Last>_Resume_<Employer12>.pdf`, `upload/E<n>_...pdf` | the files the user attaches; only the runner moves them |
-| `applications/_diy/<date>/<Company>.md` | answer sheet for a do-yourself item (no link) |
+| `applications/_diy/<date>/E<n>_<Company>.md` | answer sheet for a do-yourself item (no link), one per item, with the `n` of its `upload/E<n>_` file |
 | `runner/out/status.json` | health: `version`, `mode`, `last_daily {at, date, ok, counts}`, `last_tick`, `tracker_locked_since`, `sources`, `boards_paused`, `selftest {at, net, checks, recruitee}` (the PC's), `selftest_s` (the sandbox check), `min_skill`, `errors`, `daily_pending`, `daily_starts {date, count, at, why, how}` (dailies a tick started), `daily_running {at, pid}` (a daily is building the list now; null when none, and one over 2 hours old has stopped), `discovery_offline` (the date of a morning when no job board answered, until a run reaches them) |
 | `runner/out/tracker.json` | the tracker snapshot (tracker.py reads it in mode L) |
 | `runner/out/results/<id>.json` | one per request: `{id, op, ok, at, lines, result}` |
 | `runner/out/staged.json` | Tier A files staged by `stage_tier_a`, with their sha256 |
-| `runner/out/liveness.json` | the next items' postings re-read by the tick: `{items: {job_key: {checked, closed, why}}}`; only a job-site host or the host the board listed the posting on is read (`why` "skip host ..." otherwise) |
+| `runner/out/liveness.json` | the next items' postings re-read by the tick: `{items: {job_key: {checked, closed, why}}}`; only through the URL discovery read (the posting's own url), and only when the unattended policy allows it or its ATS API endpoint; a board's apply link is never a fallback (`why` "skip ..." otherwise) |
+| `state/request_starts/<id>.json` | the attempt marker of a request being answered (removed when it ends) |
 | `reports/funnel.csv`, `logs/runner_<date>.log` | metrics and the log (keys redacted) |
 
 Every runner JSON carries `_rev` and `_sha256`. Read it with the verified
@@ -55,7 +56,8 @@ reader (`jobfs.read_json_verified`): it retries once after 5 s, then uses
 
 ## Events (what you hand the runner)
 
-Write events only with `events.py emit` (or `events.emit` in Python), never by hand:
+Write events only with `events.py emit` (or `events.emit` in Python), never by hand
+(`emit` writes every type but `added`, which only `events.py add` writes):
 `runner/in/events/<YYYYMMDDTHHMMSSZ>_<8hex>_<type>.json`, create-only, at most 64 KB, idempotent by id.
 - `tracker`: an exact tracker.py write; tracker.py itself emits these in mode L (`--transport auto`).
 - `started`, `handed_over`, `applied`, `skipped`, `later`, `parked`, `unparked`, `blocked`: the queue states, with `{reason, question_ids, confirmation, proof}` (reason codes from 5.10, or `user`).
@@ -67,7 +69,11 @@ Write events only with `events.py emit` (or `events.emit` in Python), never by h
   `today_view.py`, `tracker.py check` (`IN QUEUE`) and `events.py overlay`
   (`ADDED #<n> <key> <via>`) see it at once. The runner numbers its own late
   addenda after these. Mode M has no list: `add` prints `NO LIST` and writes
-  nothing, and the tracker row is the record.
+  nothing, and the tracker row is the record. A posting.md whose URL is a
+  job board or not a plain public web address is refused (`ERROR`). The
+  tick takes an added job's link, host and upload name from its posting.md
+  and its own number, never from the event, and ignores an event whose
+  number or job key was already given today.
 The tick applies them in name order (`tracker.py apply-events`), moves them to
 `runner/out/events_done/<date>/`, folds queue states into `state/queue_state.json`,
 writes the `added` jobs into `queue/<date>/addendum_user.json` (it never
@@ -79,21 +85,32 @@ moved to `runner/out/events_rejected/` with a `.reason.txt`. `events.py overlay`
 
 ## Requests (what you ask the runner to do)
 
-Write a request with
-`python scripts/jobrunner.py request <op> --root R --json '<args>'` (it validates
-and creates `runner/in/requests/<id>_<op>.json`, printing `REQUEST <id> <op>`).
-Arguments are company names, URLs (netfetch policy: job boards are refused) and
-folders inside the root; anything else is refused before the file is written,
-and the runner checks again. The next tick (at most 15 minutes) writes
-`runner/out/results/<id>.json`. The long ops (`resolve_leads`, `probe_url`,
-`rebuild_queue`) never run inside a tick: the tick starts the daily, which
-answers them, so their result can take longer while that run polls the boards.
+Write the arguments as one JSON object to `R/claude/args.json` with your file
+tool, then `python scripts/jobrunner.py request <op> --root R --json-file
+claude/args.json` (it reads the file once, validates, and creates
+`runner/in/requests/<id>_<op>.json`, printing `REQUEST <id> <op>`). A company
+name or a URL never goes on the command line (SKILL.md "Scripts"); `--json`
+inline is only for codes and numbers.
+Arguments are company names, URLs and folders inside the root; anything else
+is refused before the file is written, and the runner checks again. A URL is
+judged on netfetch's canonical host: a job board in any spelling (lnkd.in and
+licdn.com too), a host that is not plain `a-z 0-9 . -` (`DENY bad-url`), an R3
+list endpoint or a private address is refused. A request's own URL is
+allowed for that request only, never for the rest of the run. The next tick
+(at most 15 minutes) writes `runner/out/results/<id>.json`. The long ops
+(`resolve_leads`, `probe_url`, `rebuild_queue`) never run inside a tick: the
+tick starts the daily, which answers them, so their result can take longer
+while that run polls the boards. A request whose run was stopped twice before
+it finished (a time limit, a page that hangs the reader) is answered `ok`
+false with `REJECTED this request was started 2 times and never finished
+...` and never run again: tell the user in one line that the runner could
+not finish it, and ask again only for a different link.
 
 | op | args | what the runner does |
 |---|---|---|
 | `resolve_leads` | none | resolves new `runner/in/leads/*.jsonl`, gates the postings, appends an addendum |
 | `probe_url` | `url`, `company`, `title`, `location` | reads one careers page or posting URL from your web search, detects the ATS, gates what it finds, appends an addendum |
-| `fetch_posting` | `url`, or `n` / `job_key` of a queue item | re-reads one posting (liveness); `result.closed` |
+| `fetch_posting` | `url`, or `n` / `job_key` of a queue item | re-reads one posting (liveness); `result.closed`. A queue item is read through the URL discovery read, as liveness (`result.deny` "skip ..." otherwise) |
 | `build` | `folder` (a job folder), `json` (default `resume.json`) | builds a Tier A JSON you wrote when pip failed in the sandbox (`--strict`) |
 | `stage_tier_a` | `folder`, or `n` / `job_key` | replaces `upload/NN_*` (and `NNc_*`) with the Tier A files the job's `final.json` names (a build that passed `--strict`; none without it); `result.sha256` |
 | `more` | `limit` (default `more_size`) | the next items from the pool as an addendum; before today's `queue.json` exists none (`ADDENDUM none: no list for <date> yet`), and late finds wait in the pool for the build |
@@ -103,7 +120,7 @@ answers them, so their result can take longer while that run polls the boards.
 ## The card and the next item
 
 - `python scripts/today_view.py card --root R` prints the card (1.2) word for word. Show it as printed.
-- `python scripts/today_view.py next --root R` prints the next item's handover data (`NEXT`, `OPEN`, `UPLOAD`, `LETTER`, `ANSWERS`, `SENSITIVE`, `DRAFT`, `ATTACH`, `HANDOVER` lines), the same item the card's `Starting #N` names. The resume is the file the job folder's `final.json` names (a strict Tier A build that passed), else `resume_B.pdf`; it compares the staged copy's sha256 with it and names the job-folder file when they differ. Items with no resume (prep_failed) are held in one `WAIT` line. Its `SENSITIVE` and `Check:` lines come from `claude/<date>/sensitive_ok.json` (apply_batch.md). `card --short` and `next --short` are the easy day: no-account items, easiest ATS first, none with an open question, a sensitive field beyond the profile's salary and sponsorship not settled today, or no resume yet (daily.md).
+- `python scripts/today_view.py next --root R` prints the next item's handover data (`NEXT`, `OPEN`, `UPLOAD`, `LETTER`, `ANSWERS`, `SENSITIVE`, `DRAFT`, `ATTACH`, `HANDOVER` lines), the same item the card's `Starting #N` names. The resume is the file the job folder's `final.json` names (a strict Tier A build that passed and cites no library entry corrected since), else `resume_B.pdf`; it compares the staged copy's sha256 with it and names the job-folder file when they differ. Items with no resume (prep_failed) are held in one `WAIT` line. A Tier B file whose version (`tune_log.json`) is no longer approved gets a `HOLD` line instead of `OPEN` and `UPLOAD`, after every other item; `OPEN` is only ever a plain http(s) web address (`SKIP #NN bad link` otherwise). Its `SENSITIVE` and `Check:` lines come from `claude/<date>/sensitive_ok.json` (apply_batch.md). `card --short` and `next --short` are the easy day: no-account items, easiest ATS first, none with an open question, a sensitive field beyond the profile's salary and sponsorship not settled today, or no resume yet (daily.md).
 - `progress` gives the counts and the closing line; `diy` gives the do-yourself list (no links); `drafts` prints the free-text drafts of `morning.json` in full (the card shows one line each).
 - The day's items are `queue.json`, its addenda and the `added` jobs not yet in `addendum_user.json`, so a job added from a link counts in `card`, `next` and `progress` at once.
 - `claude/<date>/morning.json` (written by job-morning, create-only) feeds the card:
@@ -160,6 +177,11 @@ only a `STALE LOCK` line for the next one).
 - A file another program holds open (an upload PDF in a viewer, `funnel.csv` in
   Excel) is a `WARN` line, and it is retried on a later run; requests are still
   answered and today's files are still staged.
+- One board, aggregator lane, lead, liveness item or network import that
+  fails is one `ERROR <unit>: <type>: ...` line in the log (and in
+  status.json `errors`); the rest of the run goes on, and the daily still
+  builds today's list. A network export that cannot be read is not tried
+  again until a new file is dropped in `network/raw/`.
 - A job folder carried from an earlier day keeps its `resume_B` files only while
   the variant it came from is approved as it was; otherwise they are rebuilt, or
   moved to `<job>/_unapproved/` when the family has no approved variant

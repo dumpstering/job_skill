@@ -491,12 +491,25 @@ def test_docs_round2():
     assert "posting.md lists a required cover letter" in flat, "SJ-06"
     assert '"Confirmed <Mon YYYY>:"' in flat, "SJ-09"
     assert "Confirmed" in (refs / "fit_and_questions.md").read_text(encoding="ascii"), "SJ-09"
-    assert '--base "<Name> CV"' in (refs / "cv_publications.md").read_text(encoding="ascii"), "SJ-12"
+    cvp = " ".join((refs / "cv_publications.md").read_text(encoding="ascii").split())
+    assert "`--mode cv` names the files `<Name> CV`" in cvp, "SJ-12"  # round 3: no --base on the command line
     vmd = " ".join((refs / "variants.md").read_text(encoding="ascii").split())
     assert "Library edits do not unapprove" not in vmd and "L-0006 changed since approval" in vmd, "SJ-01"
     tailor = " ".join((HERE.parent / "plugin" / "agents" / "job-tailor.md").read_text(encoding="ascii").split())
     assert "A pasted link (the single-job flow in SKILL.md) is written in the main conversation" in tailor, "SJ-07"
     print("ok writing docs match the round-2 checks")
+
+
+def test_docs_round3():
+    """Shared decision 5: a correction replaces the entry (never a note after
+    it), and the jobs built that day from a family citing it are held."""
+    refs = HERE.parent / "job" / "references"
+    rules = " ".join((refs / "writing_rules.md").read_text(encoding="ascii").split())
+    assert "a correction always replaces the old entry, never adds a note after it" in rules, "Block C"
+    vmd = " ".join((refs / "variants.md").read_text(encoding="ascii").split())
+    assert "HOLD #4: its base resume cites something you corrected today." in vmd, "the same-day hold"
+    assert "180 more jobs need a base resume you don't have yet" in vmd, "the one line for families with no variant"
+    print("ok writing docs: corrections replace entries; jobs built from them are held the same day")
 
 
 def test_split_items_and_swaps():
@@ -541,6 +554,7 @@ def main():
     test_focus_is_a_technique()
     test_cli_rules()
     test_docs_round2()
+    test_docs_round3()
     test_split_items_and_swaps()
     test_agents()
     print("PASS")

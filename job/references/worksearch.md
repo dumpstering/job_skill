@@ -52,9 +52,11 @@ never write them anywhere.
 `worksearch.py employers --root "<folder>"` lists `MISSING <employer> |
 street, city, zip, phone` lines. Ask the user once per employer, in one message
 for all of them. A value you looked up (the company's own site) is shown to
-the user to confirm before it is saved. Then `tracker.py employer-set --employer
-"<name>" --street ... --city ... --state ... --zip ... --phone ...
---main-website ... --source user --confirmed-on <today>`.
+the user to confirm before it is saved. Then write `{"employer": "<name>",
+"street": "...", "city": "...", "state": "...", "zip": "...", "phone":
+"...", "main-website": "...", "source": "user", "confirmed-on":
+"<today>"}` to `claude/args.json` and run `tracker.py employer-set
+--args-file claude/args.json` (SKILL.md "Scripts").
 
 ## Weekly checks
 

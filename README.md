@@ -43,6 +43,10 @@ runner tick every 15 min: tracker.py apply-events -> applications.xlsx -> runner
   `applications.xlsx`; Claude's tracker writes become create-only event
   files, applied by the same `tracker.py` code. Mode M (no runner) writes
   directly, as v1.1 did.
+- **No outside text on a command line.** A company, title, link, email
+  subject or form question reaches a script only through a JSON file Claude
+  writes under `claude/` (`--args-file`, `argfile.py`; `jobrunner.py request
+  --json-file`), read once and removed, so no shell parses it.
 - **Code boundary.** The runner runs only its own hash-checked install in
   `%LOCALAPPDATA%\JobRunner\app\<version>`, with `python -I`, and never
   imports or runs anything from the JobSearch folder.
@@ -65,7 +69,7 @@ runner tick every 15 min: tracker.py apply-events -> applications.xlsx -> runner
 | `job/references/ats/` | Per-site notes: Greenhouse, Lever, Ashby, Workday, Workable, BambooHR, JazzHR, SmartRecruiters, iCIMS, Oracle, USAJOBS, Dayforce, LinkedIn and job boards |
 | `job/templates/` | Starting profile, library, answers, publications, techniques, settings, search profile, header-only watch list and boards, work-search state presets |
 | `job/templates/presets/lifesci_bayarea/` | An opt-in preset: life-science title families, license knockouts, San Francisco Bay Area places, employer boards and job boards |
-| `job/scripts/` | jobfs, netfetch, posting, jobkey (foundation); tracker, events, caps (tracker and transport); boards, aggregators (readers); leads, resolve, gates, jobqueue (discovery and queue); build_resume, checks, library, variants, answers (preparation); network, worksearch, report (after applying); jobrunner, today_view (runner and card) |
+| `job/scripts/` | jobfs, netfetch, posting, jobkey, argfile (foundation); tracker, events, caps (tracker and transport); boards, aggregators (readers); leads, resolve, gates, jobqueue (discovery and queue); build_resume, checks, library, variants, answers (preparation); network, worksearch, report (after applying); jobrunner, today_view (runner and card) |
 | `plugin/agents/` | job-tailor (one Tier A job) and job-auditor (read-only, fresh context) |
 | `runner/` | install_runner.cmd (template), install_runner.ps1, uninstall_runner.ps1, requirements.lock (hash-pinned), README.md |
 | `tests/` | One script per module, fixtures, `run_all.py`, `walkthrough_v12.md` |
@@ -102,6 +106,7 @@ One at a time (each prints `ok <name>` lines and `PASS`):
 .venv\Scripts\python tests\test_library.py
 .venv\Scripts\python tests\test_variants.py
 .venv\Scripts\python tests\test_answers.py
+.venv\Scripts\python tests\test_argfile.py      # outside text through --args-file, never a shell
 .venv\Scripts\python tests\test_network.py
 .venv\Scripts\python tests\test_worksearch.py
 .venv\Scripts\python tests\test_report.py

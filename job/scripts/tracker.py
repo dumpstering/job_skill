@@ -33,6 +33,9 @@ Usage (every subcommand except `statuses` takes --root <JobSearch folder>):
     python tracker.py apply-events --root R
     python tracker.py snapshot --root R
     python tracker.py upgrade --root R
+  Any command also takes --args-file <R>/claude/<name>.json (argfile.py): the
+  options as one JSON object, so text from an email, a posting or a form never
+  passes through a shell. An event in mode L carries the expanded command line.
 
 Columns are found by header name, so the user may sort rows, add columns or
 retype values in Excel. Every write saves to a temp file and renames it over
@@ -97,6 +100,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import argfile  # noqa: E402
 import events  # noqa: E402
 import jobfs  # noqa: E402
 import jobkey  # noqa: E402
@@ -2149,8 +2153,9 @@ def main(argv=None):
             stream.reconfigure(encoding="utf-8", errors="replace")
         except (AttributeError, ValueError):
             pass
-    argv = list(sys.argv[1:] if argv is None else argv)
-    args = build_parser().parse_args(argv)
+    ap = build_parser()
+    argv = argfile.expand(argv, ap)  # outside text arrives in a JSON file, never inline
+    args = ap.parse_args(argv)
     args.store, args.pid, args.view, transport = None, None, "xlsx", "direct"
     try:
         if args.cmd in WRITES | READS:

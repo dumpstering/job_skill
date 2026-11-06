@@ -10,8 +10,10 @@ download contacts; the user downloads their own export and sends every ask.
 
 **Privacy.** `network\` holds other people's data and never leaves the
 user's folder. Read only the rows for the job in front of you: `network.py match
---n <item>` or `--company "<Company>"`. Never print or summarize the whole
-network.
+--n <item>`, or with `{"company": "<Company>"}` in `claude/args.json`,
+`network.py match --args-file claude/args.json` (a name, a company or a
+link never goes inline; SKILL.md "Scripts"). Never print or summarize the
+whole network.
 
 ## Getting the export in (setup, then monthly)
 
@@ -61,11 +63,12 @@ daily) writes `network\matches_<date>.csv` and prints IDs only:
 3. Show the drafts, one per contact: name, company, role, channel, the text.
    Edits the user asks for follow the writing_rules.md Truthfulness rules.
 4. The user sends each one: copy, open LinkedIn or their email, paste, send.
-5. `sent 1 2` means asks 1 and 2 went out. For each, run
-   `tracker.py referral-add --contact "<name>" --company "<Company>"
-   --job-key <key> --channel "LinkedIn message|Email|Text|In person"
-   --status Sent`. Contact holds the name only: no email, link or phone.
-   The tracker sets Nudge on to 5 days later.
+5. `sent 1 2` means asks 1 and 2 went out. For each, write `{"contact":
+   "<name>", "company": "<Company>", "job-key": "<key>", "channel":
+   "LinkedIn message|Email|Text|In person", "status": "Sent"}` and run
+   `tracker.py referral-add --args-file claude/args.json`. Contact holds
+   the name only: no email, link or phone. The tracker sets Nudge on to 5
+   days later.
 6. If the user has already applied, the draft says so and asks for a word with the
    hiring team instead; whether that counts is the company's policy.
 
@@ -74,8 +77,9 @@ their place in the queue. If the user set 1-2, only the job whose ask they marke
 sent waits, until the hold date or the contact's reply.
 
 **Referral link.** `ref 7 <url>` stores the contact's link exactly as sent,
-query string and all: `tracker.py update <ID> referral_url=<url>` for a row,
-and `referral-add ... --referral-url <url>`. While item 7 is not yet applied,
+query string and all: for a row, `{"_": ["<ID>", "referral_url=<url>"]}`
+and `tracker.py update --args-file claude/args.json`; for the contact,
+`"referral-url": "<url>"` in the `referral-add` file. While item 7 is not yet applied,
 the fill opens that link instead of the posting. A gh_src in a link shows a
 source is attached, not that a referral happened.
 
@@ -84,4 +88,4 @@ follow-up as text to paste. Never a second nudge. After that, set the row to
 `No reply` only when the user says so.
 
 **Replies.** A contact's reply is an Immediate item in the inbox check
-(inbox.md): `referral-add ... --status Replied`, or `Referred`.
+(inbox.md): `referral-add` with `"status": "Replied"`, or `Referred`.

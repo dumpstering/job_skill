@@ -485,10 +485,11 @@ def test_liveness_hosts():
         hosts = {u.split("/")[2] for _, u in r.fetcher().offline.requests}
         assert "track.example.net" not in hosts and hosts, hosts
         live = json.loads((jobfs.Folder(root).runner_out / "liveness.json").read_text(encoding="utf-8"))["items"]
-        assert live[stray["job_key"]]["why"] == "skip host track.example.net: not a job-site host", live[stray["job_key"]]
+        # round 3 (SEC-05): only the URL discovery read; an apply_url is never a fallback
+        assert live[stray["job_key"]]["why"] == "skip: no posting url from discovery", live[stray["job_key"]]
         assert not live[own["job_key"]]["why"].startswith("skip"), live[own["job_key"]]
         ok, res = jobrunner.req_fetch_posting(r, {"n": stray["n"]}, [])
-        assert not ok and res["deny"].startswith("skip host"), res  # the same rule for a queue item's re-read
+        assert not ok and res["deny"].startswith("skip"), res  # the same rule for a queue item's re-read
         r.flush_log()
     finally:
         os.environ.pop("JOB_SKILL_NOW", None)
@@ -783,7 +784,7 @@ def test_diy_staging():
     assert code == 0 and "DIY 1 item, 1 file staged" in lines, (lines[-5:], err[-800:])
     e1 = [p for p in f.upload.iterdir() if p.name.startswith("E1_")]
     assert [p.name for p in e1] == ["E1_Avery_Resume_HooliHealth.pdf"], e1
-    sheet = f.diy_dir(DAY) / "Hooli Health.md"
+    sheet = f.diy_dir(DAY) / "E1_Hooli Health.md"   # E<n>_<Company>.md, the n of its upload file (SEC-12)
     text = sheet.read_text(encoding="utf-8")
     assert "upload\\E1_Avery_Resume_HooliHealth.pdf" in text, text
     assert "{company}" not in text and "Hooli Health role" not in text, text
@@ -1075,13 +1076,213 @@ def test_live_install():
     print("ok live install, selftest and uninstall")
 
 
+# ---------- round 3: fail soft, bounded work, hosts (shared decisions 1-3) ----------
+
+def in_process(root, cmd="tick", offline=None, date=None):
+    """A jobrunner.Run in this process, the clock pinned to NOW and the runner
+    home a temp folder (nothing under the real %LOCALAPPDATA%)."""
+    sys.path.insert(0, str(SCRIPTS))
+    import argparse
+    import jobrunner
+    os.environ["JOB_SKILL_NOW"] = NOW if date is None else "2026-11-06T13:30:00Z"
+    os.environ["JOBRUNNER_HOME"] = str(TMP / "runner_home")
+    return jobrunner, jobrunner.Run(argparse.Namespace(root=str(root), offline=str(offline) if offline else None,
+                                                       date=date, mode=None), cmd)
+
+
+def test_request_attempts():
+    """SEC-04 / decision 3: an attempt marker is written before a request runs
+    and removed when it ends; a request whose run was stopped twice is
+    answered ok=false with one plain reason and never run a third time."""
+    root = copy_day("attempts")
+    jobrunner, r = in_process(root)
+    try:
+        seen = {}
+
+        def probe(run_, args, lines):
+            seen["marker"] = json.loads(jobrunner.request_start_path(run_, rid).read_text(encoding="utf-8"))
+            return True, {}
+        real = jobrunner.REQUEST_HANDLERS["more"]
+        jobrunner.REQUEST_HANDLERS["more"] = probe
+        rid = "20261106T170000Z_0000aaa1"
+        assert jobrunner.handle_request(r, request_file(root, "more", {}, rid), in_tick=True)
+        assert seen["marker"]["starts"] == 1 and seen["marker"]["op"] == "more", seen
+        assert not jobrunner.request_start_path(r, rid).exists() and result_of(root, rid)["ok"] is True
+        # a run stopped while answering it leaves the marker; after two such starts it is answered, not run
+        calls = []
+        jobrunner.REQUEST_HANDLERS["more"] = lambda run_, args, lines: calls.append(1) or (True, {})
+        rid = "20261106T170000Z_0000aaa2"
+        path = request_file(root, "more", {}, rid)
+        jobrunner.note_request_start(r, rid, "more", 2)
+        assert jobrunner.handle_request(r, path, in_tick=True)
+        res = result_of(root, rid)
+        assert res["ok"] is False and not calls, res
+        assert res["lines"] == ["REJECTED this request was started 2 times and never finished (the runner was "
+                                "stopped while working on it), so it is not tried again"], res["lines"]
+        assert not path.exists() and not jobrunner.request_start_path(r, rid).exists()
+        # one stopped start is tried again (a PC that slept mid-request)
+        rid = "20261106T170000Z_0000aaa3"
+        path = request_file(root, "more", {}, rid)
+        jobrunner.note_request_start(r, rid, "more", 1)
+        assert jobrunner.handle_request(r, path, in_tick=True) and calls == [1] and result_of(root, rid)["ok"]
+        jobrunner.REQUEST_HANDLERS["more"] = real
+        r.flush_log()
+    finally:
+        os.environ.pop("JOB_SKILL_NOW", None)
+    print("ok a request stopped twice is answered ok=false, not retried forever")
+
+
+def test_request_hosts():
+    """SEC-01 / SEC-05 / decision 1: a request's URL is judged on netfetch's
+    canonical host (lookalike spellings, lnkd.in, licdn.com, non-public
+    addresses refused when written); a fetch_posting url is allowed for that
+    request only, never on the run's shared fetcher; liveness reads only the
+    URL discovery read, without adding any host to the policy."""
+    root = copy_day("req_hosts")
+    jobrunner, r = in_process(root)
+    try:
+        for url in ("https://www.link" + chr(0xAD) + "edin.com/jobs/view/1", "https://lnkd.in/abc",
+                    "https://media.licdn.com/x.png", "https://indeed.jobs/x", "https://ex" + chr(0xE0) + "mple.com/j",
+                    "https://192.168.1.10/jobs/1"):
+            try:
+                jobrunner.make_request(root, "probe_url", {"url": url})
+                raise AssertionError(f"accepted {ascii(url)}")
+            except jobrunner.RequestError as e:
+                assert str(e).startswith("DENY "), (ascii(url), e)
+        net = TMP / "req_hosts_net"
+        net.mkdir()
+        page = ("<html><head><title>Scientist</title></head><body><h1>Scientist</h1><p>"
+                + "Run assays. " * 80 + "</p></body></html>")
+        (net / "p.html").write_text(page, encoding="ascii")
+        (net / "index.json").write_text(json.dumps({"https://careers.example-bio.com/jobs/1": {"file": "p.html"}}),
+                                        encoding="ascii")
+        jobrunner, r = in_process(root, offline=net)
+        rid = "20261106T170000Z_0000bbb1"
+        assert jobrunner.handle_request(r, request_file(root, "fetch_posting",
+                                                        {"url": "https://careers.example-bio.com/jobs/1"}, rid))
+        assert result_of(root, rid)["ok"] is True, result_of(root, rid)
+        assert r.fetcher().policy.reason("https://careers.example-bio.com/jobs/2") == \
+            "host-not-allowed careers.example-bio.com", "the request's host stayed allowed for the run"
+        # liveness: a posting.json url on that host (no ATS endpoint) is skipped, nothing is fetched
+        q = json.loads(jobfs.Folder(root).queue_json(DAY).read_text(encoding="utf-8"))
+        it = dict(q["items"][0])
+        pj = root / it["folder"] / "posting.json"
+        rec = json.loads(pj.read_text(encoding="utf-8"))
+        rec["url"] = "https://careers.example-bio.com/jobs/1"
+        pj.write_text(json.dumps(rec), encoding="ascii")
+        before = len(r.fetcher().offline.requests)
+        jobrunner.liveness(r, [it])
+        live = json.loads((jobfs.Folder(root).runner_out / "liveness.json").read_text(encoding="utf-8"))["items"]
+        assert live[it["job_key"]]["why"] == "skip host careers.example-bio.com: not a job-site host", live
+        assert len(r.fetcher().offline.requests) == before
+        assert r.fetcher().policy.reason("https://careers.example-bio.com/jobs/1").startswith("host-not-allowed")
+        r.flush_log()
+    finally:
+        os.environ.pop("JOB_SKILL_NOW", None)
+    print("ok request URLs on the canonical host; a request's host is allowed for that request only")
+
+
+def test_fail_soft_units():
+    """Decision 2 / SEC-08 / SEC-10: a liveness item whose read raises is its
+    own ERROR line and the others still run; a network import that raises is
+    one ERROR line and its fingerprint is recorded, so the next tick is idle
+    about it; a discovery stage that raises still lets the daily build the
+    queue. L2-07: the RESOLVE line is logged once."""
+    root = copy_day("fail_soft")
+    empty = TMP / "fail_soft_net"
+    empty.mkdir()
+    (empty / "index.json").write_text("{}", encoding="ascii")
+    jobrunner, r = in_process(root, offline=empty)
+    import network
+    import posting
+    try:
+        q = json.loads(jobfs.Folder(root).queue_json(DAY).read_text(encoding="utf-8"))
+        a, b = dict(q["items"][0]), dict(q["items"][1])
+        real_read = posting.read_posting
+        bad_url = json.loads((root / a["folder"] / "posting.json").read_text(encoding="utf-8"))["url"]
+
+        def read(url, *args, **kw):
+            if url == bad_url:
+                raise TypeError("expected string or bytes-like object, got 'list'")
+            return real_read(url, *args, **kw)
+        posting.read_posting = read
+        try:
+            jobrunner.liveness(r, [a, b])
+        finally:
+            posting.read_posting = real_read
+        live = json.loads((jobfs.Folder(root).runner_out / "liveness.json").read_text(encoding="utf-8"))["items"]
+        assert live[a["job_key"]]["why"] == "error TypeError" and b["job_key"] in live, live
+        assert any(ln.startswith(f"ERROR liveness #{a['n']:02d} {a['job_key']}: TypeError") for ln in r.log_lines)
+        # a network export that breaks the reader
+        raw = jobfs.Folder(root).network_raw
+        raw.mkdir(parents=True, exist_ok=True)
+        (raw / "export.zip").write_bytes(b"PK\x03\x04 not really a zip")
+        real_main = network.main
+        network.main = lambda argv: (_ for _ in ()).throw(RuntimeError("Error -3 while decompressing data"))
+        try:
+            assert jobrunner.network_import(r) == 1
+        finally:
+            network.main = real_main
+        assert any(ln.startswith("ERROR network import: RuntimeError") for ln in r.log_lines), r.log_lines[-3:]
+        rec = json.loads((jobfs.Folder(root).state / "network_raw.json").read_text(encoding="utf-8"))
+        assert rec["fingerprint"] == jobrunner.raw_fingerprint(jobfs.Folder(root)) and rec["exit"] == 1, rec
+        assert jobrunner.network_import(r) is None  # the same drop is not tried again
+        r.flush_log()
+    finally:
+        os.environ.pop("JOB_SKILL_NOW", None)
+    # the daily's own log has the RESOLVE line once (resolve logs it; the daily only prints it)
+    log = (day_root() / "logs" / f"runner_{DAY}.log").read_text(encoding="utf-8")
+    assert sum(1 for ln in log.splitlines() if " daily RESOLVE " in ln) == 1, log[-2000:]
+    # a discovery stage that raises: the daily still builds today's list
+    fresh = TMP / "fail_soft_daily" / "JobSearch"
+    shutil.copytree(FIXTURE, fresh)
+    jobrunner, r = in_process(fresh, cmd="daily", offline=BOARDS, date=DAY)
+    import aggregators
+    real_run = aggregators.run
+    aggregators.run = lambda *a, **k: (_ for _ in ()).throw(RuntimeError("lane exploded"))
+    try:
+        assert jobrunner.daily(r) == 0
+    finally:
+        aggregators.run = real_run
+        os.environ.pop("JOB_SKILL_NOW", None)
+        r.flush_log()
+    assert "ERROR aggregators: RuntimeError: lane exploded" in r.log_lines, [ln for ln in r.log_lines if "ERROR" in ln]
+    assert jobfs.Folder(fresh).queue_json(DAY).exists() and r.log_lines[-1].startswith("DAILY ok queue="), \
+        r.log_lines[-3:]
+    print("ok a failing liveness item, network import or discovery stage is one ERROR line; the run goes on")
+
+
+def test_diy_sheets_per_item():
+    """SEC-12: two do-it-yourself jobs at one employer get one answer sheet
+    each, named E<n>_<Company>.md with the n of its upload file."""
+    root = copy_day("diy_two")
+    jobrunner, r = in_process(root)
+    import today_view
+    real = today_view.diy_rows
+    today_view.diy_rows = lambda _root, _day, _limit: [("Genentech", "Senior Research Associate", "Springfield"),
+                                                      ("Genentech", "QC Microbiologist", "Springfield")]
+    try:
+        jobrunner.stage_diy(r)
+        r.flush_log()
+    finally:
+        today_view.diy_rows = real
+        os.environ.pop("JOB_SKILL_NOW", None)
+    d = jobfs.Folder(root).diy_dir(DAY)
+    sheets = sorted(p.name for p in d.glob("*.md"))
+    assert sheets == ["E1_Genentech.md", "E2_Genentech.md"], sheets
+    assert (d / "E1_Genentech.md").read_text(encoding="utf-8").startswith("# Genentech - Senior Research Associate")
+    assert (d / "E2_Genentech.md").read_text(encoding="utf-8").startswith("# Genentech - QC Microbiologist")
+    print("ok one answer sheet per do-it-yourself job, even at one employer")
+
+
 def main():
     tests = [test_request_cli, test_selftest, test_installer_dry_run, test_cmd_hash_mismatch, test_cmd_planted_files,
              test_config_non_ascii, test_live_install, test_locked, test_killed_lock, test_idle_tick,
              test_stage_tier_a, test_rejected_requests, test_tick_session_addendum, test_events_and_replan,
              test_tick_user_addendum, test_diy_staging, test_no_import_from_root, test_missed_daily,
              test_session_before_queue, test_held_files, test_carried_folder_reapproval, test_relative_root_and_log,
-             test_offline_morning, test_liveness_hosts, test_docs]
+             test_offline_morning, test_liveness_hosts, test_docs, test_request_attempts, test_request_hosts,
+             test_fail_soft_units, test_diy_sheets_per_item]
     if sys.argv[1:]:  # python tests/test_runner.py test_locked test_missed_daily
         tests = [t for t in tests if t.__name__ in sys.argv[1:]]
     try:

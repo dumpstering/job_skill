@@ -17,9 +17,13 @@ Job Url kept as text in network/past_applications.csv, never fetched) and a
 Google Contacts CSV (names, organization, e-mail values). Every other file,
 Profile.csv, PhoneNumbers.csv, saved answers, logins, registration and
 messages among them, is never opened. A zip is opened only to list its
-members; allowlisted members are extracted into a new empty temp folder, with
-path checks, and that folder is removed afterwards. No profile URL is kept.
-A value starting with = + - @ is written with a leading apostrophe.
+members; allowlisted members are read straight from the zip (nothing is
+written to disk), one per base name, with path checks. Limits: 50 MB a file
+and 200 MB for the whole import (counted as the data unpacks; the import stops
+at the first file that would pass it). One unreadable file (corrupt, encrypted,
+an odd compression) is one ERROR line naming it and the error type, and the
+import goes on. No profile URL is kept. A value starting with = + - @ is
+written with a leading apostrophe.
 
 match pairs people with today's queue items (queue/<date>/queue.json and its
 addenda), or with one company (--company, the single-job flow):
@@ -62,14 +66,13 @@ import csv
 import io
 import os
 import re
-import shutil
 import sys
-import tempfile
 import zipfile
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import argfile  # noqa: E402
 import jobfs  # noqa: E402
 import jobkey  # noqa: E402
 
@@ -84,7 +87,8 @@ ALLOW = {"connections.csv": "connections", "recommendations_received.csv": "recs
          "job applications.csv": "applications", "contacts.csv": "google", "google contacts.csv": "google",
          "google.csv": "google", "other contacts.csv": "google"}
 NEVER_HINT = ("profile", "phone", "saved answers", "login", "registration", "message", "email addresses")
-MAX_FILE = 50 * 1024 * 1024       # per extracted member and per CSV read
+MAX_FILE = 50 * 1024 * 1024       # per zip member and per CSV read
+MAX_TOTAL = 200 * 1024 * 1024     # every file one import reads, zips included (counted as it unpacks)
 MAX_MEMBERS = 2000
 
 STRENGTH_RANK = {"rec": 0, "emailed": 1, "connection": 2}
@@ -175,12 +179,45 @@ def rel(root, path):
 
 # ---------- reading the exports ----------
 
-def read_text(path):
+def kind_of(e):
+    """The exception type for an ERROR line: zlib.error, csv.Error, BadZipFile."""
+    t = type(e)
+    return t.__name__ if t.__module__ in ("builtins", "zipfile") else f"{t.__module__.lstrip('_')}.{t.__name__}"
+
+
+class OverBudget(NetError):
+    """The import read MAX_TOTAL bytes: nothing more is read this time."""
+
+
+class Budget:
+    """Bytes the whole import may still read (MAX_TOTAL), counted as they arrive."""
+
+    def __init__(self, total=None):
+        self.left = MAX_TOTAL if total is None else total
+
+
+def read_stream(f, label, budget):
+    """The bytes of an open file or zip member, refusing past MAX_FILE for this
+    file and past what the budget has left (counted as the data unpacks, so a
+    member that claims to be small cannot unpack to more)."""
+    chunks, n = [], 0
+    while chunk := f.read(1 << 16):
+        n += len(chunk)
+        if n > MAX_FILE:
+            raise NetError(f"{label} is over {MAX_FILE // (1024 * 1024)} MB")
+        if n > budget.left:
+            raise OverBudget(f"{label}: this import reached its {MAX_TOTAL // (1024 * 1024)} MB total; "
+                             "the files after it are not read")
+        chunks.append(chunk)
+    budget.left -= n
+    return b"".join(chunks).decode("utf-8-sig", errors="replace")
+
+
+def read_text(path, budget=None):
     if os.path.getsize(path) > MAX_FILE:
         raise NetError(f"{Path(path).name} is over {MAX_FILE // (1024 * 1024)} MB")
     with open(path, "rb") as f:
-        raw = f.read()
-    return raw.decode("utf-8-sig", errors="replace")
+        return read_stream(f, Path(path).name, budget or Budget())
 
 
 def find_table(text, required):
@@ -266,38 +303,43 @@ def member_ok(name):
     return not (n.startswith("/") or re.match(r"^[A-Za-z]:", n) or any(p == ".." for p in n.split("/")))
 
 
-def extract_allowed(zip_path, dest, report):
-    """Copy the allowlisted members of zip_path into dest (new and empty).
-    Other members are listed by name only, never opened."""
-    out = []
-    dest = Path(dest)
-    with zipfile.ZipFile(zip_path) as zf:
+def zip_sources(zip_path, report):
+    """(base name, label, read(budget)) for each allowlisted member of one zip,
+    read straight from the zip while it is open; nothing is written to disk.
+    One member per base name (a zip holding Connections.csv in 2,000 folders is
+    read once). Other members are listed by name only, never opened. A zip
+    that cannot be opened is one ERROR line."""
+    where = Path(zip_path).name
+    try:
+        zf = zipfile.ZipFile(zip_path)
+    except Exception as e:  # noqa: BLE001  a corrupt or locked zip is named; the other files are read
+        report.append(f"ERROR {where}: not a readable zip ({kind_of(e)})")
+        return
+    with zf:
         infos = zf.infolist()
         if len(infos) > MAX_MEMBERS:
-            raise NetError(f"{Path(zip_path).name} has over {MAX_MEMBERS} files")
-        for i, info in enumerate(infos):
+            report.append(f"ERROR {where}: over {MAX_MEMBERS} files, not read")
+            return
+        taken = set()
+        for info in infos:
             if info.is_dir():
                 continue
             base = info.filename.replace("\\", "/").rsplit("/", 1)[-1]
             if base.lower() not in ALLOW:
-                report.append(skip_line(base, Path(zip_path).name))
+                report.append(skip_line(base, where))
                 continue
             if not member_ok(info.filename) or info.file_size > MAX_FILE:
-                report.append(f"WARN {info.filename} in {Path(zip_path).name}: refused (path or size)")
+                report.append(f"WARN {info.filename} in {where}: refused (path or size)")
                 continue
-            target = (dest / f"{i:04d}_{jobfs.ascii_name(base, 80)}").resolve()
-            if dest.resolve() not in target.parents:
-                report.append(f"WARN {info.filename}: refused (outside the extract folder)")
+            if base.lower() in taken:
+                report.append(f"SKIP {base} in {where} (another copy in this zip was read)")
                 continue
-            with zf.open(info) as src, open(target, "wb") as dst:
-                copied = 0
-                while chunk := src.read(1 << 16):
-                    copied += len(chunk)
-                    if copied > MAX_FILE:
-                        raise NetError(f"{base} in {Path(zip_path).name} unpacks to over the size cap")
-                    dst.write(chunk)
-            out.append((target, base, Path(zip_path).name))
-    return out
+            taken.add(base.lower())
+
+            def read(budget, info=info, base=base):
+                with zf.open(info) as src:
+                    return read_stream(src, f"{base} in {where}", budget)
+            yield base, f"{base} (from {where})", read
 
 
 def skip_line(base, where=""):
@@ -305,22 +347,20 @@ def skip_line(base, where=""):
     return f"SKIP {base}{' in ' + where if where else ''} ({why})"
 
 
-def collect(raw, tmp, report):
-    """(path, base name, where) for every allowlisted file in raw, zips included."""
-    found = []
+def collect(raw, report):
+    """(base name, label, read(budget)) for every allowlisted file in raw, zip
+    members included, in folder order."""
     for dirpath, dirnames, filenames in os.walk(raw):
         dirnames.sort()
         for fn in sorted(filenames):
             p = Path(dirpath) / fn
             low = fn.lower()
             if low.endswith(".zip"):
-                sub = Path(tempfile.mkdtemp(prefix="zip_", dir=tmp))
-                found += extract_allowed(p, sub, report)
+                yield from zip_sources(p, report)
             elif low in ALLOW:
-                found.append((p, fn, ""))
+                yield fn, fn, (lambda budget, p=p: read_text(p, budget))
             elif low.endswith(".csv"):
                 report.append(skip_line(fn))
-    return found
 
 
 def merge(people):
@@ -384,12 +424,19 @@ def cmd_import(a):
         print(f"NONE no export folder at {rel(a.root, raw)}")
         return 0
     report, people, past, counts = [], [], [], {"connections": 0, "recs": 0, "google": 0}
-    tmp = tempfile.mkdtemp(prefix="jobnet_")  # a new empty folder; nothing else is ever in it
+    budget = Budget()
+    sources = collect(raw, report)
     try:
-        for path, base, where in collect(raw, tmp, report):
+        for base, label, read in sources:
             kind = ALLOW[base.lower()]
-            label = base + (f" (from {where})" if where else "")
-            rows = READERS[kind](read_text(path))
+            try:
+                rows = READERS[kind](read(budget))
+            except OverBudget as e:
+                report.append(f"WARN {e}")
+                break
+            except Exception as e:  # noqa: BLE001  one unreadable file (corrupt, encrypted, too big) is named
+                report.append(f"ERROR {label}: not read ({kind_of(e)})")
+                continue
             if rows is None:
                 report.append(f"WARN {label}: no header row found")
                 continue
@@ -400,11 +447,14 @@ def cmd_import(a):
                 people += rows
                 counts[kind] += len(rows)
     finally:
-        shutil.rmtree(tmp, ignore_errors=True)
+        sources.close()
     for line in report:
         print(line)
     if not people and not past:
-        print(f"NONE no allowlisted export file in {rel(a.root, raw)}")
+        if any(line.startswith("ERROR ") for line in report):
+            print(f"NONE nothing readable in {rel(a.root, raw)} (the ERROR lines above name each file)")
+        else:
+            print(f"NONE no allowlisted export file in {rel(a.root, raw)}")
         return 0
     merged = assign_ids(merge(people), read_csv(folder.network_csv))
     write_csv(folder.network_csv, NET_COLS, merged)
@@ -834,17 +884,18 @@ def main(argv=None):
             stream.reconfigure(encoding="utf-8", errors="replace")
         except (AttributeError, ValueError):
             pass
-    args = build_parser().parse_args(argv)
+    args = argfile.parse(build_parser(), argv)  # outside text arrives in a JSON file, never inline
     try:
         return args.func(args)
     except (NetError, jobfs.ConfigError, zipfile.BadZipFile) as e:
         print(f"ERROR {e}")
         return 1
-    except Exception as e:  # a tracker in mode M needs openpyxl
+    except Exception as e:  # noqa: BLE001  a tracker in mode M needs openpyxl; anything else is one ERROR line
         if type(e).__name__ == "MissingPackage":
             print("MISSING openpyxl: run  pip install openpyxl  and run again")
             return 2
-        raise
+        print(f"ERROR network {args.cmd if hasattr(args, 'cmd') else 'command'} stopped: {type(e).__name__}")
+        return 1
 
 
 if __name__ == "__main__":

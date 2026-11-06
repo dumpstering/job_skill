@@ -14,10 +14,15 @@ explain prints the gate trail of one posting, from the newest run that judged it
     GATE G7 knockout:ca_cls required "CLS license required"
 
 The gates (list stage G1-G5 decide whether a detail call is made at all):
-    G1 host       hard deny (job boards) discards; R3 hosts go lead-only; robots
+    G1 host       a posting or apply URL that is not http(s), names a host netfetch
+                  refuses (bad-url) or is on a job board: discard; R3 hosts go
+                  lead-only; robots. Every host is netfetch.host_of's canonical form.
     G2 seen       already pooled, queued, deferred, applied or closed: skipped, no log
-    G3 location   [home] places (plus second_ring when widened), remote with a US
-                  restriction, or an unknown location (judged again at G10)
+    G3 location   [home] places, remote with a US restriction, or an unknown
+                  location (judged again on the detail). A second_ring place is
+                  out until the widen step is on (reason location:second_ring when
+                  title and age pass). An office label ('MBC Lab') of a watch-listed
+                  employer is judged by that row's city.
     G4 title      a family's core or adjacent title (token-set >= 0.8) or a title_any
                   term; no title_none term and no [gates] exclude_title_words word
     G5 age        over 30 days and not reposted: stale
@@ -25,11 +30,21 @@ The gates (list stage G1-G5 decide whether a detail call is made at all):
     G7 knockout   a [[knockout]] title or required pattern, unless profile.md
                   "Licenses held" lists it; a preferred pattern only flags
     G8 knockout   sponsorship (and citizenship) against profile.md
-    G9 title      no require_any word in the description
+    G9 title      no require_any word in the requirements, or more avoid_any words
+                  (another field's training: chemistry, formulation, biophysics,
+                  LC-MS, machine learning) than require_any words, at least 2
     G10 location  remote but not open to the US
     G11 AI text   text addressed to an AI: parked as needs-you, never queued
-    G12 apply     no apply URL or a job-board apply URL: discard; chat apply: do-yourself
+    G12 apply     no apply URL, or one G1 would refuse: discard; chat apply:
+                  do-yourself; an http link from a board is opened as https
 G13 (caps) belongs to the queue builder (jobqueue.py), which defers, never discards.
+A posting that fails to gate is skipped with one ERROR line (D2).
+
+fit (the queue's order): 0.5 x overlap + 0.2 x title match + 0.15 x level +
+0.075, where overlap counts the user's terms the posting names (each
+techniques.md technique, hands-on 1 and familiar 0.5, and each family term,
+1 when the achievement library names it and 0.5 when not), FIT_TERMS of
+them being 1.0. The queue lists the day's picks by fit, best first.
 
 Title terms (title_any, title_none, require_any, exclude_title_words) match whole
 words of the normalized title (jobkey.norm_title), so "capa" never hits
@@ -57,6 +72,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import jobfs  # noqa: E402
@@ -67,6 +83,15 @@ import posting  # noqa: E402
 STALE_DAYS = 30
 REQ_SECTION_MIN = 200   # requirements sections shorter than this ('PhD and 2 years') say too little for G9
 REQ_SECTION_MAX = 3000  # a requirements section with no heading after it stops here (before the company blurb)
+REQ_TEXT_MAX = 200_000  # the requirement scans read at most this much of a posting (bounded work on any text)
+REQ_SECTIONS_MAX = 20   # and at most this many requirements headings
+AVOID_MIN = 2           # G9: this many avoid_any words (and more than require_any words) mark another field's job
+FIT_TERMS = 6           # fit: this many of the user's terms named by a posting is a full overlap
+FIT_TEXT_MAX = 60_000   # fit reads at most this much of a posting
+WEB_SCHEMES = ("http", "https")
+SITE_WORDS = re.compile(r"\b(lab|labs|laboratory|laboratories|campus|building|bldg|floor|suite|hq|headquarters)\b",
+                        re.I)
+STREET = re.compile(r"^\s*\d{1,6}[a-z]?\s+[A-Za-z]", re.I)  # '300 Pasteur Dr - Floor 01'
 DORMANT_DAYS = 60       # no family match on a board for this long: dormant, polled weekly (3.7)
 SEEN_DAYS = 180
 TITLE_SIM = 0.8
@@ -195,7 +220,7 @@ def read_csv(path):
 
 
 def employers(root):
-    """company_norm -> {segment, parent, priority, families} from the watch lists."""
+    """company_norm -> {segment, priority, families, city} from the watch lists."""
     f = jobfs.Folder(root)
     out = {}
     for path in (f.watchlist_csv, f.watchlist_auto_csv):
@@ -203,7 +228,10 @@ def employers(root):
             n = jobkey.norm_company(r.get("employer_norm") or r.get("employer") or "")
             if n and n not in out:
                 out[n] = {"segment": (r.get("segment") or "").strip().lower(), "priority": r.get("priority") or "",
-                          "families": [x.strip() for x in (r.get("families") or "").split(";") if x.strip()]}
+                          "families": [x.strip() for x in (r.get("families") or "").split(";") if x.strip()],
+                          "city": (r.get("city") or "").strip()}
+            elif n and not out[n].get("city") and (r.get("city") or "").strip():
+                out[n]["city"] = r["city"].strip()
     return out
 
 
@@ -243,8 +271,11 @@ class Rules:
         label = str(self.home.get("label") or "").split(",")[0].strip()
         if label:
             self.places.append(label)
+        ring = [p for p in self.home.get("second_ring") or [] if str(p).strip()]
         if "second_ring" in self.widen:
-            self.places += [p for p in self.home.get("second_ring") or [] if str(p).strip()]
+            self.places += ring
+            ring = []
+        self.second_ring = ring  # set aside (with their own discard reason) until the widen step is on
         self.home_states = home_states(self.home)
         self.remote_ok = str(self.home.get("remote", "us")).lower() == "us" or "remote_us" in self.widen
         self.families = [f for f in self.profile.get("family") or [] if self.family_on(f)]
@@ -427,14 +458,48 @@ def r3_host(host):
     return any(host == h or host.endswith("." + h) for h in LEAD_ONLY_HOSTS)
 
 
+def host_text(url):
+    """The canonical host of url for display (discards.csv, trail lines); ''
+    for a URL netfetch refuses. Never used for an allow or deny decision."""
+    try:
+        return netfetch.host_of(url) if url else ""
+    except (netfetch.Denied, ValueError):
+        return ""
+
+
+def url_refusal(url):
+    """Why a posting or apply URL may never be pooled or handed to the user,
+    else None. Every answer comes from netfetch's one canonical host (D1):
+    'not-web' for a scheme other than http or https (a file:// or smb:// link
+    makes Windows connect to that host when the browser opens it), 'bad-url'
+    for a host netfetch refuses (a soft hyphen, a fullwidth letter, an empty
+    label) or a URL with no host, else the job-board domain the host belongs to."""
+    try:
+        scheme = urlparse(str(url)).scheme.lower()
+    except ValueError:
+        return "bad-url"
+    if scheme not in WEB_SCHEMES:
+        return "not-web"
+    deny = netfetch.hard_deny(url) or ""
+    if deny.startswith("job-board"):
+        return deny.split(" ", 1)[1] if " " in deny else "job-board"
+    if deny.startswith("bad-url"):
+        return "bad-url"
+    try:
+        host = netfetch.host_of(url)
+    except (netfetch.Denied, ValueError):
+        return "bad-url"
+    if not host:
+        return "bad-url"
+    return netfetch.job_board(host)
+
+
 def g1_host(p, v, fetcher):
-    host = netfetch.host_of(p.url)
     for url in (p.url, p.apply_url):
-        board = netfetch.job_board(netfetch.host_of(url))
-        if board:
-            return v.stop("G1", "discard", f"host:{board}")
-        if not netfetch.host_of(url).isascii():  # a lookalike spelling: never fetched, never handed to the user
-            return v.stop("G1", "discard", "host:not-ascii")
+        why = url_refusal(url) if url else None
+        if why:  # never fetched, never handed to the user
+            return v.stop("G1", "discard", f"host:{why}")
+    host = host_text(p.url)
     if p.ats in LEAD_ONLY_ATS or r3_host(host) or netfetch.hard_deny(p.url):
         v.info["lead_only"] = True
         v.gate_line("G1", True, f"lead-only {host}")
@@ -444,19 +509,24 @@ def g1_host(p, v, fetcher):
             allowed, _, why = fetcher.robots.check(p.url)
         except netfetch.FetchError:
             allowed, why = True, None
-        if not allowed and why and why.startswith("robots-unreachable"):
-            return v.stop("G1", "skip", "robots-unreachable", host)
+        if not allowed and why and why.startswith(("robots-unreachable", "crawl-delay")):
+            return v.stop("G1", "skip", why.split()[0], host)  # crawl-delay: the host is skipped this run only
         if not allowed:
             return v.stop("G1", "discard", f"robots:{host}")
     v.gate_line("G1", True, host or "-")
     return None
 
 
-def place_verdict(part, rules):
+def place_verdict(part, rules, company_norm=""):
     """One place of a location field: ('in', place), ('remote', ''),
     ('unknown', why) or ('out', why). A place name counts only when no other
-    state or country is named with it ('Dublin, Ireland', 'Newark, NJ' and
-    'Richmond - VA - US' are out for a California home)."""
+    state or country is named with it ('Dublin, Ireland', 'Newark, NJ',
+    'Dublin OH' and 'Richmond - VA - US' are out for a California home: the
+    state comes from posting.region_of, which reads 'City ST' too). A
+    second_ring place before the widen step is out with its own reason. An
+    office or lab label ('MBC Lab', '300 Pasteur Dr - Floor 01', the
+    employer's own name) of a watch-listed employer is judged by that row's
+    city, and is unknown when the row names none."""
     states, foreign, us = posting.region_of(part)
     if foreign and not us and not states:
         return "out", "outside the US"
@@ -464,16 +534,38 @@ def place_verdict(part, rules):
         return "out", f"state {'/'.join(sorted(states))}"
     if re.search(r"\bremote\b", part, re.I):
         return "remote", ""
-    hit = next((pl for pl in rules.places if term_hits(pl, words(part))), None)
+    pw = words(part)
+    hit = next((pl for pl in rules.places if term_hits(pl, pw)), None)
     if hit:
         return "in", hit
+    ring = next((pl for pl in getattr(rules, "second_ring", []) if term_hits(pl, pw)), None)
+    if ring:
+        return "out", f"second ring {ring}"
     if posting.MULTI_LOCATION.match(part):
         return "unknown", "several locations"
     known = all(t.lower() in posting.US_NAMES or t.lower() in posting.US_STATE_NAMES or t in posting.US_STATES
                 for t in posting.place_tokens(part))
     if known:  # 'US', 'United States', 'CA, United States': no city given
         return "unknown", "no city"
+    row = rules.employers.get(company_norm) if company_norm else None
+    if row is not None and not foreign and site_label(part, company_norm):
+        city = row.get("city") or ""
+        if not city:
+            return "unknown", "office label"
+        kind, what = place_verdict(city, rules)
+        if kind == "in":
+            return "in", f"{what} (the watch list's city for {quote(part, 40)})"
+        return "out", f"office label; the watch list's city {quote(city, 40)}"
     return "out", "not a home place"
+
+
+def site_label(part, company_norm):
+    """True when a location names an office, lab or address rather than a
+    place: a site word ('MBC Lab', 'Main Campus'), a street address, or the
+    employer's own name ('California Academy of Sciences')."""
+    if SITE_WORDS.search(part) or STREET.match(part):
+        return True
+    return bool(company_norm) and jobkey.norm_company(part) == company_norm
 
 
 def g3_location(p, v, rules):
@@ -496,7 +588,7 @@ def g3_location(p, v, rules):
         v.gate_line("G3", True, f"no places set {quote(loc)}")
         return None
     parts = posting.place_parts(loc)
-    verdicts = [place_verdict(part, rules) for part in parts]
+    verdicts = [place_verdict(part, rules, p.company_norm) for part in parts]
     hit = next((what for kind, what in verdicts if kind == "in"), None)
     if hit:
         v.gate_line("G3", True, f"{quote(loc)} place {quote(hit)}")
@@ -513,7 +605,10 @@ def g3_location(p, v, rules):
         flags.append("location_unknown")
         v.gate_line("G3", True, f"location unknown ({unknown}) {quote(loc)}")
         return None
-    why = next((what for kind, what in verdicts if kind == "out"), "")
+    ring = next((what for kind, what in verdicts if what.startswith("second ring ")), None)
+    if ring:  # the caller turns this into location:second_ring when nothing else stops the posting
+        v.info["second_ring"] = ring.split(" ", 2)[2]
+    why = ring or next((what for kind, what in verdicts if kind == "out"), "")
     return v.stop("G3", "discard", "location", quote(loc) + (f" ({why})" if why else ""))
 
 
@@ -655,17 +750,25 @@ def g8_other(p, v, rules):
 def g9_words(p, v, fam):
     """A require_any word in the requirements sections (company
     boilerplate names biology everywhere, so the whole text says little); the
-    whole text when the requirements sections are missing or very short."""
+    whole text when the requirements sections are missing or very short.
+    avoid_any names other fields' requirement words (synthetic or analytical
+    chemistry, formulation, biophysics, LC-MS, machine learning, physics):
+    when the requirements name at least AVOID_MIN of them and more of them
+    than require_any words, the job's core training is another field's (D6)."""
     need = (fam or {}).get("require_any") or []
-    if not need:
+    avoid = (fam or {}).get("avoid_any") or []
+    if not need and not avoid:
         v.gate_line("G9", True, "no require_any")
         return None
     section = requirement_text(p.text)
-    body = section if len(section.strip()) >= REQ_SECTION_MIN else (p.text or "")
-    hit = first_hit(need, words(body))
-    if not hit:
+    body = words(section if len(section.strip()) >= REQ_SECTION_MIN else (p.text or "")[:REQ_TEXT_MAX])
+    on = [t for t in need if term_hits(t, body)]
+    if need and not on:
         return v.stop("G9", "discard", "title", "no require_any word in the requirements")
-    v.gate_line("G9", True, quote(hit))
+    off = [t for t in avoid if term_hits(t, body)]
+    if len(off) >= AVOID_MIN and len(off) > len(on):
+        return v.stop("G9", "discard", "title", "requirements name another field: " + ", ".join(off[:4]))
+    v.gate_line("G9", True, quote(on[0]) if on else "no require_any")
     return None
 
 
@@ -685,58 +788,87 @@ def g11_ai(v, ai_text):
 
 
 def g12_route(p, v):
+    """The apply route, judged on the detail record (G1 saw the list record):
+    a URL that is not http(s), names a host netfetch refuses or is a job
+    board is discarded (D1, SEC-11). An http apply link from a board or
+    aggregator becomes https before it can reach the OPEN line; a pasted
+    link keeps the form the user gave."""
     url = p.apply_url or p.url
-    host = netfetch.host_of(url)
-    if not url or not host:
+    if not url:
         return v.stop("G12", "discard", "apply_route", "no apply URL")
-    if netfetch.job_board(host):
-        return v.stop("G12", "discard", "apply_route", f"job board {host}")
+    why = url_refusal(url)
+    if why in ("not-web", "bad-url"):
+        return v.stop("G12", "discard", "apply_route", f"{why} apply link")
+    if why:
+        return v.stop("G12", "discard", "apply_route", f"job board {why}")
+    host = netfetch.host_of(url)
+    note = ""
+    if urlparse(url).scheme.lower() == "http" and p.lane != "pasted":
+        p.apply_url, note = "https" + url[len("http"):], " (http link opened as https)"
     if any(host == h or host.endswith("." + h) for h in CHAT_APPLY_HOSTS):
         return v.stop("G12", "diy", "chat_apply", host)
-    v.gate_line("G12", True, host)
+    v.gate_line("G12", True, host + note)
     return None
 
 
 # ---------- fit (3.12) ----------
 
+def section_after(text, m, cap):
+    """The text after heading match m up to the next heading (when that is
+    more than 40 characters on), else at most cap characters. Searches from
+    an offset, never on a copy of the rest, so many headings stay linear."""
+    nxt = ANY_HEADING.search(text, m.end() + 1)
+    end = nxt.start() if nxt and nxt.start() - m.end() > 40 else m.end() + cap
+    return text[m.end():end]
+
+
 def requirement_text(text):
     """Every requirements-like section (Requirements, Basic and Preferred
-    Qualifications, What you bring, ...) joined; '' when there is none."""
+    Qualifications, What you bring, ...) joined; '' when there is none. Reads
+    the first REQ_TEXT_MAX characters and at most REQ_SECTIONS_MAX headings."""
+    text = (text or "")[:REQ_TEXT_MAX]
     out = []
-    for m in REQ_HEADING.finditer(text or ""):
-        rest = text[m.end():]
-        nxt = ANY_HEADING.search(rest, 1)
-        out.append(rest[:nxt.start()] if nxt and nxt.start() > 40 else rest[:REQ_SECTION_MAX])
+    for i, m in enumerate(REQ_HEADING.finditer(text)):
+        if i >= REQ_SECTIONS_MAX:
+            break
+        out.append(section_after(text, m, REQ_SECTION_MAX))
     return "\n".join(out)
 
 
 def requirement_section(text):
-    m = REQ_HEADING.search(text or "")
+    text = (text or "")[:REQ_TEXT_MAX]
+    m = REQ_HEADING.search(text)
     if not m:
-        return text or ""
-    rest = text[m.end():]
-    nxt = ANY_HEADING.search(rest, 1)
-    return rest[:nxt.start()] if nxt and nxt.start() > 40 else rest
+        return text
+    return section_after(text, m, len(text))
 
 
-def coverage(text, fam, techniques):
-    """Share of the requirement-section terms (family terms plus techniques)
-    that techniques.md marks hands-on."""
+def overlap(text, fam, techniques, library_text=""):
+    """How many of the user's terms a posting names (the TERMS overlap, D6):
+    each techniques.md technique in any of its forms (hands-on 1, familiar
+    0.5), and each family term (1 when the achievement library names it too,
+    else 0.5). A posting that names many of them comes first in the day's list."""
     import checks  # same folder (term_regex)
-    section = requirement_section(text)
-    found, handson = set(), set()
+    text = (text or "")[:FIT_TEXT_MAX]
+    n, counted = 0.0, set()
     for t in techniques:
-        if checks.term_found(section, t.name, t.aliases):
-            found.add(t.name.lower())
-            if t.level == "hands-on":
-                handson.add(t.name.lower())
+        if checks.term_found(text, t.name, t.aliases):
+            n += 1.0 if t.level == "hands-on" else 0.5
+            counted |= {f.lower() for f in t.forms}
+    lib = library_text or ""
     for term in (fam or {}).get("terms") or []:
-        if term.lower() not in found and checks.term_found(section, term):
-            found.add(term.lower())
-            tech = next((t for t in techniques if term.lower() in (f.lower() for f in t.forms)), None)
-            if tech and tech.level == "hands-on":
-                handson.add(term.lower())
-    return round(len(handson) / len(found), 3) if found else 0.0
+        low = str(term).lower()
+        if low in counted or not str(term).strip():
+            continue
+        if checks.term_found(text, term):
+            n += 1.0 if checks.term_found(lib, term) else 0.5
+            counted.add(low)
+    return n
+
+
+def coverage(text, fam, techniques, library_text=""):
+    """The overlap as a share: FIT_TERMS of the user's terms is 1.0."""
+    return round(min(1.0, overlap(text, fam, techniques, library_text) / FIT_TERMS), 3)
 
 
 def level_match(title, fam):
@@ -747,8 +879,8 @@ def level_match(title, fam):
     return 1.0 if any(w in ok for w in have) else 0.0
 
 
-def fit_of(text, title, fam, title_match, techniques):
-    cov = coverage(text, fam, techniques)
+def fit_of(text, title, fam, title_match, techniques, library_text=""):
+    cov = coverage(text, fam, techniques, library_text)
     lvl = level_match(title, fam)
     return round(0.5 * cov + 0.2 * title_match + 0.15 * lvl + 0.15 * 0.5, 3), cov, lvl
 
@@ -772,11 +904,12 @@ class GateRun:
     """One runner pass: list gates (also as boards.poll keep=), detail gates,
     discards.csv, the seen store, trails and state/pool.json."""
 
-    def __init__(self, root, today=None, fetcher=None, widen=None):
+    def __init__(self, root, today=None, fetcher=None, widen=None, emit=None):
         self.root = Path(root)
         self.folder = jobfs.Folder(root)
         self.today = today or jobfs.today(root)
         self.fetcher = fetcher
+        self.emit = emit or print
         self.rules = Rules(root, self.today, widen)
         self.seen = Seen(root, self.today, buffered=True)
         self.discard_rows = []
@@ -784,8 +917,9 @@ class GateRun:
         self.boards_today = set()
         self.cache = {}
         self.counts = {"seen": 0, "passed": 0, "discarded": 0, "parked": 0, "diy": 0, "skipped": 0}
-        self.pooled, self.needs_you, self.diy = [], [], []
+        self.pooled, self.needs_you, self.diy, self.errors = [], [], [], []
         self._techniques = None
+        self._library = None
 
     # state files
     def _load_polls(self):
@@ -813,6 +947,14 @@ class GateRun:
             self._techniques = library.load_techniques(self.folder.techniques)
         return self._techniques
 
+    def library_text(self):
+        if self._library is None:
+            try:
+                self._library = self.folder.library.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                self._library = ""
+        return self._library
+
     # the stages
     def list_gates(self, p):
         """G1-G5 on a list-level record. Cached per job key for this run."""
@@ -833,14 +975,37 @@ class GateRun:
             self.note_match(p)
             seen_rec = self.seen.get(p.job_key)
             g5_age(p, v, seen_rec, self.polls_before(p, (seen_rec or {}).get("first_seen")), self.today)
+        elif v.gate == "G3" and v.info.get("second_ring"):
+            self.ring_only(p, v)
         self.cache[p.job_key] = v
         if not v.ok:
             self.finish(p, v)
         return v
 
+    def ring_only(self, p, v):
+        """A G3 discard for a second_ring place becomes location:second_ring
+        when the title (G4) and age (G5) would pass: set aside for its place
+        alone, so the weekly summary can count it (D8)."""
+        probe = Verdict(info={"flags": list(v.info.get("flags") or [])})
+        seen_rec = self.seen.get(p.job_key)
+        if g4_title(p, probe, self.rules) is None and g5_age(
+                p, probe, seen_rec, self.polls_before(p, (seen_rec or {}).get("first_seen")), self.today) is None:
+            v.reason = "location:second_ring"
+
     def keep(self, p):
-        """boards.poll(keep=...): True when a detail call is worth making."""
-        return self.list_gates(p).ok
+        """boards.poll(keep=...): True when a detail call is worth making. A
+        failure judging one posting skips it with one ERROR line (D2); the
+        next run judges it again."""
+        try:
+            return self.list_gates(p).ok
+        except Exception as e:  # noqa: BLE001  one posting never stops the pass
+            self.error(getattr(p, "job_key", ""), e)
+            return False
+
+    def error(self, key, e):
+        self.errors.append(f"{key}: {type(e).__name__}")
+        self.counts["skipped"] += 1
+        self.emit(f"ERROR gate {key or '(no job key)'}: {type(e).__name__}")
 
     def g2_seen(self, p, v):
         rec = self.seen.exact(p)
@@ -912,6 +1077,8 @@ class GateRun:
         if loc != v.info.get("g3_loc", loc) or ("location_unknown" in flags and loc):
             v.lines.append("GATE G3 judged again on the detail")
             if g3_location(p, v, self.rules):
+                if v.info.get("second_ring"):
+                    self.ring_only(p, v)
                 return True
         if "title_unknown" in flags or (p.title or "") != v.info.get("g4_title", p.title or ""):
             v.lines.append("GATE G4 judged again on the detail")
@@ -970,7 +1137,8 @@ class GateRun:
     def pool_item(self, p, v, reading):
         _, ai_text, hidden, md, _ = as_reading(reading)
         fam = next((f for f in self.rules.families if f.get("id") == v.info.get("family")), {}) or {}
-        fit, cov, lvl = fit_of(p.text, p.title, fam, v.info.get("title_match", 0.6), self.techniques())
+        fit, cov, lvl = fit_of(p.text, p.title, fam, v.info.get("title_match", 0.6), self.techniques(),
+                               self.library_text())
         d = p.to_dict()
         d.update(family=fam.get("id", ""), mode=str(fam.get("mode", "industry")),
                  family_priority=int(fam.get("priority", 2) or 2),
@@ -990,15 +1158,27 @@ class GateRun:
         """Kept until save(): discards.csv may be open in Excel, and that must
         not stop the pass (write_discards)."""
         self.discard_rows.append([self.today.isoformat(), p.lane, p.company, p.title, p.location,
-                                  netfetch.host_of(p.url), p.job_key, gate, reason, profile_hash])
+                                  host_text(p.url), p.job_key, gate, reason, profile_hash])
 
     def process(self, readings):
         """Gate detailed readings (Reading, Posting or saved dicts). Returns the
-        pool items added this call."""
+        pool items added this call. A reading that fails to gate is skipped
+        with one ERROR line naming it (D2): the pass goes on, nothing is
+        recorded for it, and the next run judges it again."""
         start = len(self.pooled)
-        order = sorted(readings, key=lambda r: as_reading(r)[0].lane != "watch")  # board records win dedupe
-        for r in order:
-            self.detail_gates(r)
+
+        def lane(r):
+            try:
+                return as_reading(r)[0].lane != "watch"
+            except Exception:  # noqa: BLE001  judged (and reported) below
+                return True
+        for r in sorted(readings, key=lane):  # board records win dedupe
+            try:
+                self.detail_gates(r)
+            except Exception as e:  # noqa: BLE001  one posting never stops the pass
+                key = (r.get("job_key") if isinstance(r, dict) else
+                       getattr(getattr(r, "posting", r), "job_key", "")) or ""
+                self.error(key, e)
         return self.pooled[start:]
 
     def save(self):
@@ -1167,8 +1347,7 @@ def cmd_run(a):
     readings = jobfs.read_jsonl(a.input)
     fetcher = netfetch.Fetcher(root=a.root, offline=a.offline) if a.offline else None
     run = GateRun(a.root, today, fetcher=fetcher)
-    for d in readings:
-        run.detail_gates(d)
+    run.process(readings)  # one bad record is an ERROR line, never a stopped pass
     counts = run.save()
     print("GATES " + " ".join(f"{k}={counts[k]}" for k in ("seen", "passed", "discarded", "parked", "diy", "skipped")))
     return 0
@@ -1196,7 +1375,8 @@ def main(argv=None):
             stream.reconfigure(encoding="utf-8", errors="replace")
         except (AttributeError, ValueError):
             pass
-    args = build_parser().parse_args(argv)
+    import argfile  # a job key with other characters arrives in a JSON file, never inline
+    args = argfile.parse(build_parser(), argv)
     if not Path(args.root).is_dir():
         print(f"ERROR --root {args.root} is not a folder")
         return 1

@@ -64,7 +64,8 @@ build request) goes in your report for the main task to apply.
    cannot be cited: leave it out and list it under "Library additions" in
    your report; the main task merges it and rebuilds.
 4. **Build** with the strict command in writing_rules.md ("Modes and the
-   strict build"), with `--mode` (in cv mode `--base "<Name> CV"`),
+   strict build"), with `--mode` (no `--base`: the files are named from
+   resume.json's name, `<Name> CV` in cv mode),
    `--publications` when publications.md exists, and `--sources` including
    the job's notes.md (only its `## Answers` section counts). Fix every
    `STRICT-FAIL` line and build again, at most 4 builds. Never weaken a

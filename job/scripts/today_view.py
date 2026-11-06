@@ -40,9 +40,15 @@ stopped early or reached no job site (mode L: a tick starts it again within
 30 minutes, while it still may, else the line says to double-click "Run job
 finder now"), a config file that
 does not parse (the last good copy is in use), the workbook open for 2
-hours, jobs waiting for a base resume's ok (named, with how many wait), a
-refused tracker change, follow-ups ready, a posting set aside for text
-addressed to an AI. Without this morning's prep (no morning.json, one with
+hours, jobs held because their base resume cites a library entry corrected
+since the build ("2 jobs on hold (#4, #9): their base resume cites something
+you corrected today. Say skip, ..."; next prints a HOLD line for each), jobs
+waiting for a base resume's ok (one line per family the user must approve
+or approve again, with how many wait), one line for every family with no
+base resume yet ("180 more jobs need a base resume you don't have yet (most:
+Clinical research 66, Research associate 50). Say /job variants to make
+one."), a refused tracker change, follow-ups ready, a posting set aside for
+text addressed to an AI. Held jobs are not in Ready. Without this morning's prep (no morning.json, one with
 "prepared": false, or one older than queue.json) the card takes its
 questions from the fill plans and says the prep did not run, until the
 tier_a.done marker exists. The "while you were away", weekly and catch-up
@@ -60,7 +66,15 @@ as the card's "Starting #N": an item in progress (started, handed_over; it
 waits for the user's s), then unparked items, then the rest in number order.
 Without this morning's prep, Tier A items whose Tier A build is not ready
 come after the others. Items with no resume (prep_failed, or nothing built)
-wait: one last WAIT line counts them by family.
+wait: one last WAIT line counts them by family. An item whose Tier B file
+was built from a family version whose approval no longer holds (its
+tune_log.json names the version; a cited library entry corrected since, or
+an approved file changed) comes after every other item and gets NEXT,
+COMPANY, ROLE, FOLDER and
+    HOLD #4: its base resume cites something you corrected today. Say skip, or make the new version with /job variants first.
+instead of OPEN, UPLOAD and HANDOVER. OPEN is only ever a plain http(s) web
+address (the referral link, else the apply URL); an item with none gets
+"SKIP #NN bad link (...)" and is never opened.
     NEXT #02 <job key>
     COMPANY / ROLE / ATS <ats> (attach first|last) / OPEN <url> / FOLDER <path>
     UPLOAD <path> (<what>; sha256 ok, else the job-folder file)
@@ -111,8 +125,10 @@ import hashlib
 import json
 import re
 import sys
+import unicodedata
 from datetime import date, datetime, timedelta
 from pathlib import Path
+from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import events  # noqa: E402
@@ -154,6 +170,18 @@ OFFLINE_RETRY = "The job sites could not be reached this morning; the job finder
 OFFLINE_MANUAL = ("The job sites could not be reached this morning. Double-click 'Run job finder now' on the "
                   "desktop once the internet works.")
 MAX_LISTED = 6   # job numbers a sensitive line lists before it gives a count
+# Shared decision 5: a built resume whose approval broke after the build is held at handover.
+HOLD_WHY = {"corrected": "cites something you corrected today", "changed": "changed since you approved it"}
+HOLD_ASK = "Say skip, or make the new version with /job variants first."
+# Shared decision 7: the families with no base resume yet share one card line of about this many characters.
+LINE_MAX = 140
+# SEC-11: the OPEN line names only a plain http(s) web address (shared decision 1's host form).
+LINK_MAX = 2048
+HOST_RE = re.compile(r"[a-z0-9.-]+")
+# Never automated, whatever the top-level domain (shared decision 1; ats/linkedin.md).
+BOARD_LABELS = {"linkedin", "indeed", "glassdoor", "simplyhired", "ziprecruiter", "remotive"}
+BOARD_DOMAINS = ("lnkd.in", "licdn.com")
+LOCAL_SUFFIXES = (".localhost", ".local", ".internal", ".lan", ".home.arpa")   # as netfetch.check_public
 
 
 class Parser(argparse.ArgumentParser):
@@ -292,11 +320,17 @@ def sha256_of(path):
 def final_files(folder):
     """(resume, letter) named by the job folder's final.json, the record a strict
     Tier A build writes only when every check passed: {"v": 1, "resume":
-    "<file name>", "letter": "<file name>" or null, "built_at", "verdict": "ok"}.
-    None for a file that is not named, not a plain file name, or missing."""
+    "<file name>", "letter": "<file name>" or null, "built_at", "verdict": "ok",
+    "entries": {id: hash}}. None for a file that is not named, not a plain
+    file name, or missing; (None, None) when the build cites a library entry
+    corrected since (shared decision 5: the item falls back to its Tier B
+    file, which the hold check judges)."""
+    import library
     folder = Path(folder)
     data = read_json(folder / "final.json", {})
     if data.get("v") != 1 or str(data.get("verdict", "")).lower() != "ok":
+        return None, None
+    if library.final_stale(folder, data):
         return None, None
 
     def one(name):
@@ -380,6 +414,150 @@ def has_resume(root, it, st=None):
 
 def tier_a_ready(root, it):
     return final_files(root / str(it.get("folder", "")))[0] is not None
+
+
+# ---------- a base resume corrected after its build (shared decision 5) ----------
+
+class Holds:
+    """Which built resumes no longer rest on an approval in force. A Tier B
+    file (resume_B, also a Tier A item's fallback) comes from the family
+    version its tune_log.json names; at handover that version's approval
+    (variants.py: the approved files' exact bytes and the text of every
+    library entry they cite) must still hold, so a cited entry the user
+    corrects during the day holds the jobs built from it that same day.
+    reason(it) is None (hand it over), "corrected" (a cited entry changed) or
+    "changed" (an approved file changed, or the approval cannot be read: an
+    approval that cannot be checked is not one). One check per family
+    version per run."""
+
+    def __init__(self, root):
+        self.root = root
+        self.versions = {}
+        self.items = {}
+
+    def reason(self, it):
+        key = (it.get("n"), it.get("job_key"))
+        if key not in self.items:
+            self.items[key] = self._reason(it)
+        return self.items[key]
+
+    def _reason(self, it):
+        if it.get("added_by"):
+            return None  # a job from a link: its resume is the session's own, written for it
+        folder = self.root / str(it.get("folder", ""))
+        if final_files(folder)[0] is not None:
+            return None  # the Tier A file: its own strict build checked it
+        log = read_json(folder / "tune_log.json", {})
+        fam, v = log.get("family"), log.get("version")
+        if isinstance(fam, str) and fam and isinstance(v, int) and not isinstance(v, bool):
+            why, approved = self.version(fam, v)
+            if why is None and log.get("approved_sha256") not in (None, (approved or {}).get("sha256")):
+                why = "changed"  # built under another approval of that version
+            return why
+        # No log names the version: held when the family was approved once and no version holds now.
+        fam = str(it.get("family") or "")
+        try:
+            import variants
+            if not fam or not variants.FAMILY_RE.fullmatch(fam) \
+                    or not any(jobfs.Folder(self.root).variant(fam).glob("v*/approved.json")):
+                return None  # never approved: the file is not a variant build
+            if variants.usable(self.root, fam)[0] is not None:
+                return None
+            return self.version(fam, variants.current_version(self.root, fam))[0] or "changed"
+        except Exception:  # unreadable: fail closed
+            return "changed"
+
+    def version(self, fam, v):
+        """(None | "corrected" | "changed", approved dict or None) for one family version."""
+        key = (fam, v)
+        if key not in self.versions:
+            try:
+                import variants
+                if not variants.FAMILY_RE.fullmatch(fam):
+                    raise ValueError(fam)
+                ok, _, approved = variants.files_approval(jobfs.Folder(self.root).variant(fam, v))
+                if not ok:
+                    self.versions[key] = ("changed", None)
+                elif variants.changed_entries(self.root, approved):
+                    self.versions[key] = ("corrected", approved)
+                else:
+                    self.versions[key] = (None, approved)
+            except Exception:  # an approval that cannot be checked is not one
+                self.versions[key] = ("changed", None)
+        return self.versions[key]
+
+
+def hold_text(n, why):
+    """next's HOLD line for item n."""
+    return f"HOLD #{n}: its base resume {HOLD_WHY.get(why, HOLD_WHY['changed'])}. {HOLD_ASK}"
+
+
+def hold_line(held):
+    """The card's one line for the held items [(n, why)]; None when there are none."""
+    if not held:
+        return None
+    ns = {n for n, _ in held}
+    why = "corrected" if all(w == "corrected" for _, w in held) else "changed"
+    where = f" ({numbers(ns)})" if len(ns) <= MAX_LISTED else ""
+    whose = "its" if len(ns) == 1 else "their"
+    return f"{plural(len(ns), 'job')} on hold{where}: {whose} base resume {HOLD_WHY[why]}. {HOLD_ASK}"
+
+
+# ---------- the link next opens (SEC-11) ----------
+
+def web_link(url):
+    """url when it is a plain http(s) web address that a browser opens as
+    written, else "". Refused: any other scheme (file:, javascript:, data:,
+    ...), user info or a percent sign in the host part, a backslash (a browser
+    reads it as a slash, so the host it opens differs), a space or control or
+    format character, a host outside a-z, 0-9, '.' and '-' (one trailing dot
+    dropped), an empty label or one over 63 characters, an address or a name
+    for this PC or its network (an IP address, localhost, .local, one
+    label), and a job board."""
+    if not isinstance(url, str):
+        return ""
+    s = url.strip()
+    if not s or len(s) > LINK_MAX or "\\" in s:
+        return ""
+    if any(unicodedata.category(ch)[0] in "CZ" for ch in s):
+        return ""
+    try:
+        u = urlsplit(s)
+        u.port  # a port that is not a number raises ValueError
+    except ValueError:
+        return ""
+    if u.scheme.lower() not in ("http", "https") or not u.netloc or not u.netloc.isascii() \
+            or any(ch in u.netloc for ch in "@%"):
+        return ""
+    import netfetch  # the one canonical host every allow and deny decision uses (shared decision 1)
+    try:
+        host = netfetch.host_of(s)
+    except netfetch.Denied:
+        return ""
+    labels = host.split(".")
+    if not host or not HOST_RE.fullmatch(host) or any(not lb or len(lb) > 63 for lb in labels):
+        return ""
+    # A public name: two labels or more, the last one starting with a letter (a browser reads
+    # 10.0.0.1, 0x7f.1 or 2130706433 as an address), and not a name for this PC or its network.
+    if len(labels) < 2 or not labels[-1][0].isalpha() or host == "localhost" \
+            or host.endswith(LOCAL_SUFFIXES):
+        return ""
+    if netfetch.job_board(host) or BOARD_LABELS & set(labels) \
+            or any(host == d or host.endswith("." + d) for d in BOARD_DOMAINS):
+        return ""
+    return s
+
+
+def open_link(it, refs):
+    """The link next opens: the referral link (the queue's, else one stored in
+    the tracker after the build), else the apply URL; each must be a plain
+    http(s) web address (web_link). "" when none is."""
+    for get in (lambda: it.get("referral_url"), lambda: refs().get(it.get("job_key")), lambda: it.get("apply_url")):
+        url = get()
+        link = web_link(url) if url else ""
+        if link:
+            return link
+    return ""
 
 
 # ---------- sensitive answers ----------
@@ -546,11 +724,14 @@ def draft_for(m, n):
 
 # ---------- the order items are served in ----------
 
-def serving(root, day, items, by_n, by_key, m, short=False):
+def serving(root, day, items, by_n, by_key, m, short=False, holds=None):
     """(order, waiting): [(item, state)] in the order next serves them (the card's
     "Starting #N" is the first), and the items that wait for a resume.
     In progress first, then unparked, then number order; without this
-    morning's prep, Tier A items with no Tier A build yet come after the rest."""
+    morning's prep, Tier A items with no Tier A build yet come after the rest.
+    Items held for a corrected base resume (Holds) come after every other
+    item, so a user who stops early has done the ones that are ready."""
+    holds = holds or Holds(root)
     prepped = tier_a_prepped(root, day, m)
     order, waiting = [], []
     for it in items:
@@ -562,22 +743,27 @@ def serving(root, day, items, by_n, by_key, m, short=False):
             continue
         defer = not prepped and it.get("tier") == "A" and not it.get("added_by") and not tier_a_ready(root, it)
         rank = 0 if st in IN_PROGRESS else 1 if st == "unparked" else 2
-        order.append(((rank, 1 if defer else 0, int(it.get("n") or 0)), it, st))
+        group = 2 if holds.reason(it) else 0 if st in IN_PROGRESS else 1
+        order.append(((group, rank, 1 if defer else 0, int(it.get("n") or 0)), it, st))
     order = [(it, st) for _, it, st in sorted(order, key=lambda x: x[0])]
     if short:
-        order = short_order(root, order, sensitive_ok(root, day))
+        order = short_order(root, order, sensitive_ok(root, day), holds)
     return order, waiting
 
 
-def short_order(root, cands, confirmed):
+def short_order(root, cands, confirmed, holds=None):
     """The easy day (spec 1.3): an item already started or handed over first,
     then no-account items by ATS effort. Passed over (no event: they stay):
     an open question, a sensitive field other than the profile's salary and
-    sponsorship that today's sensitive_ok.json does not settle, no resume."""
+    sponsorship that today's sensitive_ok.json does not settle, no resume, a
+    resume held for a correction."""
     import jobqueue  # ATS_PROFILES effort: Greenhouse 1 ... Pinpoint 9, the rest after
+    holds = holds or Holds(root)
     keep = []
     for it, st in cands:
         n = int(it.get("n") or 0)
+        if holds.reason(it):
+            continue
         if st not in IN_PROGRESS:
             if it.get("account") != "none" or it.get("needs") or it.get("answers_status") == "needs_you" \
                     or (it.get("sensitive") and not settled(n, confirmed) and not standard_only(root, it)) \
@@ -590,6 +776,17 @@ def short_order(root, cands, confirmed):
 def closed_keys(root):
     live = read_json(jobfs.Folder(root).runner_out / "liveness.json", {}).get("items", {})
     return {k for k, v in live.items() if isinstance(v, dict) and v.get("closed")}, live
+
+
+def lazy(fn):
+    """fn's value, computed on the first call only."""
+    box = []
+
+    def get():
+        if not box:
+            box.append(fn())
+        return box[0]
+    return get
 
 
 # ---------- the card's lines ----------
@@ -623,9 +820,12 @@ def needs_line(m):
     return f"Needs you: {'; '.join(urgent)}." if urgent else None
 
 
-def ready_line(items, block, by_n, by_key, root=None):
+def ready_line(items, block, by_n, by_key, root=None, holds=None):
+    """Ready counts the jobs not done that can be served now: a resume to
+    attach, and none held for a correction (the hold line counts those)."""
     left = [it for it in items if state_of(it, by_n, by_key) not in FINAL
-            and (root is None or has_resume(root, it, state_of(it, by_n, by_key)))]
+            and (root is None or has_resume(root, it, state_of(it, by_n, by_key)))
+            and not (holds and holds.reason(it))]
     if not left:
         return None
     no_acct = sum(1 for it in left if it.get("account") == "none")
@@ -889,11 +1089,68 @@ def variant_wait(root, day):
     return out
 
 
+def a_an(phrase):
+    """"a" or "an" by the sound of the phrase's first word: an Academic, a
+    Clinical, a QC, an MSL, an R&D, a university, an hour."""
+    first = str(phrase or "").strip().split(" ")[0]
+    letters = re.sub(r"[^A-Za-z]", "", first)
+    if not letters:
+        return "a"
+    if len(letters) > 1 and letters.isupper():  # an initialism, read letter by letter
+        return "an" if letters[0] in "AEFHILMNORSX" else "a"
+    low = letters.lower()
+    if low.startswith(("hour", "honest", "honor", "heir")):
+        return "an"
+    if low.startswith(("uni", "use", "usu", "uti", "eu", "one", "once")):
+        return "a"
+    return "an" if low[0] in "aeiou" else "a"
+
+
+def short_label(label):
+    """A family label as a card names it in passing: the part before a
+    parenthesis, and before " / " when that part has two words or more
+    ("Research associate / lab technician" -> "Research associate"; "Quality /
+    validation" stays whole)."""
+    text = str(label or "").split(" (")[0].strip() or str(label or "").strip()
+    head = text.split(" / ")[0].strip()
+    if head != text and len(head.split()) >= 2:
+        text = head
+    return text[:40].rstrip()
+
+
+def no_variant_line(root, never):
+    """One line for every family with no base resume yet (shared decision 7):
+    '180 more jobs need a base resume you don't have yet (most: Clinical
+    research 66, Research associate 50). Say /job variants to make one.'
+    About LINE_MAX characters at most; the family names drop first."""
+    total = sum(never.values())
+    ranked = sorted(never.items(), key=lambda kv: (-kv[1], family_label(root, kv[0]).lower()))
+    names = [(short_label(family_label(root, fam)), k) for fam, k in ranked]
+    head = f"{total} more {'job needs' if total == 1 else 'jobs need'}"
+    tail = " Say /job variants to make one."
+    tries = []
+    if len(names) == 1:
+        tries.append(f"{head} {a_an(names[0][0])} {names[0][0]} base resume you don't have yet.")
+    else:
+        most = "most: " if len(names) > 2 else ""
+        tries.append(f"{head} a base resume you don't have yet ({most}{names[0][0]} {names[0][1]}, "
+                     f"{names[1][0]} {names[1][1]}).")
+        tries.append(f"{head} a base resume you don't have yet (most: {names[0][0]} {names[0][1]}).")
+    for line in tries:
+        if len(line + tail) <= LINE_MAX:
+            return line + tail
+    return f"{head} a base resume you don't have yet.{tail}"
+
+
 def approval_lines(root, waiting, held=None):
-    """One line per family whose jobs wait for a base resume (shared decision 2):
-    never made, never approved, or changed since its approval, with how many
-    jobs wait (the queued ones, or the builder's count when larger); one line
-    for jobs whose resume file is simply not built yet."""
+    """The lines for jobs that wait for a base resume (shared decisions 2 and
+    7), with how many jobs wait (the queued ones, or the builder's count when
+    larger). One line per family only when it needs the user: never approved
+    ("... for your ok on the <label> base resume"), or changed since its
+    approval ("The <label> base resume changed, ..."). Every family with no
+    variant at all shares one line (no_variant_line). Jobs whose file is
+    simply not built yet, an approved family's too, share the "no resume
+    file yet" line."""
     by_fam, unbuilt, usable = {}, 0, {}
     for it in waiting:
         fam = str(it.get("family") or "")
@@ -910,30 +1167,33 @@ def approval_lines(root, waiting, held=None):
             usable[fam] = approved_now(root, fam)
         if not usable[fam]:  # once approved, only the queued jobs still wait (for their build)
             counts[fam] = max(counts.get(fam, 0), k)
-    out = []
-    if unbuilt:
-        out.append(f"{plural(unbuilt, 'job')} {'has' if unbuilt == 1 else 'have'} no resume file yet; "
-                   f"the job finder makes {'it' if unbuilt == 1 else 'them'} on its next run.")
     folder = jobfs.Folder(root)
+    per, never = [], {}
     for fam in sorted(counts):
         k = counts[fam]
         jobs = f"{plural(k, 'job')} wait{'s' if k == 1 else ''}"
         if not fam:
-            out.append(f"{jobs} for a resume (type /job variants).")
+            per.append(f"{jobs} for a resume (type /job variants).")
             continue
-        label = family_label(root, fam)
         base = folder.variant(fam)
         made = any(p.is_dir() for p in base.glob("v*")) if base.exists() else False
         ever = any(base.glob("v*/approved.json")) if made else False
         if not made:
-            out.append(f"{jobs} for a {label} base resume (type /job variants).")
+            never[fam] = k
         elif not ever:
-            out.append(f"{jobs} for your ok on the {label} base resume (type /job variants).")
-        elif approved_now(root, fam):
-            out.append(f"{jobs} for resumes from the {label} base you approved; "
-                       "the job finder builds them on its next run.")
+            per.append(f"{jobs} for your ok on the {family_label(root, fam)} base resume (type /job variants).")
+        elif usable[fam]:
+            unbuilt += k  # approved: the job finder builds them on its next run
         else:
-            out.append(f"The {label} base resume changed, so {jobs} for your ok again (type /job variants).")
+            per.append(f"The {family_label(root, fam)} base resume changed, so {jobs} for your ok again "
+                       "(type /job variants).")
+    out = []
+    if unbuilt:
+        out.append(f"{plural(unbuilt, 'job')} {'has' if unbuilt == 1 else 'have'} no resume file yet; "
+                   f"the job finder makes {'it' if unbuilt == 1 else 'them'} on its next run.")
+    out += per
+    if never:
+        out.append(no_variant_line(root, never))
     return out
 
 
@@ -946,8 +1206,9 @@ def approved_now(root, fam):
         return False
 
 
-def note_lines(root, day, items, view, store, waiting):
-    out = approval_lines(root, waiting, variant_wait(root, day))
+def note_lines(root, day, items, view, store, waiting, held=()):
+    out = [line for line in [hold_line(held)] if line]
+    out += approval_lines(root, waiting, variant_wait(root, day))
     rejected = view.get("rejected") or []
     if rejected:
         out.append(f"{plural(len(rejected), 'tracker change')} did not go through: {clean(rejected[0].get('reason'), 120)}.")
@@ -984,8 +1245,16 @@ def catch_up_line(root, day, m, items):
     return CATCH_UP_NOTE
 
 
-def first_open(order, closed):
-    return next((it for it, _ in order if it.get("job_key") not in closed), None)
+def first_open(order, closed, refs=None):
+    """The first item next would serve: not found closed, and with a link it may open."""
+    return next((it for it, _ in order if it.get("job_key") not in closed
+                 and (refs is None or open_link(it, refs))), None)
+
+
+def held_items(order, closed, refs, holds):
+    """[(n, why)] of the items next prints HOLD for, in serving order."""
+    return [(int(it.get("n") or 0), holds.reason(it)) for it, _ in order
+            if it.get("job_key") not in closed and open_link(it, refs) and holds.reason(it)]
 
 
 def day_started(by_n, by_key):
@@ -1000,8 +1269,10 @@ def card(root, day, short=False):
     m = morning(root, day)
     status = verified(jobfs.Folder(root).status_json, {})
     closed, _ = closed_keys(root)
-    order, waiting = serving(root, day, items, by_n, by_key, m, short=short)
-    nxt = first_open(order, closed)
+    holds = Holds(root)
+    refs = lazy(lambda: referral_links(root))
+    order, waiting = serving(root, day, items, by_n, by_key, m, short=short, holds=holds)
+    nxt = first_open(order, closed, refs)
     lines = [f"{day:%A}, {day:%B} {day.day}"]
     if short:
         lines = [SHORT_HEAD]
@@ -1022,7 +1293,7 @@ def card(root, day, short=False):
     cap = int(settings["daily"].get("questions_per_day", 6))
     done = {int(n) for n, st in by_n.items() if st in FINAL and str(n).isdigit()}
     head = [yesterday_line(store, day)] + (away_lines(m) if first else []) + [needs_line(m)]
-    for line in head + [ready_line(items, block, by_n, by_key, root)]:
+    for line in head + [ready_line(items, block, by_n, by_key, root, holds)]:
         if line:
             lines.append(line)
     lines += question_lines(root, day, m, cap, by_n, by_key)
@@ -1036,14 +1307,15 @@ def card(root, day, short=False):
         lines += [w for w in weekly if w]
     lines += runner_lines(root, day, status, settings)
     lines += config_lines(root, settings)
-    lines += note_lines(root, day, items, view, store, waiting)
+    held = held_items(order, closed, refs, holds)
+    lines += note_lines(root, day, items, view, store, waiting, held)
     if first:
         line = catch_up_line(root, day, m, items)
         if line:
             lines.append(line)
-    if nxt:
+    if nxt and not holds.reason(nxt):
         lines.append(f"Starting #{int(nxt['n'])} now. Say \"short\" any time for an easy day.")
-    elif waiting:
+    elif waiting or held:
         lines.append("Nothing else is ready until then.")
     elif items:
         lines.append("Today's list is done. Say \"more\" for up to 10 more from the pool.")
@@ -1111,7 +1383,9 @@ def next_item(root, day, short=False):
     by_n, by_key, _ = states(root, day)
     m = morning(root, day)
     closed, live = closed_keys(root)
-    order, waiting = serving(root, day, items, by_n, by_key, m, short=short)
+    holds = Holds(root)
+    refs = lazy(lambda: referral_links(root))
+    order, waiting = serving(root, day, items, by_n, by_key, m, short=short, holds=holds)
     confirmed = sensitive_ok(root, day)
     out, wait = [], []
     if waiting:
@@ -1127,13 +1401,26 @@ def next_item(root, day, short=False):
             rec = live.get(it.get("job_key")) or {}
             out.append(f"SKIP #{n:02d} closed (checked {rec.get('checked', '?')})")
             continue
+        link = open_link(it, refs)
+        if not link:  # SEC-11: never an OPEN line that is not a plain http(s) web address
+            out.append(f"SKIP #{n:02d} bad link (not a plain http(s) web address; never opened)")
+            continue
+        why = holds.reason(it)
+        if why:  # shared decision 5: no OPEN, UPLOAD or HANDOVER for a resume built before a correction
+            out += [f"NEXT #{n:02d} {it.get('job_key', '')}",
+                    f"COMPANY {it.get('company', '')}", f"ROLE {it.get('role', '')}",
+                    f"FOLDER {it.get('folder', '')}"]
+            if st in IN_PROGRESS:
+                out.append(f"STATE {st}")
+            out.append(hold_text(n, why))
+            return out + wait
         upload, note = upload_line(root, it)
         letter, lnote = letter_line(root, it)
         attach = "attach last" if it.get("attach") in LAST_ATTACH else "attach first"
         out += [f"NEXT #{n:02d} {it.get('job_key', '')}",
                 f"COMPANY {it.get('company', '')}", f"ROLE {it.get('role', '')}",
                 f"ATS {it.get('ats', '')} ({attach}, account {it.get('account', 'none')})",
-                f"OPEN {it.get('referral_url') or referral_links(root).get(it.get('job_key'), '') or it.get('apply_url', '')}",
+                f"OPEN {link}",
                 f"FOLDER {it.get('folder', '')}",
                 f"UPLOAD {upload or 'none'} ({note})"]
         if letter:

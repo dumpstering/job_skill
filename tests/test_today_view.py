@@ -5,7 +5,10 @@ its sha256 check; the SENSITIVE and Check lines from sensitive_ok.json; the
 cover letter; --short), the card and next agreeing on the first item, items
 waiting for a base resume, the short-day card, progress, the do-yourself
 list, a job from a link counted at once, the no-runner line, config typos
-and the drafts.
+and the drafts; the one line for families with no base resume (live day
+2's card shape), jobs held at next after a cited library entry is
+corrected mid-day (HOLD, and the card's count line), and OPEN lines that
+are only ever plain http(s) web addresses.
 
 Usage: python tests/test_today_view.py
 Every root is synthetic and built in a temp folder (a hand-made queue.json,
@@ -366,8 +369,10 @@ def test_waiting_variants():
     sp = jobfs.Folder(root).config / "search_profile.toml"
     sp.write_text('[[family]]\nid = "qc_micro"\nlabel = "QC microbiology"\n', encoding="ascii")
     lines = card(root).splitlines()
-    assert "3 jobs wait for a QC microbiology base resume (type /job variants)." in lines, lines
-    assert "1 job waits for a assay_dev base resume (type /job variants)." in lines, lines
+    # Shared decision 7: the families with no variant share one line.
+    assert ("4 more jobs need a base resume you don't have yet (QC microbiology 3, assay_dev 1). "
+            "Say /job variants to make one.") in lines, lines
+    assert not any("wait for a" in ln for ln in lines), lines
     assert "Ready: 20. No account needed for any of them." in lines, lines
     assert lines[-1].startswith("Starting #5 now."), lines
     out = run_args(root, "next")
@@ -377,13 +382,15 @@ def test_waiting_variants():
     q["counts"]["variant_wait"] = {"qc_micro": 40, "postdoc": 7}
     jobfs.atomic_write_json(jobfs.Folder(root).queue_json(DAY), q)
     lines = card(root).splitlines()
-    assert "40 jobs wait for a QC microbiology base resume (type /job variants)." in lines, lines
-    assert "7 jobs wait for a postdoc base resume (type /job variants)." in lines, lines
+    assert ("48 more jobs need a base resume you don't have yet (most: QC microbiology 40, postdoc 7). "
+            "Say /job variants to make one.") in lines, lines
     q["counts"]["variant_wait"] = {}
     jobfs.atomic_write_json(jobfs.Folder(root).queue_json(DAY), q)
     v1 = jobfs.Folder(root).variant("qc_micro", 1)
     v1.mkdir(parents=True)
-    assert "3 jobs wait for your ok on the QC microbiology base resume (type /job variants)." in card(root).splitlines()
+    lines = card(root).splitlines()
+    assert "3 jobs wait for your ok on the QC microbiology base resume (type /job variants)." in lines, lines
+    assert "1 more job needs an assay_dev base resume you don't have yet. Say /job variants to make one." in lines
     (v1 / "approved.json").write_text("{}", encoding="ascii")
     assert ("The QC microbiology base resume changed, so 3 jobs wait for your ok again (type /job variants)."
             in card(root).splitlines())
@@ -394,8 +401,7 @@ def test_waiting_variants():
         lines = today_view.card(root, jobfs.today(root))
     finally:
         today_view.approved_now = real
-    assert ("3 jobs wait for resumes from the QC microbiology base you approved; the job finder builds them on "
-            "its next run.") in lines, lines
+    assert "3 jobs have no resume file yet; the job finder makes them on its next run." in lines, lines
     for n in range(5, 25):
         emit(root, "applied", n)
     out = run_args(root, "next")
@@ -783,6 +789,227 @@ def test_stale_upload_copy():
     print("ok an upload copy that differs is never handed over")
 
 
+VARIANT_FIXTURE = HERE / "fixtures" / "variant_example"
+LIVE_FAMILIES = {   # the preset's labels and live day 2's counts.variant_wait (r2 live card, 11 lines)
+    "academic_staff_research": ("Academic staff research (UC, Stanford, institutes)", 9),
+    "biosafety": ("Biosafety", 3), "clinical_research": ("Clinical research", 66),
+    "field_application_tech_support": ("Field application / technical support scientist", 2),
+    "medical_science_liaison": ("Medical science liaison / medical affairs", 9),
+    "medical_scientific_writing": ("Medical / scientific writing", 5), "postdoc": ("Postdoctoral", 4),
+    "process_dev_fermentation": ("Process development / fermentation", 5),
+    "quality_validation": ("Quality / validation", 11), "regulatory_affairs": ("Regulatory affairs", 16),
+    "research_associate_lab_tech": ("Research associate / lab technician", 50)}
+HOLD_ASK = "Say skip, or make the new version with /job variants first."
+
+
+def test_no_variant_line():
+    """L2-04, shared decision 7: families with no variant share one line under
+    about 140 characters, the two largest named; articles follow the sound."""
+    root = make_root("no_variant", morning=QUIET_MORNING, workday=False)
+    sp = jobfs.Folder(root).config / "search_profile.toml"
+    sp.write_text("".join(f'[[family]]\nid = "{fid}"\nlabel = "{label}"\n\n'
+                          for fid, (label, _) in LIVE_FAMILIES.items()), encoding="ascii")
+    q = json.loads(jobfs.Folder(root).queue_json(DAY).read_text(encoding="utf-8"))
+    q["counts"]["variant_wait"] = {fid: k for fid, (_, k) in LIVE_FAMILIES.items()}
+    jobfs.atomic_write_json(jobfs.Folder(root).queue_json(DAY), q)
+    out = card(root)
+    want = ("180 more jobs need a base resume you don't have yet (most: Clinical research 66, Research associate 50). "
+            "Say /job variants to make one.")
+    lines = out.splitlines()
+    assert want in lines and len(want) <= 140, out
+    assert not any("base resume (type /job variants)" in ln for ln in lines), out
+    assert len(lines) <= 6, f"the live card was 17 lines; now {len(lines)}:\n{out}"
+    assert report.check_wording(out) == [], report.check_wording(out)
+    # One family: its label with the right article.
+    q["counts"]["variant_wait"] = {"academic_staff_research": 9}
+    jobfs.atomic_write_json(jobfs.Folder(root).queue_json(DAY), q)
+    assert ("9 more jobs need an Academic staff research base resume you don't have yet. Say /job variants to make "
+            "one.") in card(root).splitlines()
+    # A label too long for the line: the names drop, the count stays.
+    sp.write_text(sp.read_text(encoding="ascii") + '[[family]]\nid = "long_one"\nlabel = "'
+                  + "Very long family label words " * 3 + '"\n', encoding="ascii")
+    q["counts"]["variant_wait"] = {"long_one": 7, "postdoc": 7}
+    jobfs.atomic_write_json(jobfs.Folder(root).queue_json(DAY), q)
+    line = next(ln for ln in card(root).splitlines() if ln.startswith("14 more jobs"))
+    assert len(line) <= 140, line
+    import today_view
+    for phrase, want in (("Academic staff research", "an"), ("Clinical research", "a"), ("QC microbiology", "a"),
+                         ("MSL", "an"), ("R&D scientist", "an"), ("University lab", "a"), ("Industry R&D", "an"),
+                         ("Honors", "an"), ("Ecology", "an"), ("one-year", "a")):
+        assert today_view.a_an(phrase) == want, (phrase, today_view.a_an(phrase))
+    assert today_view.short_label("Research associate / lab technician") == "Research associate"
+    assert today_view.short_label("Quality / validation") == "Quality / validation"
+    assert today_view.short_label("Academic staff research (UC, Stanford, institutes)") == "Academic staff research"
+    print("ok families with no base resume share one line (live day 2's 11 lines -> 1), a/an by sound")
+
+
+def approve_qc(root):
+    r = subprocess.run([sys.executable, str(SCRIPTS / "variants.py"), "approve", "--root", str(root), "--family",
+                        "qc_micro"], capture_output=True, text=True, encoding="utf-8",
+                       env=dict(os.environ, JOB_SKILL_NOW=NOW))
+    assert r.returncode == 0 and "APPROVED qc_micro v1" in r.stdout, r.stdout + r.stderr
+    return r.stdout
+
+
+def correction_root(name):
+    """A make_root list whose #4 and #9 Tier B files came from qc_micro v1 (their
+    tune_log.json names it), #12's file has no log (an older build) and every
+    other job is assay_dev, a family with no variant; qc_micro v1 is approved."""
+    root = make_root(name, morning=QUIET_MORNING, workday=False)
+    for fname in ("achievement_library.md", "techniques.md", "master_resume.md", "profile.md", "publications.md"):
+        shutil.copyfile(VARIANT_FIXTURE / fname, root / fname)
+    shutil.copytree(VARIANT_FIXTURE / "variants", root / "variants")
+    shutil.copyfile(VARIANT_FIXTURE / "config" / "search_profile.toml",
+                    jobfs.Folder(root).config / "search_profile.toml")
+    approve_qc(root)
+    approved = json.loads((root / "variants" / "qc_micro" / "v1" / "approved.json").read_text(encoding="utf-8"))
+    items = queue_items(root)
+    for it in items:
+        if it["n"] in (4, 9):
+            (root / it["folder"] / "tune_log.json").write_text(json.dumps(
+                {"family": "qc_micro", "version": 1, "variant": "qc_micro@v1", "approved_sha256": approved["sha256"],
+                 "status": "built"}), encoding="ascii")
+        elif it["n"] != 12:
+            it["family"] = "assay_dev"
+    write_queue(root, items)
+    return root
+
+
+def correct_l0007(root):
+    """The user corrects L-0007, which qc_micro v1 cites ("Replaces:" keeps the ID)."""
+    lib = root / "achievement_library.md"
+    lib.write_bytes(lib.read_bytes().replace(b"Gram stain and identification", b"Gram stain, and identification"))
+
+
+def test_corrected_today():
+    """Shared decision 5: a library entry corrected mid-day that a family's
+    approved version cites holds that day's jobs built from it: next prints
+    HOLD (no OPEN, UPLOAD or HANDOVER), they come last, Ready leaves them out,
+    and the card's one count line names the same jobs next holds."""
+    root = correction_root("corrected")
+    lines = card(root).splitlines()
+    assert "Ready: 24. No account needed for any of them." in lines and not any("on hold" in ln for ln in lines), lines
+    for n in (1, 2, 3):
+        emit(root, "applied", n)
+    out = run_args(root, "next")
+    assert out[0] == "NEXT #04 greenhouse:9004" and any(ln.startswith("UPLOAD upload/04_") for ln in out), out
+    correct_l0007(root)
+    hold = f"3 jobs on hold (#4, #9, #12): their base resume cites something you corrected today. {HOLD_ASK}"
+    lines = card(root).splitlines()
+    assert hold in lines, lines
+    assert "Ready: 18. No account needed for any of them." in lines, lines
+    assert lines[-1].startswith("Starting #5 now."), lines
+    assert run_args(root, "next")[0] == "NEXT #05 greenhouse:9005"
+    for n in [n for n in range(5, 25) if n not in (9, 12)]:
+        emit(root, "applied", n)
+    seen = []
+    for _ in range(3):
+        out = run_args(root, "next")
+        n = int(out[0].split()[1].lstrip("#"))
+        assert out[-1] == f"HOLD #{n}: its base resume cites something you corrected today. {HOLD_ASK}", out
+        assert not any(ln.startswith(("OPEN", "UPLOAD", "ATTACH", "HANDOVER", "LETTER")) for ln in out), out
+        seen.append(n)
+        assert card(root).splitlines()[-1] == "Nothing else is ready until then."
+        emit(root, "later", n)
+    assert seen == [4, 9, 12], "next holds the same jobs the card counts, in number order"
+    assert run_args(root, "next") == ["NEXT none"]
+    print("ok a cited entry corrected mid-day: HOLD at next, held jobs last, the card counts the same ones")
+    # The user's ok on the same files ("approve qc_micro": APPROVED ... again): the held jobs are ready at once.
+    root = correction_root("corrected_again")
+    correct_l0007(root)
+    emit(root, "started", 4)
+    assert run_args(root, "next")[0] == "NEXT #01 greenhouse:9001", "a held job in progress waits behind the rest"
+    assert any(ln.startswith("3 jobs on hold") for ln in card(root).splitlines())
+    assert "again" in approve_qc(root)
+    lines = card(root).splitlines()
+    assert not any("on hold" in ln for ln in lines) and "Ready: 24. No account needed for any of them." in lines, lines
+    assert run_args(root, "next")[0] == "NEXT #04 greenhouse:9004", "in progress first again"
+    # An approved file changed after the build (not a library entry): held, with its own reason.
+    pool = root / "variants" / "qc_micro" / "v1" / "pool.json"
+    pool.write_bytes(pool.read_bytes().replace(b"Performed bioburden", b"Performed  bioburden", 1))
+    lines = card(root).splitlines()
+    assert f"3 jobs on hold (#4, #9, #12): their base resume changed since you approved it. {HOLD_ASK}" in lines, lines
+    assert run_args(root, "next")[0] == "NEXT #01 greenhouse:9001"
+    out = run_args(root, "next", "--short")
+    assert not any(ln.startswith(("NEXT #04", "NEXT #09", "NEXT #12")) for ln in out), "a short day leaves them out"
+    print("ok re-approval releases the held jobs; a changed approved file holds them too")
+
+
+def test_tier_a_corrected():
+    """Shared decision 5 for Tier A: a strict build records the hashes of the
+    library entries it cites in final.json ("entries"); once the user corrects
+    one of them, that build no longer counts, so next falls back to the Tier B
+    file (judged by the hold check) and staging never uses it."""
+    import jobqueue
+    import library
+    root = correction_root("tier_a_corrected")
+    it3 = next(it for it in queue_items(root) if it["n"] == 3)
+    folder = root / it3["folder"]
+    for n in (1, 2):
+        emit(root, "applied", n)
+    tier_a_build(root, it3)
+    final = json.loads((folder / "final.json").read_text(encoding="utf-8"))
+    lib = library.load(root / "achievement_library.md").by_id
+    final["entries"] = {i: library.entry_hash(lib[i]) for i in ("L-0007", "L-0001")}
+    (folder / "final.json").write_text(json.dumps(final), encoding="ascii")
+    out = run_args(root, "next")
+    assert out[0].startswith("NEXT #03") and any(ln.startswith(f"UPLOAD {it3['folder']}/Jordan Q. Avery Resume.pdf")
+                                                 for ln in out), out
+    assert jobqueue.final_files(folder)[0] is not None
+    correct_l0007(root)
+    assert jobqueue.final_files(folder) == (None, None)
+    for n in [n for n in range(5, 25) if n not in (9, 12)]:  # #4, #9 and #12 are held (qc_micro cites L-0007)
+        emit(root, "applied", n)
+    out = run_args(root, "next")  # a Tier A item with no usable build comes after the others
+    assert out[0].startswith("NEXT #03") and not any("Jordan Q. Avery Resume.pdf" in ln for ln in out), out
+    assert any("this is the fallback" in ln for ln in out), out
+    # An entries record that cannot be checked is not one; one with no entries is judged as before.
+    final["entries"] = {"L-0007": 7}
+    (folder / "final.json").write_text(json.dumps(final), encoding="ascii")
+    assert library.final_stale(folder, final) is True
+    final.pop("entries")
+    assert library.final_stale(folder, final) is False
+    print("ok a Tier A build citing an entry corrected since falls back to its Tier B file")
+
+
+def test_open_link():
+    """SEC-11: next never prints an OPEN line that is not a plain http(s) web
+    address; such an item is skipped (never opened), and the card does not
+    start with it."""
+    root = make_root("open_link", morning=QUIET_MORNING, workday=False)
+    items = queue_items(root)
+    bad = ["file://files.example-bio.com/share/apply.html", "javascript:alert(1)", "ftp://example.com/x",
+           "https://example.com" + chr(92) + "@jobs.example.com/x", "https://user@jobs.example.com/x",
+           "https://exa mple.com/x", "https://www.linkedin.com/jobs/view/1", "https://jobs.indeed.example/x",
+           "https://lnkd.in/abc", "https://ex_ample.com/x", "https://" + "a" * 64 + ".com/x",
+           "https://jobs..example.com/x", "//jobs.example.com/x", "https://jobs.example.com:99999/x",
+           "https://jobs.example.com/" + chr(0x202E) + "x", "http://10.0.0.1/apply", "http://0x7f.1/apply",
+           "http://localhost:8080/apply", "https://printer.local/apply", "http://intranet/apply",
+           "http://[::1]/apply", ""]
+    for it in items:
+        it["tier"], it["resume_status"] = "B", "built"
+    for i, url in enumerate(bad):
+        items[i]["apply_url"] = url
+    items[len(bad)]["referral_url"] = "file://files.example-bio.com/r"  # a bad referral link: the apply URL instead
+    items[len(bad) + 1]["apply_url"] = "HTTPS://Jobs.Example.COM./apply/7?src=x#top"
+    write_queue(root, items)
+    out = run_args(root, "next")
+    skips = [ln for ln in out if ln.startswith("SKIP")]
+    assert len(skips) == len(bad) and all("bad link (not a plain http(s) web address; never opened)" in ln
+                                          for ln in skips), out
+    opens = [ln for ln in out if ln.startswith("OPEN")]
+    assert opens == [f"OPEN {items[len(bad)]['apply_url']}"], out
+    lines = card(root).splitlines()
+    assert lines[-1].startswith(f"Starting #{len(bad) + 1} now."), lines
+    emit(root, "applied", len(bad) + 1)
+    assert "OPEN HTTPS://Jobs.Example.COM./apply/7?src=x#top" in run_args(root, "next")
+    import today_view
+    assert today_view.web_link("https://job-boards.greenhouse.io/acme/jobs/1") == \
+        "https://job-boards.greenhouse.io/acme/jobs/1"
+    assert today_view.web_link(None) == "" and today_view.web_link(["https://example.com"]) == ""
+    print("ok OPEN is only ever a plain http(s) web address; other links are skipped, never opened")
+
+
 def test_wording():
     for text in CARDS:
         assert report.check_wording(text) == [], report.check_wording(text)
@@ -796,7 +1023,8 @@ def main():
              test_letter, test_one_selector, test_waiting_variants, test_notes_and_diy, test_diy, test_job_from_link,
              test_sensitive_check, test_sensitive_line, test_short_day, test_short_card, test_stale_morning,
              test_card_after_break, test_drafts, test_config_typo, test_no_runner_card, test_runner_state_lines,
-             test_computed_checks, test_stale_upload_copy, test_wording)
+             test_computed_checks, test_stale_upload_copy, test_no_variant_line, test_corrected_today,
+             test_tier_a_corrected, test_open_link, test_wording)
     try:
         for t in tests:
             if not only or t.__name__ in only or t.__name__.removeprefix("test_") in only:

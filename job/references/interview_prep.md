@@ -1,7 +1,8 @@
 # Interview prep
 
 For the job in this chat, or the application the user names (find it with
-`tracker.py show --company "<Company>"`). With none named, list the rows at
+`{"company": "<Company>"}` in `claude/args.json` and `tracker.py show
+--args-file claude/args.json`; SKILL.md "Scripts"). With none named, list the rows at
 `Screen` or `Interview` (`tracker.py show --status Screen Interview`) and ask
 which. An Interview or Screen email already reached the user's phone (inbox.md,
 Immediate) and tops the card with an offer of `/job prep`.
@@ -11,9 +12,9 @@ Work from what the employer has: the files in the job folder's `submitted/`
 achievement library. The posting is the only source about the employer.
 
 A job logged by hand has no job folder. Get its posting as in SKILL.md step 3
-(creating the job folder and setting the row's Folder with `tracker.py update
-<ID> folder="applications/<job folder name>"`), and use the master resume as
-what was sent, saying so.
+(creating the job folder from posting.py's `FOLDER` line and setting the
+row's Folder with `tracker.py update <ID> folder="<the FOLDER path>"`), and
+use the master resume as what was sent, saying so.
 
 1. **Likely questions:** for each must-have and main duty in the posting, one
    or two questions an interviewer would ask about it, plus the usual openers

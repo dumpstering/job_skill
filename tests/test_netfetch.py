@@ -77,7 +77,8 @@ def test_policy_rules():
     p = netfetch.Policy()
     assert p.reason("https://indeed.co.uk/viewjob") == "job-board indeed.co.uk"
     assert p.reason("https://jobs.lever.co/acme/1") is None
-    assert p.reason("https://indeed.acmebio.example/jobs") == "host-not-allowed indeed.acmebio.example"
+    # D1: any label 'indeed' (or linkedin, glassdoor, ...) is the board, whatever follows it
+    assert p.reason("https://indeed.acmebio.example/jobs") == "job-board indeed.acmebio.example"
     assert p.reason("http://api.lever.co/v0/postings/acme") == "not-https api.lever.co"
     assert p.reason("https://careers.acme.example/jobs") == "host-not-allowed careers.acme.example"
     assert p.reason("https://api.lever.co/v0/postings/acme", "POST") == "post-not-allowed api.lever.co"
@@ -91,9 +92,12 @@ def test_policy_rules():
     assert p.reason("https://recruiting.ultipro.com/ACME/JobBoard/abc/OpportunityDetail?opportunityId=1") is None
     for bad in ("ftp://example.com/x", "http://user@evil.example/job", "file:///etc/passwd"):
         assert p.reason(bad) == "bad-url", bad
-    for private in ("http://127.0.0.1/", "http://localhost/x", "http://[::1]/", "http://printer.local/",
+    for private in ("http://127.0.0.1/", "http://localhost/x", "http://printer.local/",
                     "http://169.254.169.254/latest/meta-data"):
         assert p.reason(private).startswith("non-public "), private
+    # an IP literal in brackets holds ':' (not a host character): refused before any lookup
+    for v6 in ("http://[::1]/", "http://[64:ff9b::a00:1]/", "http://[::127.0.0.1]/"):
+        assert p.reason(v6).startswith("bad-url"), v6
     # attended (a pasted link): hard deny and public only, any host and http
     a = netfetch.Policy(unattended=False)
     assert a.reason("http://careers.acme.example/jobs") is None
@@ -135,7 +139,9 @@ def test_public_address_guard():
             pass
 
     real = (socket.getaddrinfo, socket.socket)
+    real_cls = netfetch.DeadlineSocket
     socket.getaddrinfo, socket.socket = resolver, FakeSocket
+    netfetch.DeadlineSocket = FakeSocket
     try:
         # a resolver answering public, then private: the socket uses the checked
         # public answer and the name is resolved once
@@ -158,6 +164,7 @@ def test_public_address_guard():
         assert "10.0.0.5" in str(e), e
     finally:
         socket.getaddrinfo = real[0]
+        netfetch.DeadlineSocket = real_cls
 
     # a redirect to 127.0.0.1 is refused mid-flight, by the plain and the policy handlers
     req = netfetch.Request("https://boards-api.greenhouse.io/v1/boards/acme/jobs")
@@ -335,7 +342,7 @@ def test_lookalike_hosts():
     letters, an ideographic dot or a zero-width space resolves to the board
     itself (the IDNA codec maps them), so it is the board: denied attended
     and unattended, before any request. Any other non-ASCII host is refused
-    too (host-not-ascii); the punycode spelling stays an ordinary host."""
+    too (bad-url); the punycode spelling stays an ordinary host."""
     shy, zwsp, ideo, fwdot = chr(0xAD), chr(0x200B), chr(0x3002), chr(0xFF0E)
     fw = "".join(chr(0xFF41 + ord(c) - ord("a")) for c in "linkedin")
     cases = {"https://www.link" + shy + "edin.com/jobs/view/1": "job-board linkedin.com",
@@ -349,33 +356,252 @@ def test_lookalike_hosts():
         assert netfetch.hard_deny(url) == want, (ascii(url), netfetch.hard_deny(url))
         for unattended in (True, False):
             assert netfetch.Policy(unattended=unattended).reason(url) == want, ascii(url)
-        assert netfetch.job_board(netfetch.host_of(url)), ascii(url)
+        try:
+            netfetch.host_of(url)
+            raise AssertionError(f"host_of accepted {ascii(url)}")
+        except netfetch.Denied as e:
+            assert e.reason.startswith("bad-url"), e.reason
     odd = "https://exam" + shy + "ple.com/jobs/1"
-    assert netfetch.hard_deny(odd) == "host-not-ascii exam\\xadple.com", netfetch.hard_deny(odd)
+    assert netfetch.hard_deny(odd) == "bad-url host exam\\xadple.com", netfetch.hard_deny(odd)
     f, _ = offline_fetcher(robots=False, unattended=False)
     try:
         f.get(odd)
         raise AssertionError("fetched a non-ASCII host")
     except netfetch.Denied as e:
-        assert e.reason.startswith("host-not-ascii"), e.reason
+        assert e.reason.startswith("bad-url"), e.reason
     assert f.log == []
     assert netfetch.hard_deny("https://xn--exmple-cua.com/jobs/1") is None
 
 
+def test_canonical_host():
+    """D1: one canonical host for every check. Mixed case and one trailing dot
+    fold to the plain name; any character outside a-z 0-9 . -, an empty label
+    or a label over 63 characters is refused with bad-url (host_of raises,
+    hard_deny and the policy answer bad-url or the board the spelling maps
+    to). LinkedIn's lnkd.in and licdn.com hosts and indeed.jobs are boards."""
+    assert netfetch.host_of("https://WWW.LinkedIn.COM./jobs/view/1") == "www.linkedin.com"
+    assert netfetch.host_of("https://Boards-API.Greenhouse.io/v1/boards/acme/jobs") == "boards-api.greenhouse.io"
+    assert netfetch.host_of("not a url") == "" and netfetch.host_of("") == ""
+    assert netfetch.canon_host("Careers.Example.com.") == "careers.example.com"
+    for url in ("https://WWW.LINKEDIN.COM/jobs/view/1", "https://www.linkedin.com./jobs/view/1",
+                "https://LinkedIn.com/in/x"):
+        assert netfetch.hard_deny(url) == "job-board linkedin.com", url
+    boards = {"https://lnkd.in/abc": "job-board lnkd.in", "https://media.licdn.com/x.png": "job-board licdn.com",
+              "https://indeed.jobs/x": "job-board indeed.jobs", "https://www.indeed.careers/x": "job-board indeed.careers",
+              "https://remotive.com/remote-jobs/x": "job-board remotive.com",
+              "https://www.ziprecruiter.co.uk/jobs/x": "job-board ziprecruiter.co.uk",
+              "https://LNKD.IN./x": "job-board lnkd.in"}
+    for url, want in boards.items():
+        for unattended in (True, False):
+            assert netfetch.Policy(unattended=unattended).reason(url) == want, (url, want)
+        assert netfetch.hard_deny(url) == want, url
+    assert netfetch.hard_deny("https://www.linkedin.com../x") == "job-board linkedin.com"  # refused host, named
+    refused = ["https://exa_mple.com/x", "https://a..b.example/x", "https://" + "a" * 64 + ".example/x",
+               "https://exa%6Dple.com/x", "https://[::1/x"]
+    for url in refused:
+        why = netfetch.hard_deny(url)
+        assert why and why.startswith("bad-url"), (url, why)
+        assert netfetch.Policy(unattended=False).reason(url).startswith("bad-url"), url
+        try:
+            netfetch.host_of(url)
+            raise AssertionError(f"host_of accepted {url}")
+        except netfetch.Denied as e:
+            assert e.reason.startswith("bad-url") and str(e).startswith("denied: bad-url"), e
+    for host in ("exa mple.com", "ex\\ample.com", "", "a" * 64 + ".com", "x." * 130 + "com"):
+        try:
+            netfetch.canon_host(host)
+            raise AssertionError(f"canon_host accepted {host!r}")
+        except netfetch.Denied as e:
+            assert e.reason.startswith("bad-url"), e
+    assert netfetch.host_or_blank("https://exam" + chr(0xAD) + "ple.com/") == ""
+    # every spelling the IDNA codec maps, named in D1: soft hyphen, sharp s, fullwidth, ideographic dot
+    shy, ideo = chr(0xAD), chr(0x3002)
+    fw = "".join(chr(0xFF41 + ord(c) - ord("a")) for c in "indeed")
+    for url, board in (("https://www.link" + shy + "edin.com/x", "linkedin.com"),
+                       ("https://www.gla" + chr(0xDF) + "door.com/x", "glassdoor.com"),
+                       ("https://" + fw + ".jobs/x", "indeed.jobs"),
+                       ("https://lnkd" + ideo + "in/abc", "lnkd.in")):
+        assert netfetch.hard_deny(url) == f"job-board {board}", (ascii(url), netfetch.hard_deny(url))
+    # allowlist and watch-list hosts are kept in the same form
+    pol = netfetch.Policy(extra_hosts=["Jobs.Initech.Example.", "exam" + shy + "ple.com"])
+    assert pol.extra == {"jobs.initech.example"}, pol.extra
+    assert pol.reason("https://JOBS.initech.example/1") is None
+    pol.allow_host("www.link" + shy + "edin.com")
+    assert pol.extra == {"jobs.initech.example"}, pol.extra
+    # the socket layer refuses a non-canonical or job-board name whatever parsed the URL upstream
+    for name in ("www.link" + shy + "edin.com", "www.linkedin.com", "lnkd.in"):
+        try:
+            netfetch.connect_public(name, 443, 5)
+            raise AssertionError(f"connect_public accepted {ascii(name)}")
+        except netfetch.Denied as e:
+            assert e.reason.startswith(("bad-url", "job-board")), e.reason
+
+
+def test_encoded_paths():
+    """SEC-06: R3 list paths and robots rules are compared after decoding
+    percent-escaped unreserved characters (RFC 9309 2.2.2) and resolving dot
+    segments, so '%4AobBoardView' and '/jobs/%73earch' are the R3 lists; an
+    unattended path still holding %2F or %5C is refused."""
+    p = netfetch.Policy()
+    for url, host in (("https://recruiting.ultipro.com/ACME1000/%4AobBoardView/LoadSearchResults",
+                       "recruiting.ultipro.com"),
+                      ("https://careers-acme.icims.com/jobs/%73earch?ss=1", "careers-acme.icims.com"),
+                      ("https://careers-acme.icims.com//jobs/./search?ss=1", "careers-acme.icims.com"),
+                      ("https://careers-acme.icims.com/x/../jobs/search", "careers-acme.icims.com")):
+        assert netfetch.hard_deny(url) == f"r3-list {host}", (url, netfetch.hard_deny(url))
+        assert p.reason(url) == f"r3-list {host}", url
+    # attended too (a pasted link): an encoded slash a server may decode still names the list endpoint
+    assert netfetch.Policy(unattended=False).reason("https://careers-acme.icims.com/jobs%2Fsearch?ss=1") \
+        == "r3-list careers-acme.icims.com"
+    for url in ("https://acme.wd5.myworkdayjobs.com/en-US/x%2F..%2Fy", "https://jobs.lever.co/acme/a%5cb"):
+        assert p.reason(url).startswith("bad-url encoded slash"), url
+        assert netfetch.Policy(unattended=False).reason(url) is None, url  # attended: the site reads it
+    ukg = netfetch.RobotRules((ROBOTS_FIX / "ukg.txt").read_text(encoding="utf-8"))
+    assert not ukg.allowed("/ACME1000ACME/JobBoard/abc/JobBoardView/x")
+    assert not ukg.allowed("/ACME1000ACME/JobBoard/abc/%4AobBoardView/x")
+    assert ukg.allowed("/ACME1000ACME/JobBoard/abc/OpportunityDetail?opportunityId=7")
+    enc = netfetch.RobotRules("User-agent: *\nDisallow: /p%61th\nAllow: /%7Euser/\n")
+    assert not enc.allowed("/path") and not enc.allowed("/p%61th/x") and enc.allowed("/~user/a")
+    assert netfetch.norm_path("/a%2541%2fb%7e") == "/a%2541%2Fb~", netfetch.norm_path("/a%2541%2fb%7e")
+
+
+def test_robots_bounded():
+    """D3: robots rules match without backtracking. Rules over 256 characters
+    or with more than 10 wildcards are ignored; ten-wildcard rules against a
+    long path, and a 512 KB robots.txt, take well under a second."""
+    import time
+    long_rule = "/" + "a" * 300
+    many = "/" + "*a" * 11
+    r = netfetch.RobotRules(f"User-agent: *\nDisallow: {long_rule}\nDisallow: {many}\nDisallow: /private\n")
+    assert r.allowed(long_rule) and r.allowed("/" + "a" * 40) and not r.allowed("/private/x")
+    ten = "/" + "*a" * 9 + "*b"  # ten wildcards: the most a rule may hold
+    rules = netfetch.RobotRules("User-agent: *\n" + "".join(f"Disallow: {ten}\n" for _ in range(200)))
+    path = "/" + "a" * 5000
+    t = time.perf_counter()
+    for _ in range(20):
+        assert rules.allowed(path)
+    assert time.perf_counter() - t < 2.0, time.perf_counter() - t
+    assert not rules.allowed(path + "b")
+    big = "User-agent: *\n" + "".join(f"Disallow: /x{i}/*a*b*c$\n" for i in range(20000))
+    t = time.perf_counter()
+    rb = netfetch.RobotRules(big[:netfetch.ROBOTS_MAX])
+    assert rb.allowed("/y/" + "a" * 2000) and not rb.allowed("/x7/zaZbZc")
+    assert time.perf_counter() - t < 2.0, time.perf_counter() - t
+    # the glob matcher agrees with the regex form on ordinary rules
+    for rule, path, want in (("/*.pdf$", "/files/a.pdf", True), ("/*.pdf$", "/files/a.pdf?x=1", False),
+                             ("/a*b*c", "/aXbYcZ", True), ("/a*b*c", "/aXcYb", False), ("*$", "/", True),
+                             ("/fish*", "/fish.html", True), ("/fish*", "/Fish", False), ("/x$", "/x/", False)):
+        pieces, anchored = netfetch.robots_rule(rule)
+        assert netfetch.rule_matches(pieces, anchored, path) is want, (rule, path)
+
+
+def test_fetch_deadline():
+    """D3: one fetch has a 60 s wall-clock deadline (FETCH_DEADLINE), checked
+    on every socket read. A server sending one byte at a time, each well
+    inside the 20 s socket timeout, used to hold a fetch for as long as it
+    liked. Local server on 127.0.0.1; the public-address check is bypassed
+    for the test only."""
+    import threading
+    import time
+
+    def drip_server(headers_first):
+        srv = socket.socket()
+        srv.bind(("127.0.0.1", 0))
+        srv.listen(4)
+
+        def serve():
+            while True:
+                try:
+                    conn, _ = srv.accept()
+                except OSError:
+                    return
+                with conn:
+                    try:
+                        conn.recv(4096)
+                        if headers_first:
+                            conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 100000\r\n\r\n")
+                        else:
+                            conn.sendall(b"HTTP/1.1 200 OK\r\n")
+                        for _ in range(60):
+                            time.sleep(0.1)
+                            conn.sendall(b"X-A: b\r\n" if not headers_first else b"x")
+                    except OSError:
+                        pass
+        threading.Thread(target=serve, daemon=True).start()
+        return srv
+
+    saved = (netfetch.check_public, netfetch.FETCH_DEADLINE, socket.getaddrinfo)
+    real_gai = socket.getaddrinfo
+    netfetch.check_public = lambda url: None
+    netfetch.FETCH_DEADLINE = 1.0
+    try:
+        for headers_first in (True, False):
+            srv = drip_server(headers_first)
+            port = srv.getsockname()[1]
+            # the policy and the socket layer would refuse 127.0.0.1; this test names a
+            # public-looking host and answers its lookup with the local server
+            socket.getaddrinfo = lambda host, p, **kw: real_gai("127.0.0.1", p, **kw)
+            real_ip = netfetch.ipaddress.ip_address
+            netfetch.ipaddress.ip_address = lambda s: real_ip("93.184.216.34")
+            f = netfetch.Fetcher(robots=False, unattended=False, throttle=netfetch.Throttle(enabled=False))
+            t = time.perf_counter()
+            try:
+                f.get(f"http://drip.example:{port}/")
+                raise AssertionError("the drip answer was read to the end")
+            except netfetch.FetchError as e:
+                took = time.perf_counter() - t
+                assert took < 4.0 and "within" in str(e), (headers_first, took, e)
+            finally:
+                netfetch.ipaddress.ip_address = real_ip
+                socket.getaddrinfo = real_gai
+                srv.close()
+    finally:
+        netfetch.check_public, netfetch.FETCH_DEADLINE, socket.getaddrinfo = saved
+    assert netfetch.FETCH_DEADLINE == 60.0 and netfetch.TIMEOUT == 20
+
+
+def test_odd_charset():
+    """A Content-Type naming a codec that cannot replace errors (idna) or is no
+    text codec (rot13) falls back to UTF-8 instead of raising."""
+    for cs in ("idna", "rot13", "bogus", "utf-8"):
+        r = netfetch.Response("https://x.example/", 200, {"Content-Type": f"application/json; charset={cs}"},
+                              b'{"a": "\xff"}')
+        assert r.text().startswith('{"a"'), cs
+
+
 def test_crawl_delay_limits():
-    """A Crawl-delay over 30 s (or inf, nan, negative) leaves the host alone
-    (robots <host>, nothing fetched, nothing slept); a sane one is honored."""
-    for value in ("86400", "inf", "nan", "-5", "31"):
+    """D2: a Crawl-delay that is not a finite number from 0 to 10 s (86400,
+    inf, nan, negative, 11, a word) skips the host for the run (crawl-delay
+    <host>, nothing fetched, nothing slept); 10 s and less is honored."""
+    for value in ("86400", "inf", "nan", "-5", "11", "10.5", "1e309", "soon"):
         robots = netfetch.Robots(lambda url, v=value: (200, f"User-agent: *\nCrawl-delay: {v}\n"))
         ok, delay, why = robots.check("https://careers.example.com/jobs/1")
-        assert not ok and why == "robots careers.example.com", (value, ok, delay, why)
-    robots = netfetch.Robots(lambda url: (200, "User-agent: *\nCrawl-delay: 5\n"))
-    assert robots.check("https://careers.example.com/jobs/1") == (True, 5.0, None)
+        assert not ok and why == "crawl-delay careers.example.com", (value, ok, delay, why)
+    for value, want in (("10", 10.0), ("5", 5.0), ("0", 0.0)):
+        robots = netfetch.Robots(lambda url, v=value: (200, f"User-agent: *\nCrawl-delay: {v}\n"))
+        assert robots.check("https://careers.example.com/jobs/1") == (True, want, None), value
     clock = FakeClock()
     t = netfetch.Throttle(clock=clock.now, sleep=clock.sleep)
     t.wait("a.example", float("inf"))
     t.wait("a.example", float("inf"))
-    assert clock.slept == [netfetch.MAX_CRAWL_DELAY], clock.slept
+    assert clock.slept == [netfetch.MAX_CRAWL_DELAY] and netfetch.MAX_CRAWL_DELAY == 10.0, clock.slept
+    # through a Fetcher: the host is refused with that reason and nothing but robots.txt is requested
+    with tempfile.TemporaryDirectory(prefix="netfetch_") as tmp:
+        (Path(tmp) / "slow.txt").write_text("User-agent: *\nCrawl-delay: 3600\n", encoding="ascii")
+        (Path(tmp) / "index.json").write_text(json.dumps({"https://slow.example/robots.txt": {"file": "slow.txt"},
+                                                          "https://slow.example/jobs": {"file": "slow.txt"}}),
+                                              encoding="ascii")
+        clock = FakeClock()
+        f = netfetch.Fetcher(offline=tmp, extra_hosts=["slow.example"], sleep=clock.sleep,
+                             throttle=netfetch.Throttle(clock=clock.now, sleep=clock.sleep))
+        for _ in range(2):
+            try:
+                f.get("https://slow.example/jobs")
+                raise AssertionError("a host asking for an hour between requests was fetched")
+            except netfetch.Denied as e:
+                assert e.reason == "crawl-delay slow.example", e.reason
+        assert [u for _, u in f.offline.requests] == ["https://slow.example/robots.txt"], f.offline.requests
+        assert sum(clock.slept) <= netfetch.MAX_CRAWL_DELAY, clock.slept
 
 
 def test_robots_redirect_loop():
@@ -420,7 +646,8 @@ def test_robots_redirect_loop():
 def main():
     for t in (test_cli_policy, test_policy_rules, test_public_address_guard, test_proxy_means_no_fetch,
               test_robots_rules, test_robots_fetching_and_cache, test_politeness, test_size_cap,
-              test_lookalike_hosts, test_crawl_delay_limits, test_robots_redirect_loop):
+              test_lookalike_hosts, test_canonical_host, test_encoded_paths, test_robots_bounded,
+              test_fetch_deadline, test_odd_charset, test_crawl_delay_limits, test_robots_redirect_loop):
         t()
         print("ok", t.__name__)
     if os.environ.get("JOB_SKILL_LIVE") == "1":

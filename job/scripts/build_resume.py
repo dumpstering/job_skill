@@ -1,8 +1,14 @@
 """Build a resume or cover letter from JSON into .docx, .pdf and .txt.
 
 Usage:
-    python build_resume.py resume.json --out <folder> --base "First Last Resume"
+    python build_resume.py resume.json --out <folder> [--base "First Last Resume"]
         [--sources FILE [FILE ...]] [--terms terms.json]
+        [--root <JobSearch folder> --args-file claude/args.json]
+
+With no --base the files are named from the JSON's own "name": "<name>
+Resume", "<name> CV" in cv mode, "<name> Cover Letter" for a letter, so the
+user's name never goes on a command line (a --base of your own goes in the
+args file, {"base": "..."}).
         [--mode industry|cv|usajobs] [--max-pages N] [--publications publications.md]
         [--posting posting.md] [--library achievement_library.md]
         [--techniques techniques.md] [--strict]
@@ -64,6 +70,7 @@ from pathlib import Path
 from xml.sax.saxutils import escape
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import argfile  # noqa: E402
 import checks  # noqa: E402
 
 EN_DASH = chr(0x2013)
@@ -691,7 +698,8 @@ def parse_args(argv):
     ap = Parser(description=__doc__.splitlines()[0])
     ap.add_argument("json_path")
     ap.add_argument("--out", required=True, help="folder to write into")
-    ap.add_argument("--base", required=True, help='file name without extension, e.g. "First Last Resume"')
+    ap.add_argument("--base", help='file name without extension, e.g. "First Last Resume" (default: the '
+                                   'JSON\'s name plus Resume, CV in cv mode, or Cover Letter for a letter)')
     ap.add_argument("--sources", nargs="+", metavar="FILE", help="master_resume.md, achievement_library.md, profile.md (and notes.md: with v1.2 flags only its ## Answers section): enables the FACT check")
     ap.add_argument("--terms", metavar="terms.json", help="posting terms (strings or {term, aliases}): enables the KEYWORD check")
     ap.add_argument("--mode", choices=sorted(MODE_CAPS), help="v1.2 document mode: page cap and section order")
@@ -701,7 +709,9 @@ def parse_args(argv):
     ap.add_argument("--library", metavar="achievement_library.md", help="v1.2: the library EVIDENCE reads (default: the --sources file of that name)")
     ap.add_argument("--techniques", metavar="techniques.md", help="v1.2: the TECHNIQUE check's list (default: techniques.md beside the library)")
     ap.add_argument("--strict", action="store_true", help="v1.2: exit 6 with STRICT-FAIL lines on any failed check")
-    return ap.parse_args(argv)
+    ap.add_argument("--root", help="the JobSearch folder (needed with --args-file)")
+    # The base name holds the user's name: it arrives through --args-file (shared decision 4).
+    return argfile.parse(ap, argv)
 
 
 def page_cap(mode, max_pages):
@@ -744,9 +754,26 @@ def read_final(out):
         return {}
 
 
-def write_final(out, kind, name, emit):
+def cited_entries(data, args):
+    """{id: library.entry_hash} for every library entry the resume cites, from
+    the library EVIDENCE read; None with no library. Recorded in final.json,
+    so a correction to one of them later the same day retires this build
+    (shared decision 5; library.final_stale)."""
+    import library
+    paths = checks.library_paths(args.sources, args.library)
+    if not paths:
+        return None
+    try:
+        by_id = library.load(paths[0]).by_id
+    except (OSError, UnicodeDecodeError):
+        return None
+    return {i: library.entry_hash(by_id[i]) for i in library.cited_ids(data) if i in by_id}
+
+
+def write_final(out, kind, name, emit, entries=None):
     """final.json after a strict build passes (shared decision 1): the resume or
-    letter file a reader uploads. A letter needs a passing resume there first."""
+    letter file a reader uploads. A letter needs a passing resume there first.
+    "entries" holds the hashes of the library entries the resume cites."""
     old = read_final(out)
     if kind == "letter" and not (old.get("resume") and (out / str(old["resume"])).exists()):
         emit(f"FINAL {FINAL_JSON} not written: build the resume with --strict here first, then the letter")
@@ -757,6 +784,9 @@ def write_final(out, kind, name, emit):
         letter = None
     data = {"v": 1, "resume": resume, "letter": letter,
             "built_at": datetime.now().astimezone().isoformat(timespec="seconds"), "verdict": "ok"}
+    cited = entries if kind == "resume" else old.get("entries")
+    if isinstance(cited, dict) and cited:
+        data["entries"] = cited
     tmp = out / f".{FINAL_JSON}.tmp"
     tmp.write_text(json.dumps(data, indent=1) + "\n", encoding="utf-8")
     tmp.replace(out / FINAL_JSON)
@@ -826,6 +856,21 @@ def install_final(build_dir, out, base, emit):
     return True
 
 
+BASE_UNSAFE = re.compile(r'[<>:"/\\|?*$`\x00-\x1f\x7f]')
+
+
+def default_base(data, mode):
+    """The file name with no --base: '<name> Resume', '<name> CV' in cv mode or
+    '<name> Cover Letter' for a letter, from the JSON's own name, so the
+    user's name never has to go on a command line (shared decision 4). ''
+    when nothing usable is left."""
+    name = " ".join(BASE_UNSAFE.sub(" ", str(data.get("name") or "")).split()).strip(" .")
+    if not name:
+        return ""
+    kind = "Cover Letter" if "letter" in data else ("CV" if mode == "cv" else "Resume")
+    return f"{name[:80]} {kind}"
+
+
 def main(argv=None, emit=print):
     """Build and check; returns the exit code. emit receives every output line
     (variants.py collects them in-process).
@@ -847,6 +892,11 @@ def main(argv=None, emit=print):
     except (InputError, ValueError, OSError) as e:
         emit(f"ERROR {e}")
         return 1
+    if not args.base:
+        args.base = default_base(data, mode)
+        if not args.base:
+            emit("ERROR the JSON's name gives no usable file name: pass --base in the args file")
+            return 1
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     build_dir = strict_dir(out, args.base) if args.strict else out
@@ -931,7 +981,8 @@ def run_build(args, data, pubs, posting, mode, v12, warnings, paper, size, margi
             emit(line)
         if not failures:
             if install_final(build_dir, out, args.base, emit):
-                write_final(out, kind, args.base + ".pdf", emit)
+                write_final(out, kind, args.base + ".pdf", emit,
+                            entries=cited_entries(data, args) if kind == "resume" else None)
             else:
                 failures.append("files not written (a file is open in another program)")
                 code = 1

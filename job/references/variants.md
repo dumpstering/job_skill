@@ -96,7 +96,21 @@ log prints `WAIT_VARIANT <family> <n> jobs`.
   (`FALLBACK <family> v<N>`). With none, tuning refuses and the family's
   items become `prep_failed`; the card names the family and how many jobs
   wait ("The <label> base resume changed, so 12 jobs wait for your ok
-  again (type /job variants).") and `next` never hands them over.
+  again (type /job variants).") and `next` never hands them over. Families
+  with no variant at all share one card line ("180 more jobs need a base
+  resume you don't have yet (most: Clinical research 66, Research associate
+  50). Say /job variants to make one.").
+- The same day too: a job whose Tier B file was built from a version
+  (`tune_log.json` names it) that is no longer approved is held at
+  handover. `next` prints `HOLD #4: its base resume cites something you
+  corrected today. Say skip, or make the new version with /job variants
+  first.` in place of `OPEN` and `UPLOAD`, held jobs come after every other
+  job, and the card counts them in one line. On the user's ok to the same
+  files (`APPROVED <family> v<N> again`) they are ready at once; a new
+  version builds them at the next daily run. A Tier A build whose
+  `final.json` cites the corrected entry no longer counts either: that job
+  goes back to its Tier B file (held as above when that one is affected
+  too) until its Tier A resume is built again.
 - `approve` never re-approves a changed file: put the change in a new
   version (`new --copy`), and approve that. Earlier versions stay.
 - After a cited entry changed, `check` prints each `CHANGED` entry with its
@@ -109,7 +123,7 @@ log prints `WAIT_VARIANT <family> <n> jobs`.
   again`). Either way, tell the user in one line which family waits.
 - After merging a "Replaces:" entry (writing_rules.md, Block C), run
   `variants.py check` at once, so a family that cites it is caught before
-  the next daily run.
+  the next daily run and its jobs built today are held, not handed over.
 - An approval written before per-entry hashes holds while
   `achievement_library.md` is byte-identical to `library_rev`; any library
   edit then needs the re-approval above.

@@ -63,8 +63,8 @@ affected ([discovery.md](discovery.md)).
 ## /job watch <company or careers URL>
 
 Adds an employer's board to `config/watchlist.csv` (columns in
-[sources.md](sources.md)). Never a job board: a linkedin.com, indeed.*,
-glassdoor.*, simplyhired.* or ziprecruiter.com link is refused.
+[sources.md](sources.md)). Never a job board: a linkedin.com, lnkd.in, licdn.com,
+indeed.*, glassdoor.*, simplyhired.*, ziprecruiter.* or remotive.com link is refused.
 
 1. **Find the careers page.** With a URL, use it. With a company name, look
    first in `state/watchlist_auto.csv` (the runner adds every employer it
@@ -72,8 +72,10 @@ glassdoor.*, simplyhired.* or ziprecruiter.com link is refused.
    `added_by` = `user` and `status` = `active`, and you are done. Otherwise
    run one web search, "<company> careers", and keep only a result on a
    known ATS host or the company's own domain.
-2. **Detect the board.** Mode L or S: `jobrunner.py request probe_url --json
-   '{"url": "<careers URL>", "company": "<Company>"}'`, then read
+2. **Detect the board.** Mode L or S: write `{"url": "<careers URL>",
+   "company": "<Company>"}` to `claude/args.json` and run `jobrunner.py
+   request probe_url --json-file claude/args.json` (SKILL.md "Scripts"),
+   then read
    `runner/out/results/<id>.json` in about 20 minutes (the next tick hands
    `probe_url` to the daily):
    - `DETECT <ats>:<board>[/<site>][@<host>]`: write that row.

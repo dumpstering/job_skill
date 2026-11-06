@@ -125,7 +125,7 @@ plugin):
   library (Confirmed lines included), my profile or `notes.md` already
   answers. Quick checks stay in `notes.md`; they do not go into the batch.
 - When my answers arrive: recurring answers go to `answers.md`
-  (`answers.py add`, source `user:<date>`), achievements to the library as
+  (`answers.py add` with `claude/args.json`, source `user:<date>`), achievements to the library as
   new entries with IDs (`library.py ids`), job-specific ones to the job's
   `notes.md`. Each file is backed up first. Then revise the resume and build
   it again with `--strict`.
@@ -142,6 +142,6 @@ and join the batch after every job's own questions.
 ([cv_publications.md](cv_publications.md)):
 - `cv` when the posting asks for a CV or curriculum vitae, the employer is a
   university, institute or government lab, or the title is a postdoc (build
-  it as `--base "<Name> CV"`);
+  it with `--mode cv`, which names it `<Name> CV`, cv_publications.md);
 - `usajobs` for a USAJOBS announcement (always Tier A, 2 pages, hard);
 - `industry` otherwise.

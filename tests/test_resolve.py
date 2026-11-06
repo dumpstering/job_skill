@@ -246,8 +246,68 @@ def test_detect_linear():
     assert [(d["ats"], d["board"], d["site"]) for d in found] == [("workday", "acme", "Careers")], found
 
 
+def test_detect_bounded():
+    """D3: detect reads only the URL-like tokens around ATS host names, from
+    the first 512 KB, with bounded patterns. Each 1 MB hostile page (long
+    letter runs, thousands of ATS names with no board, unclosed tags, dotted
+    runs) is scanned in under 2 seconds; real links are still found, in page
+    order, including JSON's escaped slashes (a percent-encoded link inside a
+    query string is not a board link)."""
+    import time
+    mb = 1_000_000
+    pages = {"letters": "a" * mb, "dotted": "a." * (mb // 2), "lever names": "lever.co" * (mb // 8),
+             "workday names": ("x" * 60 + ".wd1.myworkdayjobs.com/") * (mb // 84),
+             "unclosed iframes": "<iframe " * (mb // 8), "adp no cid": "workforcenow.adp.com/" * (mb // 21),
+             "dash runs": ("-" * 5000 + ".bamboohr.com ") * (mb // 5014)}
+    for name, page in pages.items():
+        t = time.perf_counter()
+        resolve.detect(page)
+        took = time.perf_counter() - t
+        assert took < 2.0, (name, took)
+    page = ('<script>var cfg = {"url":"https:\\/\\/acme.wd5.myworkdayjobs.com\\/en-US\\/AcmeCareers"};</script>'
+            '<a href="https://go.example/r?u=https%3A%2F%2Fjobs.lever.co%2Fglobex">x</a>'
+            '<p>' + "filler " * 20 + '</p><a href="https://boards.greenhouse.io/initech">jobs</a>')
+    found = resolve.detect(page)
+    assert [(d["ats"], d["board"]) for d in found] == [("workday", "acme"), ("greenhouse", "initech")], found
+    assert [(d["ats"], d["board"]) for d in resolve.detect("https://jobs.lever.co/globex/123")] == [("lever", "globex")]
+    # past the first 512 KB nothing is read
+    late = " " * (resolve.HTML_SCAN_MAX + 10) + '<a href="https://boards.greenhouse.io/late">x</a>'
+    assert resolve.detect(late) == []
+
+
+def test_one_lead_fails_soft():
+    """D2: an exception while resolving one lead is one ERROR line naming the
+    lead and the error type; the other leads are still resolved, the failing
+    lead stays pending (no try counted), and a lead file nested thousands
+    deep or a broken leads_state.json never stops the run."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = make_root(tmp)
+        (root / "runner" / "in" / "leads" / "2026-11-12_0800_odd.jsonl").write_text(
+            "[" * 50000 + "]" * 50000 + "\n" + '{"lead_id": ["x"], "company": "A", "title": "B"}\n', encoding="ascii")
+        (root / "state").mkdir(exist_ok=True)
+        (root / "state" / "leads_state.json").write_text('{"leads": {"zz": "not a lead"}}', encoding="ascii")
+        res = resolve.Resolver(root, D1, fetcher(root), emit=lambda s: None)
+        real, lines = res.resolve_group, []
+        res.emit = lines.append
+
+        def flaky(lead, cnorm, readings, out):
+            if cnorm == "globex bio":
+                raise KeyError("odd")
+            return real(lead, cnorm, readings, out)
+        res.resolve_group = flaky
+        out = res.run()
+        err = [ln for ln in lines if ln.startswith("ERROR lead ")]
+        assert len(err) == 1 and err[0].endswith("Globex Bio: KeyError"), lines
+        assert any(ln.startswith("RESOLVED ") for ln in lines) and lines[-1].startswith("RESOLVE leads="), lines
+        state = json.loads((root / "state" / "leads_state.json").read_text(encoding="utf-8"))["leads"]
+        globex = [v for v in state.values() if v["company"] == "Globex Bio"]
+        assert globex and all(v["status"] == "pending" and v["tries"] == [] for v in globex), globex
+        assert "zz" not in state and out.resolved, state.keys()
+
+
 def main():
-    for fn in (test_two_runs, test_expired_lead_not_dropped, test_probe_url, test_helpers, test_detect_linear):
+    for fn in (test_two_runs, test_expired_lead_not_dropped, test_probe_url, test_helpers, test_detect_linear,
+               test_detect_bounded, test_one_lead_fails_soft):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

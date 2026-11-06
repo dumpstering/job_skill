@@ -26,8 +26,9 @@ Write it once a week: after it is written, create the marker
    - what is working, as "x of n" per family, variant, lane, account cost and
      freshness at apply, shrunk toward about 3%; under 30 applications it
      says it is too early to tell;
-   - discards by filter, board changes (listed once), widen steps in use,
-     family weight moves;
+   - discards by filter, jobs set aside for their place alone (in the
+     wider ring, such as Novato), board changes (listed once), widen steps
+     in use, family weight moves;
    - at most one question.
 3. If the file has a `Question:` line, ask it in the card's question batch,
    word for word, phrased as an experiment. A yes changes one thing (an
@@ -37,7 +38,10 @@ Write it once a week: after it is written, create the marker
    - "mark no response": rows applied 30 or more days ago with no reply get
      `tracker.py update <ID> status="No response"`;
    - "archive", offered when the tracker passes 5000 rows:
-     `tracker.py archive --before <date>` (backup first; nothing deleted).
+     `tracker.py archive --before <date>` (backup first; nothing deleted);
+   - "widen": back up `config/search_profile.toml`, add the `[home]
+     second_ring` places to `[home] places`, and say the next run looks at
+     the jobs set aside for their place again.
 5. In a California certification week, also offer the work-search export
    (worksearch.md).
 
@@ -48,7 +52,8 @@ Write it once a week: after it is written, create the marker
 - `report.py check-wording` rejects: streak, missed, behind, overdue,
   target, goal, only, short of, failed to, should have, catch up, falling,
   lagging. Run it on anything you write for the card or a closing line:
-  `report.py check-wording --text "<line>"` prints `WORDING ok` or a
+  write the line to `claude/wording.txt` and run `report.py check-wording
+  --file "<folder>/claude/wording.txt"`; it prints `WORDING ok` or a
   `BANNED` line to rewrite.
 
 ## Family weights (the runner)

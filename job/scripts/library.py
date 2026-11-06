@@ -22,10 +22,14 @@ headings are `### Job Title | Company | Mon YYYY - Mon YYYY` (v1.1).
 check reads techniques.md's technique lines and answers.md's answer lines
 only, so the format examples in those files are never DANGLING.
 
-Other scripts import parse(), load() and load_techniques().
+Other scripts import parse(), load() and load_techniques(), and entry_hash(),
+cited_ids(), changed_cited() and final_stale() for the same-day check: a
+correction replaces an entry's text, so a resume built on the old text (a
+variant's approval, a Tier A build's final.json "entries") no longer rests on it.
 Exit codes: 0 ok, 1 bad input or a failed check.
 """
 import argparse
+import hashlib
 import re
 import shutil
 import sys
@@ -117,6 +121,69 @@ def load(path):
         return parse(Path(path).read_text(encoding="utf-8-sig"))
     except FileNotFoundError:
         return Library()
+
+
+def entry_hash(entry):
+    """sha256 of one entry as a resume relies on it: its role heading and text
+    (a variant's approval and a Tier A build's final.json use this form)."""
+    return hashlib.sha256(f"{entry.heading}\n{entry.text}".encode("utf-8")).hexdigest()
+
+
+def cited_ids(data):
+    """Every library ID the "ev" lists in a resume JSON object cite, sorted."""
+    ids, stack = set(), [data]
+    while stack:
+        x = stack.pop()
+        if isinstance(x, dict):
+            if isinstance(x.get("ev"), list):
+                ids.update(i for i in x["ev"] if isinstance(i, str))
+            stack.extend(x.values())
+        elif isinstance(x, list):
+            stack.extend(x)
+    return sorted(ids)
+
+
+_LOADED = {}  # library path -> ((mtime_ns, size), {id: entry_hash}), so one run parses each library once
+
+
+def hashes(path):
+    """{id: entry_hash} for the library at path; {} when it is missing or unreadable."""
+    p = Path(path)
+    try:
+        st = p.stat()
+        stamp = (st.st_mtime_ns, st.st_size)
+    except OSError:
+        return {}
+    got = _LOADED.get(str(p))
+    if got and got[0] == stamp:
+        return got[1]
+    try:
+        by_id = {i: entry_hash(e) for i, e in load(p).by_id.items()}
+    except (OSError, UnicodeDecodeError):
+        by_id = {}
+    _LOADED[str(p)] = (stamp, by_id)
+    return by_id
+
+
+def changed_cited(path, entries):
+    """The IDs in entries ({id: entry_hash}) whose library entry is gone or
+    whose text or role heading changed since the hash was taken."""
+    now = hashes(path)
+    return sorted(i for i, h in entries.items() if now.get(i) != h)
+
+
+def final_stale(folder, final):
+    """True when a job folder's final.json (a strict Tier A build) cites a
+    library entry the user corrected after that build (shared decision 5):
+    its "entries" ({id: entry_hash}) no longer match the library at
+    <root>/achievement_library.md, two levels above the job folder. A
+    final.json without entries (an older build) is judged as before."""
+    entries = final.get("entries") if isinstance(final, dict) else None
+    if not isinstance(entries, dict) or not entries:
+        return False
+    if not all(isinstance(k, str) and isinstance(v, str) for k, v in entries.items()):
+        return True  # an entries record that cannot be checked is not one
+    return bool(changed_cited(Path(folder).resolve().parent.parent / "achievement_library.md", entries))
 
 
 def role_of(heading):

@@ -12,8 +12,9 @@ Usage:
 weekly writes reports/week_<date>.md for the 7 days before --date (default
 today): applications sent by tier and family, people contacted,
 conversations started, employers that said no (listed only in this file),
-"x of n" rates shrunk toward Beta(1, 30), discards by gate, board health
-changes, widen steps, and at most one question. Only nonzero counts print,
+"x of n" rates shrunk toward Beta(1, 30), discards by gate, the jobs set
+aside for a second_ring place alone (one line ending "Say widen to include
+them"), board health changes, widen steps, and at most one question. Only nonzero counts print,
 and nothing is compared with an earlier week. Stdout is the card's lines:
     WROTE reports/week_2026-11-16.md
     CARD Last week: 12 applications sent, 2 people contacted.
@@ -52,6 +53,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import argfile  # noqa: E402
 import jobfs  # noqa: E402
 
 BANNED = ("streak", "missed", "behind", "overdue", "target", "goal", "only", "short of", "failed to",
@@ -242,6 +244,41 @@ def discards(root, start, end):
     return c
 
 
+def second_ring_set_aside(root, start, end):
+    """(n, Counter of places): the window's discards set aside for a
+    second_ring place alone (G3 reason location:second_ring, D8)."""
+    home = (jobfs.search_profile(root).get("home") or {})
+    places = [str(p).strip() for p in home.get("second_ring") or [] if str(p).strip()]
+    n, by = 0, Counter()
+    d = start
+    while d <= end:
+        for r in read_csv(jobfs.Folder(root).discards_csv(d)):
+            if (r.get("reason") or "").strip() != "location:second_ring":
+                continue
+            n += 1
+            loc = r.get("location") or ""
+            hit = next((p for p in places if re.search(r"(?<![A-Za-z])" + re.escape(p) + r"(?![A-Za-z])", loc, re.I)),
+                       None)
+            if hit:
+                by[hit] += 1
+        d += timedelta(days=1)
+    return n, by
+
+
+def second_ring_line(root, start, end, widen):
+    """One weekly line: jobs set aside for their place alone, and how to
+    include them. None when there are none or the ring is already on."""
+    if "second_ring" in widen:
+        return None
+    n, by = second_ring_set_aside(root, start, end)
+    if not n:
+        return None
+    where = ", ".join(f"{p} {k}" for p, k in by.most_common(3))
+    return (f"{plural(n, 'job')} {'was' if n == 1 else 'were'} set aside for the place alone: "
+            f"{'it is' if n == 1 else 'they are'} in your wider ring" + (f" ({where})" if where else "") +
+            ". Say widen to include them.")
+
+
 def queued_count(root, start, end):
     import tracker
     n, d = 0, start
@@ -398,10 +435,13 @@ def weekly_text(root, store, day):
     total = sum(gates.values()) + queued_count(root, start, end)
     if gates:
         md += ["", "## Not queued, by filter", ""] + [f"- {g}: {n}" for g, n in gates.most_common()]
+    widen = widen_steps(root, end)
+    ring = second_ring_line(root, start, end, widen)
+    if ring:
+        md += ["", ring]
     boards = board_changes(root, day)
     if boards:
         md += ["", "## Board changes", ""] + boards
-    widen = widen_steps(root, end)
     if widen:
         md += ["", "Wider search in use: " + ", ".join(widen) + "."]
     moved = weights_log(root, start, end)
@@ -719,7 +759,7 @@ def main(argv=None):
             stream.reconfigure(encoding="utf-8", errors="replace")
         except (AttributeError, ValueError):
             pass
-    args = build_parser().parse_args(argv)
+    args = argfile.parse(build_parser(), argv)  # outside text arrives in a JSON file, never inline
     try:
         return args.func(args)
     except (ReportError, jobfs.ConfigError) as e:

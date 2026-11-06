@@ -239,9 +239,35 @@ def test_references():
         path.read_bytes().decode("ascii")
 
 
+def test_second_ring_line():
+    """D8: the weekly summary counts the jobs set aside for a second_ring place
+    alone (G3 reason location:second_ring) in one line that says how to
+    include them, and says nothing once that ring is on."""
+    root = copy_fixture()
+    prof = root / "config" / "search_profile.toml"
+    prof.write_text('[home]\nplaces = ["Springfield"]\nsecond_ring = ["Ogdenville", "North Haverbrook"]\n\n'
+                    + prof.read_text(encoding="ascii"), encoding="ascii")
+    disc = root / "queue" / "2026-11-12" / "discards.csv"
+    disc.parent.mkdir(parents=True)
+    disc.write_text("date,lane,company,role,location,host,job_key,gate,reason,profile_hash\n"
+                    "2026-11-12,watch,Example Bio,QC Analyst,\"Ogdenville, IL\",boards.greenhouse.io,greenhouse:1,"
+                    "G3,location:second_ring,abc\n"
+                    "2026-11-12,watch,Example Bio,Microbiologist,\"Ogdenville, IL\",boards.greenhouse.io,greenhouse:2,"
+                    "G3,location:second_ring,abc\n"
+                    "2026-11-12,watch,Example Bio,Sales Lead,\"Ogdenville, IL\",boards.greenhouse.io,greenhouse:3,"
+                    "G3,location,abc\n", encoding="ascii")
+    run("weekly", "--root", root, "--date", "2026-11-16")
+    md = (root / "reports" / "week_2026-11-16.md").read_text(encoding="utf-8")
+    line = ("2 jobs were set aside for the place alone: they are in your wider ring (Ogdenville 2). "
+            "Say widen to include them.")
+    assert line in md, md
+    assert not report.check_wording(md), report.check_wording(md)
+    assert report.second_ring_line(root, date(2026, 11, 9), date(2026, 11, 15), ["second_ring"]) is None
+
+
 def main():
     for fn in (test_weekly_fixture, test_one_question, test_adapt, test_usage, test_wording, test_funnel,
-               test_references):
+               test_references, test_second_ring_line):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

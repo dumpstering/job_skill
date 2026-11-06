@@ -100,8 +100,24 @@ def test_root_salt_and_create_only():
         assert code == 1 and lines[0].startswith("ERROR --out must be inside"), lines
 
 
+def test_linkedin_links_and_odd_input():
+    """A card field holding LinkedIn's lnkd.in or licdn.com link is dropped
+    (url-in-field) like any link; a cards file nested thousands deep is one
+    ERROR line, never a traceback."""
+    for loc in ("lnkd.in/abc123", "see media.licdn.com/x", "LNKD.IN/xyz"):
+        assert leads.check_card({"company": "Acme", "title": "Scientist", "location": loc})[1] == "url-in-field", loc
+    assert leads.check_card({"company": "Acme", "title": "Scientist", "location": "Lincoln, NE"})[1] is None
+    with tempfile.TemporaryDirectory() as tmp:
+        deep = Path(tmp) / "deep.json"
+        deep.write_text("[" * 100000 + "]" * 100000, encoding="ascii")
+        out = Path(tmp) / "d.jsonl"
+        code, lines = cli("validate", "--source", "biospace_alert", "--in", str(deep), "--out", str(out))
+        assert code == 1 and len(lines) == 1 and lines[0].startswith("ERROR --in is not a cards file"), lines
+
+
 def main():
-    for fn in (test_mixed, test_refusals, test_card_rules, test_root_salt_and_create_only):
+    for fn in (test_mixed, test_refusals, test_card_rules, test_root_salt_and_create_only,
+               test_linkedin_links_and_odd_input):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

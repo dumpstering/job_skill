@@ -109,7 +109,7 @@ Create `config/` and write, backing up anything already there:
 2. **The search profile, from a preset when one fits.** Presets live in
    `templates/presets/`; `lifesci_bayarea` holds life-science title
    families, license knockouts and San Francisco Bay Area places, plus a
-   watch list of about 270 employer boards and a list of life-science job boards.
+   watch list of about 280 employer boards and a list of life-science job boards.
    - When the user's field and region match a preset, say so in one line and
      offer it. On yes: copy
      [../templates/presets/lifesci_bayarea/families.toml](../templates/presets/lifesci_bayarea/families.toml)
@@ -134,10 +134,11 @@ Create `config/` and write, backing up anything already there:
 Create `applications/` and `backups/` if missing, and the tracker with
 `tracker.py init` (mode M, so it writes the workbook directly). Log each
 earlier application with `tracker.py add --source "By hand" --tier "By hand"
---status Applied --applied <date>` plus the company, role and link given. A
-loose date becomes your best single `YYYY-MM-DD`, with the user's words in
-`--notes`. When that date is more than 14 days ago, clear the follow-up
-(`tracker.py update <ID> follow_up=`). A tracker from an earlier version is
+--status Applied --applied <date> --args-file claude/args.json`, the file
+holding the `company`, `role` and `url` given (SKILL.md "Scripts"). A
+loose date becomes your best single `YYYY-MM-DD`, with the user's words as
+`notes` in the file. When that date is more than 14 days ago, clear the
+follow-up (`tracker.py update <ID> follow_up=`). A tracker from an earlier version is
 upgraded in place on its first write (a backup is made first).
 
 ### The scheduled tasks

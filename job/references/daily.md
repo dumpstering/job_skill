@@ -8,8 +8,10 @@ fills the items one at a time ([apply_batch.md](apply_batch.md)). The user
 reads one card and types short replies; never ask anything before #1 starts.
 
 Commands below are shortened (SKILL.md "Scripts"); each takes
-`--root "<folder>"`. `<date>` is today's local date (`events.py overlay`
-prints `OVERLAY <date>`).
+`--root "<folder>"`, and outside text (an answer, a company, a link) goes in
+`claude/args.json` with `--args-file claude/args.json`, never inline
+(job-morning: `claude/args_morning.json`). `<date>` is today's local date
+(`events.py overlay` prints `OVERLAY <date>`).
 
 ## /job (the normal day)
 
@@ -28,8 +30,11 @@ prints `OVERLAY <date>`).
    (at most 6; answered ones and drafted fields drop out), the
    sensitive-answers line (`Reply yes, ...`), one line per free-text draft
    (its start, then `(say "drafts" for the full text)`), the referral line,
-   and a line naming any base resume that jobs wait for (`... wait for your
-   ok on the <family> base resume (type /job variants)`), and it ends
+   a line naming any base resume that jobs wait for (`... wait for your
+   ok on the <family> base resume (type /job variants)`), one line for the
+   families with no base resume yet (`180 more jobs need a base resume you
+   don't have yet ...`), a line for jobs on hold after a correction
+   (`2 jobs on hold (#4, #9): ...`), and it ends
    `Starting #<n> now.`, the same item `next` gives. With no job finder
    installed (mode M, or no `runner/out/status.json`) its one line says to
    type `/job setup` (setup.md sitting 2). With no list today its last line
@@ -37,7 +42,8 @@ prints `OVERLAY <date>`).
    and wait for a link. While the PC's job finder is building today's list
    the last line is `Today's list is being built; say card again in a few
    minutes.`: show it, and run the card again when the user says card. When,
-   in mode L, the card does not say the list is being built, the PC runner's `last_daily.at` in
+   in mode L, the card does not say the list is being built, the PC
+   runner's `last_daily.at` in
    `runner/out/status.json` is over 36 hours old and `selftest_s` `net` is
    PASS (setup.md sitting 2 step 3), also say "Your PC's job finder has not
    run since <day>; I'm building today's list here.", run `jobrunner.py daily
@@ -58,10 +64,11 @@ prints `OVERLAY <date>`).
 6. **Answers to the card** (`1 yes, Stanford 2 years 2 2026-12-01 3 skip;
    yes`: a numbered part answers that question, a `yes` with no number
    confirms the sensitive line), any time:
-   - A recurring answer: `answers.py add ... --kind <kind> --source
-     user:<date>`, with `--sensitive yes` when the card marked the question
-     sensitive (pay, rate, visa, sponsorship; a pay figure is stored
-     sensitive anyway). A yes/no answer is stored for that exact question
+   - A recurring answer: `answers.py add --args-file claude/args.json`,
+     the file holding `question`, `answer`, `kind` and `"source":
+     "user:<date>"`, with `"sensitive": "yes"` when the card marked the
+     question sensitive (pay, rate, visa, sponsorship; a pay figure is
+     stored sensitive anyway). A yes/no answer is stored for that exact question
      (backup first; the bank keeps its own backup). An achievement: a new
      library entry, then `library.py ids`. A job-specific answer: that job's
      `notes.md`, as a `- JOB-1 | <question> | <answer> | <kind> | any |
@@ -179,10 +186,11 @@ in its turn like the runner's items.
    tick copies it into `queue/<date>/addendum_user.json`. No tracker row
    yet: it gets one at its handover, like every item.
 4. So that it can come back tomorrow if today runs out (`later`, or the day
-   ends first), also send `jobrunner.py request probe_url --json '{"url":
-   "<link>", "company": "<Company>", "title": "<Role>", "location":
-   "<Location>"}'`. The runner reads and gates it into its pool; it adds no
-   second item today, since that job key is taken.
+   ends first), also write `{"url": "<link>", "company": "<Company>",
+   "title": "<Role>", "location": "<Location>"}` to `claude/args.json` and
+   send `jobrunner.py request probe_url --json-file claude/args.json`. The
+   runner reads and gates it into its pool; it adds no second item today,
+   since that job key is taken.
 5. When its turn comes with `UPLOAD none (no built resume yet)` (step 2 gave
    no Tier B file), write its resume first by SKILL.md steps 4-7 in that
    folder, run `today_view.py next` again so `UPLOAD` and the attach lines

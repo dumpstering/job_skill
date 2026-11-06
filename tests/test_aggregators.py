@@ -179,9 +179,53 @@ def test_cli():
     shutil.rmtree(root)
 
 
+class Fuzzed(netfetch.Fetcher):
+    """Answers every request with HTTP 200 and one body; nothing is sent."""
+
+    def __init__(self, body):
+        super().__init__(robots=False, throttle=netfetch.Throttle(enabled=False))
+        self.body = body
+
+    def _send(self, method, url, data, headers, crawl_delay):
+        return netfetch.Response(url, 200, {"content-type": "application/json"},
+                                 self.body.encode("utf-8", "surrogatepass"))
+
+
+def test_odd_answers_stay_in_their_lane():
+    """D2: every lane, against every odd-but-valid answer of the boards fuzz
+    fixture (null, wrong types, JSON nested 200,000 deep, HTML), ends as one
+    OK or ERROR line and never raises; one odd item in a good answer is
+    skipped and counted (skipped=1) while the rest are kept."""
+    bodies = json.loads((FIX / "fuzz" / "bodies.json").read_text(encoding="ascii"))
+    n = bodies["generated"]["deep"]["nest"]
+    cases = dict(bodies["bodies"], deep="[" * n + "]" * n)
+    root = make_root({"usajobs": True, "adzuna": True, "muse": True, "workable_search": True})
+    os.environ["JOB_SKILL_NOW"] = "2026-11-05T18:00:00Z"
+    try:
+        for name, body in cases.items():
+            lines = []
+            try:
+                lanes = aggregators.run(root, fetcher=Fuzzed(body), keys_file=root / "keys.toml",
+                                        emit=lines.append)
+            except Exception as e:  # noqa: BLE001
+                raise AssertionError(f"{name}: RAISED {type(e).__name__}")
+            assert len(lanes) == 4 and all(ln.status in ("OK", "ERROR") for ln in lanes), (name, lines)
+        good = json.loads((FIX / "agg_usajobs.json").read_text(encoding="utf-8"))
+        items = good["SearchResult"]["SearchResultItems"]
+        good["SearchResult"]["SearchResultItems"] = [None, {"MatchedObjectDescriptor": [1]}] + items
+        lines = []
+        lanes = {ln.name: ln for ln in aggregators.run(root, fetcher=Fuzzed(json.dumps(good)),
+                                                       keys_file=root / "keys.toml", emit=lines.append)}
+        assert len(lanes["usajobs"].postings) == 2 and lines[0].startswith("SOURCE usajobs OK 2 postings"), lines
+        assert lines[0].endswith("skipped=1"), lines  # the null row; the list descriptor reads as no posting
+    finally:
+        del os.environ["JOB_SKILL_NOW"]
+        shutil.rmtree(root)
+
+
 def main():
     for t in (test_usajobs_headers_and_records, test_adzuna_leads_only, test_lanes_behind_settings_and_keys,
-              test_muse_drops_stale, test_cli):
+              test_muse_drops_stale, test_cli, test_odd_answers_stay_in_their_lane):
         t()
         print("ok", t.__name__)
     print("PASS")

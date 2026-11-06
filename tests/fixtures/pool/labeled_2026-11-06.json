@@ -1,0 +1,2203 @@
+{
+ "about": "Live day 2 (2026-11-06): the 271 postings the round-2 gates pooled from real public job boards, each labeled by the D6 question: could a microbiology PhD, casting a wide net in the Bay Area, plausibly be hired for it? Borderline counts as yes. 'queue' is the item's number in that day's 30-item queue. Company, title and location are as the boards published them (ASCII).",
+ "items": [
+  {
+   "company": "Nautilus Biotechnology",
+   "title": "Staff Scientist, Protein Chemistry & Library Prep",
+   "location": "San Carlos",
+   "family": "academic_staff_research",
+   "label": "no",
+   "reason": "protein bioconjugation and mass spec; PhD plus 10 years"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Basic Life Research Scientist",
+   "location": "Stanford, CA, United States",
+   "family": "academic_staff_research",
+   "label": "no",
+   "reason": "visual neuroscience and large neural datasets (computational)"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Basic Life Research Scientist",
+   "location": "Stanford, CA, United States",
+   "family": "academic_staff_research",
+   "label": "no",
+   "reason": "7T fMRI / MEG brain imaging project"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Life Science Research Professional (24-Month Fixed-Term)",
+   "location": "Stanford, CA, United States",
+   "family": "academic_staff_research",
+   "label": "yes",
+   "reason": "entry research professional in a radiology lab"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Life Science Research Professional 1",
+   "location": "Stanford, CA, United States",
+   "family": "academic_staff_research",
+   "label": "yes",
+   "reason": "entry lab research professional"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Life Science Research Professional 1",
+   "location": "Stanford, CA, United States",
+   "family": "academic_staff_research",
+   "label": "yes",
+   "reason": "entry lab research professional (hematology)",
+   "queue": 14
+  },
+  {
+   "company": "Stanford University",
+   "title": "Life Science Research Professional 1",
+   "location": "Stanford, CA, United States",
+   "family": "academic_staff_research",
+   "label": "yes",
+   "reason": "entry lab research professional (cancer lab)"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Life Science Research Professional 1",
+   "location": "Stanford, CA, United States",
+   "family": "academic_staff_research",
+   "label": "yes",
+   "reason": "immunology lab: cell culture, flow, ELISA",
+   "queue": 11
+  },
+  {
+   "company": "Stanford University",
+   "title": "Life Science Research Professional 1",
+   "location": "Stanford, CA, United States",
+   "family": "academic_staff_research",
+   "label": "yes",
+   "reason": "entry lab research professional"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Life Science Research Professional 1",
+   "location": "Stanford, CA, United States",
+   "family": "academic_staff_research",
+   "label": "yes",
+   "reason": "genetics lab, CRISPR enzymes",
+   "queue": 16
+  },
+  {
+   "company": "Stanford University",
+   "title": "Life Science Research Professional 1",
+   "location": "Stanford, CA, United States",
+   "family": "academic_staff_research",
+   "label": "yes",
+   "reason": "genomics of diabetes lab"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Research Scientist - Neuroscience",
+   "location": "Stanford, CA, United States",
+   "family": "academic_staff_research",
+   "label": "no",
+   "reason": "patch-clamp electrophysiology expertise"
+  },
+  {
+   "company": "Glyphic Biotechnologies",
+   "title": "Staff / Senior Scientist, Assay Research",
+   "location": "Berkeley, CA",
+   "family": "assay_development",
+   "label": "yes",
+   "reason": "molecular assay research (borderline: senior)",
+   "queue": 29
+  },
+  {
+   "company": "Gordian Biotechnology",
+   "title": "Research Associate I/II (Temporary), Ex Vivo & Assays",
+   "location": "South San Francisco, CA",
+   "family": "assay_development",
+   "label": "yes",
+   "reason": "lab RA: primary cells, assays"
+  },
+  {
+   "company": "Natera",
+   "title": "Scientist, Research- Oncology Diagnostics",
+   "location": "San Carlos, CA",
+   "family": "assay_development",
+   "label": "yes",
+   "reason": "molecular biology assay development"
+  },
+  {
+   "company": "Nautilus Biotechnology",
+   "title": "Staff Scientist, Assay Development & Integration",
+   "location": "San Carlos",
+   "family": "assay_development",
+   "label": "no",
+   "reason": "staff level: PhD plus 10 years industry"
+  },
+  {
+   "company": "Plasmidsaurus",
+   "title": "Scientist, Assay & Automation Development",
+   "location": "San Francisco",
+   "family": "assay_development",
+   "label": "yes",
+   "reason": "PCR, cell culture, sequencing workflows",
+   "queue": 3
+  },
+  {
+   "company": "Thermo Fisher Scientific",
+   "title": "CSD Diagnostic Partner - Business Development",
+   "location": "Remote, California, USA | Remote, Arizona, USA | Remote, Oregon, USA | Remote, Washington, USA | Remote, Nevada, USA",
+   "family": "assay_development",
+   "label": "no",
+   "reason": "business development (sales) role",
+   "queue": 15
+  },
+  {
+   "company": "Xaira Therapeutics",
+   "title": "Senior Scientist Single Cell Assay and Technology Development",
+   "location": "South San Francisco, California, United States",
+   "family": "assay_development",
+   "label": "yes",
+   "reason": "single-cell and NGS assay development (borderline: senior)"
+  },
+  {
+   "company": "Arc Institute",
+   "title": "Biosafety Manager",
+   "location": "Palo Alto, CA",
+   "family": "biosafety",
+   "label": "no",
+   "reason": "biosafety manager: 3+ years EH&S required"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Biosafety Specialist 2",
+   "location": "Stanford, CA, United States",
+   "family": "biosafety",
+   "label": "yes",
+   "reason": "biosafety specialist; microbiology background fits"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Biosafety Specialist 2- Fixed term",
+   "location": "Stanford, CA, United States | Menlo Park, CA, United States",
+   "family": "biosafety",
+   "label": "yes",
+   "reason": "biosafety specialist; microbiology background fits"
+  },
+  {
+   "company": "Abbott",
+   "title": "Associate I Clinical Research",
+   "location": "United States - California - Alameda",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "entry clinical research associate (education may count)"
+  },
+  {
+   "company": "Abbott",
+   "title": "Clinical Associate",
+   "location": "United States - California - San Francisco",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "field clinical support for cardiac EP devices"
+  },
+  {
+   "company": "Abbott",
+   "title": "Clinical Research Associate II",
+   "location": "United States - California - Alameda",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "CRA II: 5 years clinical research, 2 years monitoring"
+  },
+  {
+   "company": "BillionToOne",
+   "title": "Research Associate",
+   "location": "Menlo Park - Base Building",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "lab research associate: PCR, DNA work"
+  },
+  {
+   "company": "CareDx",
+   "title": "Sr. Clinical Research Associate",
+   "location": "Brisbane, CA",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "senior CRA: 5+ years clinical research"
+  },
+  {
+   "company": "Ceribell",
+   "title": "Manager, Strategic Clinical Research",
+   "location": "Sunnyvale, CA",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "manager of clinical research programs"
+  },
+  {
+   "company": "Eikon Therapeutics",
+   "title": "Clinical Trial Associate, APAC (CONTRACT)",
+   "location": "Jersey City, NJ; Millbrae, CA",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "clinical trial associate; advanced degree without experience accepted"
+  },
+  {
+   "company": "Genentech",
+   "title": "Senior Pharmacovigilance (PV) Clinical Scientist",
+   "location": "South San Francisco",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "pharmacovigilance: RN/PharmD/MD and 5-7 years PV"
+  },
+  {
+   "company": "Generate Biomedicines",
+   "title": "Senior Clinical Trial Manager",
+   "location": "Remote",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "senior clinical trial manager"
+  },
+  {
+   "company": "Gilead Sciences",
+   "title": "Clinical Trials Manager",
+   "location": "United States - California - Foster City",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "clinical trials manager: years of study leadership"
+  },
+  {
+   "company": "Gilead Sciences",
+   "title": "Sr Clinical Trials Manager",
+   "location": "United States - California - Foster City",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "senior clinical trials manager"
+  },
+  {
+   "company": "IQVIA",
+   "title": "Clinical Research Associate, Early Clinical Development",
+   "location": "Carlsbad, CA, United States of America | Atlanta, GA | Durham, NC | Boston, MA | San Francisco, CA, United States of America | Sacramento, CA, United States of America | Philadelphia, PA",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "CRA needs 1.5 years on-site monitoring"
+  },
+  {
+   "company": "IQVIA",
+   "title": "Clinical Research Associate, Sponsor Dedicated",
+   "location": "Durham, North Carolina, United States of America | Aurora, Illinois, United States | San Fernando, California, United States | Clinton, Missouri, United States | Mansfield, Ohio, United States | Santa Cruz, California, United States | Santa Fe, New Mexico, United States | South Shore, Illinois, United States | Elk Grove, California, United States | Hudson, Ohio, United States | Englewood, Colorado, United States | Bellingham, Washington, United States | Marysville, Washington, United States | Overland Park, KS, United States of America | Evanston, Wyoming, United States | La Habra, California, United States | Prescott, Arizona, United States | Westchester, New York, United States | Mount Vernon, Illinois, United States | Warren, Ohio, United States of America | Linden, New Jersey, United States | Fremont, California, United States | Del Mar, California, United States | Lake Tahoe, California, United States | Northfield, New Jersey, United States | Fort Pierce, Florida, United States | Wilkes Barre, Pennsylvania, United States | Camden, New Jersey, United States | Lancaster, California, United States | Clarksville, Tennessee, United States | Adair, Iowa, United States | Fort Collins, Colorado, United States | Breckenridge, Colorado, United States | Littleton, Colorado, United States | Liverpool, New York, United States | Ft Lauderdale, Florida, United States | Springfield, Ohio, United States | Long Island, New York, United States | Gloucester, Virginia, United States | West Point, Virginia, United States | O'Fallon, Illinois, United States | Cheyenne, Wyoming, United States | Manhattan, New York, United States | New City, New York, United States | Parsippany, New Jersey, United States of America | Queens, New York, United States | New York City, New York, United States | Escondido, California, United States | Oak Brook, Illinois, United States | Merritt Island, Florida, United States | El Cajon, California, United States | Ontario, California, United States | Afton, Wyoming, United States | Abilene, Texas, United States | Orangevale, California, United States | Abingdon, Virginia, United States | Orland Park, Illinois, United States | Shenandoah, Texas, United States | Akron, Ohio, United States | Paradise Valley, Arizona, United States | Newark, Delaware, United States | Hollywood, Florida, United States | Port Saint Lucie, Florida, United States | Lawton, Oklahoma, United States | Portland, Oregon, United States | Chino Hills, California, United States | Belmar, New Jersey, United States | Sonora, California, United States | Berkley, California, United States | Springfield, Massachusetts, United States | Springfield, Missouri, United States | San Jose, California, United States | Beverly Hills, California, United States | Melbourne, Florida, United States | Colorado Springs, Colorado, United States | St. Petersburg, Florida, United States | Panama City, Florida, United States | Redondo Beach, California, United States | Crystal Lake, Illinois, United States | Rochester, New York, United States | Ada, Oklahoma, United States | Kansas City, Missouri, United States | Ainsworth, Nebraska, United States | Carlsbad, CA, United States of America | Denver , Colorado, United States",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "CRA needs 2 years independent monitoring"
+  },
+  {
+   "company": "Iovance Biotherapeutics",
+   "title": "Clinical Trial Manager",
+   "location": "Remote",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "clinical trial manager"
+  },
+  {
+   "company": "Merck (MSD)",
+   "title": "Associate Principal Scientist, Clinical Research",
+   "location": "USA - Pennsylvania - West Point | USA - Massachusetts - Boston (MA Parcel B Laboratory) | USA - New Jersey - Rahway | USA - California - South San Francisco (Grand Ave)",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "principal scientist: 3+ years Phase 1 trials"
+  },
+  {
+   "company": "Merck (MSD)",
+   "title": "Clinical Trial Coordinator - Monitoring (Remote)",
+   "location": "USA - New Jersey - Rahway | USA - REMOTE - REMOTE",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "clinical trial coordinator (entry, admin)"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Assistant Clinical Research Coordinator",
+   "location": "Redwood City, CA, United States | Stanford, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "entry clinical research coordinator"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Assistant Clinical Research Coordinator",
+   "location": "Stanford, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "entry clinical research coordinator"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Cancer Clinical Research Coordinator 2 - BMT (Hybrid)",
+   "location": "Stanford, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "clinical research coordinator 2 (borderline)"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Cancer Clinical Research Coordinator 2 - Neurology (Hybrid)",
+   "location": "Stanford, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "clinical research coordinator 2 (borderline)"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Cancer Clinical Research Coordinator Associate - Breast (Hybrid)",
+   "location": "Stanford, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "entry clinical research coordinator"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Cancer Clinical Research Coordinator Associate - Head and Neck Surgery (Hybrid)",
+   "location": "Stanford, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "entry clinical research coordinator"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Cancer Clinical Research Coordinator Associate - Pediatric Oncology/Liquid Tumor (Hybrid)",
+   "location": "Stanford, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "entry clinical research coordinator"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Cancer Clinical Research Manager - BMT Oncology (Hybrid)",
+   "location": "Stanford, CA, United States",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "clinical research manager: 5 years clinical research"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Clinical Research Coordinator 2",
+   "location": "Stanford, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "clinical research coordinator 2 (borderline)"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Clinical Research Coordinator 2",
+   "location": "Stanford, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "clinical research coordinator 2 (borderline)"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Clinical Research Coordinator 2",
+   "location": "Stanford, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "clinical research coordinator 2 (borderline)"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Clinical Research Coordinator 2",
+   "location": "Stanford, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "clinical research coordinator 2 (borderline)"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Clinical Research Coordinator 2",
+   "location": "Redwood City, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "clinical research coordinator 2 (sleep trials desired only)"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Clinical Research Coordinator 2",
+   "location": "Stanford, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "clinical research coordinator 2 (borderline)"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Clinical Research Coordinator 2 - Head and Neck Oncology CRG (Hybrid)",
+   "location": "Stanford, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "clinical research coordinator 2 (borderline)"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Clinical Research Coordinator Associate",
+   "location": "Stanford, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "entry research coordinator (bilingual asked)"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Clinical Research Coordinator Associate",
+   "location": "Stanford, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "entry clinical research coordinator"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Clinical Research Coordinator Associate",
+   "location": "Stanford, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "entry clinical research coordinator"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Clinical Research Coordinator Associate",
+   "location": "Stanford, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "entry clinical research coordinator"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Clinical Research Coordinator Associate",
+   "location": "Stanford, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "entry clinical research coordinator"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Clinical Research Coordinator Associate (12-Month Fixed-Term)",
+   "location": "Stanford, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "entry clinical research coordinator"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Clinical Research Coordinator Associate (Hybrid Opportunity)",
+   "location": "Stanford, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "entry clinical research coordinator"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Clinical Research Coordinator III",
+   "location": "Stanford, CA, United States",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "lead coordinator: 4 years clinical research"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Sr. Clinical Research Program Manager",
+   "location": "Stanford, CA, United States",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "senior program manager: 5 years clinical research"
+  },
+  {
+   "company": "Summit Therapeutics",
+   "title": "Senior Clinical Trial Manager",
+   "location": "Remote",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "senior clinical trial manager: 8-10 years"
+  },
+  {
+   "company": "Thermo Fisher Scientific",
+   "title": "Assoc. Manager / Manager, Clinical Operations - FSP",
+   "location": "Remote, California, USA",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "clinical operations people manager"
+  },
+  {
+   "company": "Thermo Fisher Scientific",
+   "title": "Experienced Clinical Research Associate (CRA II / SR CRA I / SR CRA II) - US West - FSO",
+   "location": "Remote, California, USA",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "experienced CRA: monitoring years"
+  },
+  {
+   "company": "Thermo Fisher Scientific",
+   "title": "FSP Experienced Clinical Research Associate (CRA II/Sr. CRA I) - Oncology - Respiratory - Cardiovascular - US West",
+   "location": "Remote, Oregon, USA | Remote, Idaho, USA | Remote, Colorado, USA | Remote, California, USA | Remote, Nevada, USA | Remote, Washington, USA | Remote, Utah, USA | Remote, New Mexico, USA | Remote, Arizona, USA | Remote, Montana, USA | Remote, Wyoming, USA",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "experienced CRA: monitoring years"
+  },
+  {
+   "company": "Thermo Fisher Scientific",
+   "title": "FSP Experienced Clinical Research Associate (CRA II/Sr. CRA I) - Oncology - Respiratory - Cardiovascular - US West",
+   "location": "Remote, California, USA | Remote, Idaho, USA | Remote, Colorado, USA | Remote, Nevada, USA | Remote, Washington, USA | Remote, Utah, USA | Remote, New Mexico, USA | Remote, Arizona, USA | Remote, Montana, USA | Remote, Oregon, USA | Remote, Wyoming, USA",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "experienced CRA: 1-5 years as a monitor"
+  },
+  {
+   "company": "Thermo Fisher Scientific",
+   "title": "FSP Sr. CRA I",
+   "location": "Remote, California, USA",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "senior CRA: 3+ years monitoring"
+  },
+  {
+   "company": "UCSF",
+   "title": "Assistant Clinical Research Coordinator - Dermatology (Limited)",
+   "location": "San Francisco, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "entry clinical research coordinator"
+  },
+  {
+   "company": "UCSF",
+   "title": "Clinical Research Coordinator",
+   "location": "San Francisco, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "clinical research coordinator (entry requirements)"
+  },
+  {
+   "company": "UCSF",
+   "title": "Clinical Research Coordinator",
+   "location": "San Francisco, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "clinical research coordinator (entry requirements)"
+  },
+  {
+   "company": "UCSF",
+   "title": "Clinical Research Coordinator",
+   "location": "San Francisco, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "clinical research coordinator (entry requirements)"
+  },
+  {
+   "company": "UCSF",
+   "title": "Clinical Research Coordinator",
+   "location": "San Francisco, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "clinical research coordinator (entry requirements)"
+  },
+  {
+   "company": "UCSF",
+   "title": "Clinical Research Coordinator",
+   "location": "San Francisco, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "clinical research coordinator (entry requirements)"
+  },
+  {
+   "company": "UCSF",
+   "title": "Clinical Research Coordinator",
+   "location": "San Francisco, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "clinical research coordinator (language asked)"
+  },
+  {
+   "company": "UCSF",
+   "title": "Clinical Research Coordinator",
+   "location": "San Francisco, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "clinical research coordinator (entry requirements)"
+  },
+  {
+   "company": "UCSF",
+   "title": "Clinical Research Coordinator - Cancer Immunotherapy Research & Clinical Translation",
+   "location": "San Francisco, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "clinical research coordinator with specimen processing"
+  },
+  {
+   "company": "UCSF",
+   "title": "Clinical Research Coordinator - Cardiology",
+   "location": "San Francisco, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "clinical research coordinator (entry requirements)"
+  },
+  {
+   "company": "UCSF",
+   "title": "Clinical Research Coordinator - Genitourinary Oncology Program",
+   "location": "San Francisco, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "clinical research coordinator with specimen processing"
+  },
+  {
+   "company": "UCSF",
+   "title": "Clinical Research Coordinator - Radiology (Part-Time)",
+   "location": "San Francisco, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "clinical research coordinator (entry requirements)"
+  },
+  {
+   "company": "UCSF",
+   "title": "Clinical Research Coordinator - Thoracic & Sarcoma Oncology",
+   "location": "San Francisco, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "clinical research coordinator with specimen processing"
+  },
+  {
+   "company": "UCSF",
+   "title": "Part-Time Clinical Research Coordinator",
+   "location": "San Francisco, CA, United States",
+   "family": "clinical_research",
+   "label": "yes",
+   "reason": "clinical research coordinator (entry requirements)"
+  },
+  {
+   "company": "UCSF",
+   "title": "Senior Clinical Research Coordinator",
+   "location": "San Francisco, CA, United States",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "senior coordinator: in-depth trial experience"
+  },
+  {
+   "company": "UCSF",
+   "title": "Sr. Clinical Research Coordinator - Breast Oncology",
+   "location": "San Francisco, CA, United States",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "senior coordinator: significant trial management"
+  },
+  {
+   "company": "UCSF",
+   "title": "Sr. Clinical Research Coordinator - Dermatology",
+   "location": "San Francisco, CA, United States",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "senior coordinator: in-depth trial experience"
+  },
+  {
+   "company": "UCSF",
+   "title": "Sr. Clinical Research Coordinator - Division of HIV (Part-Time)",
+   "location": "San Francisco, CA, United States",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "senior coordinator: 3 years as a CRC"
+  },
+  {
+   "company": "Vera Therapeutics",
+   "title": "Senior Clinical Trial Manager",
+   "location": "Remote",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "senior clinical trial manager"
+  },
+  {
+   "company": "Viz.ai",
+   "title": "Senior Clinical Study Manager",
+   "location": "United States - Remote",
+   "family": "clinical_research",
+   "label": "no",
+   "reason": "senior clinical study manager: 6 years"
+  },
+  {
+   "company": "Alamar Biosciences",
+   "title": "Product Application Scientist",
+   "location": "Fremont, California",
+   "family": "field_application_tech_support",
+   "label": "yes",
+   "reason": "immunoassay application scientist",
+   "queue": 17
+  },
+  {
+   "company": "Danaher",
+   "title": "Field Application Scientist",
+   "location": "San Francisco, California, United States",
+   "family": "field_application_tech_support",
+   "label": "yes",
+   "reason": "application scientist for assay data software (borderline)"
+  },
+  {
+   "company": "Danaher",
+   "title": "Field Application Scientist - Flow Cytometry - 85% Travel",
+   "location": "San Francisco, California, United States | San Jose, California, United States | Sacramento, California, United States",
+   "family": "field_application_tech_support",
+   "label": "yes",
+   "reason": "flow cytometry field application scientist"
+  },
+  {
+   "company": "4D Molecular Therapeutics",
+   "title": "Scientist II",
+   "location": "Emeryville, California",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "cell culture, qPCR/ddPCR, bioanalytical assays",
+   "queue": 1
+  },
+  {
+   "company": "Alamar Biosciences",
+   "title": "Associate Scientist II - Technology Access Program",
+   "location": "Fremont, California",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "immunoassay associate scientist"
+  },
+  {
+   "company": "Alamar Biosciences",
+   "title": "Scientist I - Content Development",
+   "location": "Fremont, California",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "multiplex immunoassays"
+  },
+  {
+   "company": "Alamar Biosciences",
+   "title": "Scientist I, Technology Development",
+   "location": "Fremont, California",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "ELISA and qPCR assay development"
+  },
+  {
+   "company": "Alamar Biosciences",
+   "title": "Scientist I, Technology Development",
+   "location": "Fremont, California",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "ELISA and qPCR assay development",
+   "queue": 8
+  },
+  {
+   "company": "Alector",
+   "title": "Scientist, Biology",
+   "location": "South San Francisco, CA",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "cell culture, ELISA, flow (neuro focus; borderline)",
+   "queue": 25
+  },
+  {
+   "company": "Amgen",
+   "title": "Senior Principal Scientist Integrated Technology, Computation & Experimental Biology",
+   "location": "US - California - South San Francisco",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "computational biology and multi-omics integration"
+  },
+  {
+   "company": "Amgen",
+   "title": "Senior Principal Scientist, Skin Biology and Inflammation",
+   "location": "US - California - South San Francisco | US - California - Thousand Oaks",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "skin biology, PhD plus 3 years (borderline)"
+  },
+  {
+   "company": "BigHat Biosciences",
+   "title": "Scientist I, Display Technologies",
+   "location": "San Mateo, CA",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "phage display libraries, molecular biology"
+  },
+  {
+   "company": "BigHat Biosciences",
+   "title": "Scientist II, Biomolecular Characterization",
+   "location": "San Mateo, CA",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "antibody binding biophysics (BLI/SPR)"
+  },
+  {
+   "company": "BigHat Biosciences",
+   "title": "Scientist II, Developability",
+   "location": "San Mateo, CA",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "antibody developability biophysics",
+   "queue": 19
+  },
+  {
+   "company": "BigHat Biosciences",
+   "title": "Senior Scientist, Developability [Contract]",
+   "location": "San Mateo, CA",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "antibody developability, chromatography methods",
+   "queue": 21
+  },
+  {
+   "company": "Calico Life Sciences",
+   "title": "Senior/Principal Associate Scientist, Mammalian Physiology",
+   "location": "South San Francisco, CA",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "6-8 years of in vivo physiology required"
+  },
+  {
+   "company": "Chai Discovery",
+   "title": "Research Scientist, Applied Research",
+   "location": "San Francisco office",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "machine learning research",
+   "queue": 2
+  },
+  {
+   "company": "Chai Discovery",
+   "title": "Research Scientist, Pre-training Research",
+   "location": "San Francisco office",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "machine learning pre-training research"
+  },
+  {
+   "company": "Clorox",
+   "title": "Packaging Scientist II",
+   "location": "Pleasanton, CA - USA",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "consumer packaging R&D"
+  },
+  {
+   "company": "Clorox",
+   "title": "R&D Packaging Scientist 1 (Recent Grad Starting in 2027)",
+   "location": "Pleasanton, CA - USA",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "consumer packaging R&D"
+  },
+  {
+   "company": "Codexis",
+   "title": "Associate Scientist, Attribute Sciences",
+   "location": "Redwood City, CA, US",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "analytical biochemistry with ELISA (borderline)",
+   "queue": 6
+  },
+  {
+   "company": "Cytokinetics",
+   "title": "Principal Scientist, Translational Biology",
+   "location": "South San Francisco, California",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "computational biology, GWAS, 6+ years"
+  },
+  {
+   "company": "Cytokinetics",
+   "title": "Senior Scientist, CMC Analytical Development",
+   "location": "South San Francisco, California",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "small-molecule analytical chemistry"
+  },
+  {
+   "company": "Denali Therapeutics",
+   "title": "Associate Scientist, Cell Line Development",
+   "location": "South San Francisco",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "CHO cell culture, cell line development"
+  },
+  {
+   "company": "Denali Therapeutics",
+   "title": "Principal Scientist, CMC Analytical Development - Commercial Products",
+   "location": "South San Francisco",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "principal analytical chemist, 10+ years"
+  },
+  {
+   "company": "Denali Therapeutics",
+   "title": "Senior Principal Scientist, Translational Medicine",
+   "location": "South San Francisco",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "senior principal, 12+ years"
+  },
+  {
+   "company": "Eikon Therapeutics",
+   "title": "Scientist I, High-Throughput Biology",
+   "location": "Millbrae, CA",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "cell-based assays, HTS",
+   "queue": 9
+  },
+  {
+   "company": "Exelixis",
+   "title": "Senior Scientist I, Bioassay",
+   "location": "Alameda, CA",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "cell-based bioassays"
+  },
+  {
+   "company": "Exelixis",
+   "title": "Senior Scientist II",
+   "location": "Alameda, CA",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "small-molecule process chemistry"
+  },
+  {
+   "company": "Frontage",
+   "title": "Scientist/Senior Scientist/Principal Scientist-Biomarker",
+   "location": "Hayward, CA",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "biomarker immunoassay development"
+  },
+  {
+   "company": "GeneFab",
+   "title": "Scientist/Senior Scientist, Analytical Development (CONTRACT)",
+   "location": "Alameda, CA",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "qPCR, ELISA, flow assays for cell and gene therapy",
+   "queue": 23
+  },
+  {
+   "company": "Genentech",
+   "title": "Principal Scientist - Translational Medicine (Tumor Microenvironment)",
+   "location": "South San Francisco",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "principal; advanced computational analysis essential"
+  },
+  {
+   "company": "Genentech",
+   "title": "Scientist 3 - Translational Medicine",
+   "location": "South San Francisco",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "PhD biology, wet lab plus analysis"
+  },
+  {
+   "company": "Genentech",
+   "title": "Scientist 3 Translational Medicine (Cardiovascular and Metabolism)",
+   "location": "South San Francisco",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "cell culture, ELISA, molecular biology"
+  },
+  {
+   "company": "Genentech",
+   "title": "Scientist 3 - Translational Medicine, Oncology",
+   "location": "South San Francisco",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "hands-on lab biology (cancer focus; borderline)"
+  },
+  {
+   "company": "Genentech",
+   "title": "Scientist 3, Cell Therapy T cell Differentiation",
+   "location": "South San Francisco",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "iPSC and immune cell assays (borderline)"
+  },
+  {
+   "company": "Genentech",
+   "title": "Scientist 3, Lung Biology & Inflammation",
+   "location": "South San Francisco",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "lung biology incl. host-microbe interactions"
+  },
+  {
+   "company": "Genentech",
+   "title": "Scientist 3, Microscopy Specialist",
+   "location": "South San Francisco",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "microscopy specialist (borderline)"
+  },
+  {
+   "company": "Genentech",
+   "title": "Scientist 3, Single Cell & Functional Genomics",
+   "location": "South San Francisco",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "single-cell CRISPR screens, NGS (borderline)"
+  },
+  {
+   "company": "Genentech",
+   "title": "Scientist 3/4, Complex in Vitro Systems",
+   "location": "South San Francisco",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "iPSC and organoid cell culture (borderline)"
+  },
+  {
+   "company": "Genentech",
+   "title": "Scientist II",
+   "location": "South San Francisco",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "LC-MS metabolomics and lipidomics"
+  },
+  {
+   "company": "Genentech",
+   "title": "Senior /Principal Scientist- (Multiple Sclerosis)",
+   "location": "South San Francisco",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "immunology translational scientist (borderline)"
+  },
+  {
+   "company": "Genentech",
+   "title": "Senior Principal Scientist, Pathologist",
+   "location": "South San Francisco",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "veterinary pathologist (DVM, ACVP)"
+  },
+  {
+   "company": "Genentech",
+   "title": "Senior Scientist- Translational PKPD",
+   "location": "South San Francisco",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "translational PKPD modeling"
+  },
+  {
+   "company": "Genentech",
+   "title": "Technical Development Principal Scientist, Mass Spectrometry Characterization Lead",
+   "location": "South San Francisco",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "mass spectrometry characterization lead"
+  },
+  {
+   "company": "Gilead Sciences",
+   "title": "Scientist, FPD",
+   "location": "United States - California - Foster City",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "formulation and drug product development"
+  },
+  {
+   "company": "Gilead Sciences",
+   "title": "Scientist, RNA Biology",
+   "location": "United States - California - Foster City",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "RNA production, molecular biology, QC assays"
+  },
+  {
+   "company": "Gilead Sciences",
+   "title": "Senior Associate Scientist, Biologics",
+   "location": "United States - California - Foster City",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "biologics purification scale-up (bioprocess engineering)"
+  },
+  {
+   "company": "Gilead Sciences",
+   "title": "Senior Associate Scientist, External Quality Analytical Oversight",
+   "location": "United States - California - Foster City",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "QC analytical oversight (quality; borderline)"
+  },
+  {
+   "company": "Gilead Sciences",
+   "title": "Senior Scientist, Analytical Development",
+   "location": "United States - California - Foster City",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "separation-based analytical chemistry"
+  },
+  {
+   "company": "Gilead Sciences",
+   "title": "Senior Scientist, Analytical Development",
+   "location": "United States - California - Foster City",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "potency methods: ELISA and cell-based bioassays"
+  },
+  {
+   "company": "Gilead Sciences",
+   "title": "Senior Scientist, HIV Discovery Virology",
+   "location": "United States - California - Foster City",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "HIV virology"
+  },
+  {
+   "company": "Gilead Sciences",
+   "title": "Senior Scientist, Protein Therapeutics",
+   "location": "United States - California - Foster City",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "ADC LC-MS characterization"
+  },
+  {
+   "company": "Gilead Sciences",
+   "title": "Sr Associate Scientist, FPD",
+   "location": "United States - California - Foster City",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "formulation and drug product development"
+  },
+  {
+   "company": "Gilead Sciences",
+   "title": "Sr Associate Scientist, FPD",
+   "location": "United States - California - Foster City",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "formulation and drug product development"
+  },
+  {
+   "company": "Glyphic Biotechnologies",
+   "title": "Scientist / Senior Scientist, Library Prep",
+   "location": "Berkeley, CA",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "sequencing library prep, molecular biology",
+   "queue": 28
+  },
+  {
+   "company": "Gordian Biotechnology",
+   "title": "Senior Scientist I/II, In Vitro Pharmacology",
+   "location": "South San Francisco, CA",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "in vitro pharmacology assays (borderline)"
+  },
+  {
+   "company": "Illumina",
+   "title": "Senior or Staff Scientist, Perturb-seq - Foster City, CA (San Francisco Bay Area)",
+   "location": "US - Bay Area - Foster City",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "CRISPR, single cell, cell culture (borderline: senior)"
+  },
+  {
+   "company": "Merck (MSD)",
+   "title": "Associate Principal Scientist, Automation & Screening (Biologics Discovery)",
+   "location": "USA - California - South San Francisco (Grand Ave)",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "leads lab automation across programs"
+  },
+  {
+   "company": "Merck (MSD)",
+   "title": "Principal Scientist, Translational Immunology & Antibody Discovery Innovation",
+   "location": "USA - California - South San Francisco (Grand Ave)",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "principal: leads vaccine discovery programs"
+  },
+  {
+   "company": "Merck (MSD)",
+   "title": "Scientist, Laboratory Animal Resources (On-site)",
+   "location": "USA - California - South San Francisco (Grand Ave)",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "laboratory animal resources scientist"
+  },
+  {
+   "company": "Natera",
+   "title": "Scientist, Genomics and Cancer Biology",
+   "location": "San Carlos, CA",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "NGS and molecular biology (cancer focus; borderline)",
+   "queue": 4
+  },
+  {
+   "company": "Natera",
+   "title": "Senior Scientist, Molecular Biology Research",
+   "location": "San Carlos, CA",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "NGS and molecular biology (borderline: senior)"
+  },
+  {
+   "company": "Natera",
+   "title": "Staff Scientist, Molecular Biology Research",
+   "location": "San Carlos, CA",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "staff level: 8 years industry"
+  },
+  {
+   "company": "NewLimit",
+   "title": "Scientist, mRNA Analytical Development",
+   "location": "South San Francisco",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "qPCR/ELISA assay development, PhD 0-3 years",
+   "queue": 22
+  },
+  {
+   "company": "NewLimit",
+   "title": "Scientist- Delivery Sciences-targeted LNPs (tLNPs)",
+   "location": "South San Francisco",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "LNP formulation and conjugation chemistry",
+   "queue": 30
+  },
+  {
+   "company": "Nurix Therapeutics",
+   "title": "Scientist I, Bioanalytical",
+   "location": "Brisbane, California",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "LC-MS/MS bioanalysis",
+   "queue": 27
+  },
+  {
+   "company": "Nurix Therapeutics",
+   "title": "Senior Scientist / Principal Scientist, Induced Proximity",
+   "location": "Brisbane, California",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "5+ years industry protein degradation, biophysics",
+   "queue": 5
+  },
+  {
+   "company": "Profluent Bio",
+   "title": "Scientist II, Screening",
+   "location": "Emeryville, California, United States; On-site",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "bacterial and mammalian culture, genome editing",
+   "queue": 26
+  },
+  {
+   "company": "Prolific Machines",
+   "title": "Senior Scientist, Analytical Operations",
+   "location": "Emeryville, California",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "analytical chemistry team: chromatography, LC-MS",
+   "queue": 10
+  },
+  {
+   "company": "Retro Biosciences",
+   "title": "Scientist, Microglia Therapeutics Team",
+   "location": "Redwood City, CA",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "in vitro and in vivo models (neuro focus; borderline)",
+   "queue": 18
+  },
+  {
+   "company": "SLAC National Accelerator Laboratory",
+   "title": "Associate Scientist - SSRL HAXPES Beamline",
+   "location": "Menlo Park, CA, United States",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "X-ray beamline physics"
+  },
+  {
+   "company": "Stanford Health Care",
+   "title": "Genomics Sr Staff Scientist",
+   "location": "3375 Hillview - Clinical - PALO ALTO",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "clinical variant interpretation; CLIA lab years"
+  },
+  {
+   "company": "Thermo Fisher Scientific",
+   "title": "FSP Associate Scientist: Pharmaceutics, Solid Dosage Preparation",
+   "location": "South San Francisco, California, USA",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "solid dosage pharmaceutics"
+  },
+  {
+   "company": "Thermo Fisher Scientific",
+   "title": "Scientist - Formulations, Drug Delivery",
+   "location": "South San Francisco, California, USA",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "pharmaceutical formulation",
+   "queue": 12
+  },
+  {
+   "company": "Thermo Fisher Scientific",
+   "title": "Staff Scientist, Research and Development",
+   "location": "Sunnyvale, California, USA | San Jose, California, USA | San Francisco, California, USA",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "mass spectrometry and chromatography instruments"
+  },
+  {
+   "company": "Until Labs",
+   "title": "Scientist/Senior Scientist, High-Throughput Screening",
+   "location": "Bay Area",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "iPSC and 3D-model screening (borderline)"
+  },
+  {
+   "company": "Vaxcyte",
+   "title": "Scientist II, Analytical Development",
+   "location": "San Carlos, California, United States",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "vaccine analytical development: plate assays, ELISA, PCR",
+   "queue": 7
+  },
+  {
+   "company": "Xaira Therapeutics",
+   "title": "Principal Scientist, Target Discovery & Portfolio Strategy",
+   "location": "South San Francisco, California, United States",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "principal: target and portfolio strategy"
+  },
+  {
+   "company": "Xaira Therapeutics",
+   "title": "Senior Associate Scientist, High Throughput Protein Production",
+   "location": "South San Francisco, California, United States",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "protein expression and purification (borderline)"
+  },
+  {
+   "company": "Xaira Therapeutics",
+   "title": "Senior Scientist, Antibody Characterization",
+   "location": "South San Francisco, California, United States",
+   "family": "industry_rd_scientist",
+   "label": "no",
+   "reason": "antibody biophysics (BLI/SPR)",
+   "queue": 20
+  },
+  {
+   "company": "Xaira Therapeutics",
+   "title": "Senior Scientist, High Throughput Biology (Contract)",
+   "location": "South San Francisco, California, United States",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "molecular biology, library construction, NGS",
+   "queue": 24
+  },
+  {
+   "company": "Amgen",
+   "title": "Medical Science Liaison-Obesity and Related Conditions-San Jose, CA",
+   "location": "US - California - San Jose",
+   "family": "medical_science_liaison",
+   "label": "yes",
+   "reason": "MSL; doctorate is the basic qualification"
+  },
+  {
+   "company": "Amgen",
+   "title": "Senior Medical Science Liaison - Rare Disease-GPA/MPA & Sjogren's Disease - San Jose, CA",
+   "location": "US - California - San Jose",
+   "family": "medical_science_liaison",
+   "label": "no",
+   "reason": "senior MSL: 2+ years as an MSL"
+  },
+  {
+   "company": "BillionToOne",
+   "title": "Medical Science Liaison (MSL), Prenatal",
+   "location": "Remote (US)",
+   "family": "medical_science_liaison",
+   "label": "no",
+   "reason": "needs a genetic counseling degree and board certification"
+  },
+  {
+   "company": "Gilead Sciences",
+   "title": "Manager, Medical Affairs",
+   "location": "United States - California - Foster City",
+   "family": "medical_science_liaison",
+   "label": "yes",
+   "reason": "medical affairs manager; PhD qualifies (borderline)"
+  },
+  {
+   "company": "Illumina",
+   "title": "Sr. Staff Medical Science Liaison in Genetic Disease Testing and Reproductive Health, US",
+   "location": "US - Remote | US - Washington - Remote | US - California - Southern - Remote | US - California - Northern - Remote | US - Idaho - Remote | US - Oregon - Remote | US - Arizona - Remote | US - Texas - Remote | US - Utah - Remote | US - Nevada - Remote | US - Colorado - Remote",
+   "family": "medical_science_liaison",
+   "label": "yes",
+   "reason": "MSL; PhD and 5 years research meet the minimum (borderline)"
+  },
+  {
+   "company": "Natera",
+   "title": "Medical Science Liaison",
+   "location": "US Remote",
+   "family": "medical_science_liaison",
+   "label": "yes",
+   "reason": "MSL; advanced scientific degree"
+  },
+  {
+   "company": "Rezolute",
+   "title": "Medical Science Liaison / Senior Medical Science Liaison - Oncology / Rare Endocrine Disorders",
+   "location": "Remote",
+   "family": "medical_science_liaison",
+   "label": "no",
+   "reason": "5 years as an MSL required"
+  },
+  {
+   "company": "Rezolute",
+   "title": "Medical Science Liaison / Senior Medical Science Liaison - Pediatric Endocrinology / Rare Metabolic Disorders",
+   "location": "Remote",
+   "family": "medical_science_liaison",
+   "label": "no",
+   "reason": "5 years as an MSL required"
+  },
+  {
+   "company": "Veracyte",
+   "title": "Medical Science Liaison",
+   "location": "Remote",
+   "family": "medical_science_liaison",
+   "label": "no",
+   "reason": "5 years clinical experience required"
+  },
+  {
+   "company": "Abbott",
+   "title": "Senior Medical Writer / Senior Project Manager, Clinical Evaluation",
+   "location": "United States - California - Santa Clara | United States - Minnesota - St. Paul",
+   "family": "medical_scientific_writing",
+   "label": "no",
+   "reason": "EU MDR clinical evaluation expertise, senior"
+  },
+  {
+   "company": "Rezolute",
+   "title": "Medical Writer II, Clinical/Regulatory",
+   "location": "Redwood City",
+   "family": "medical_scientific_writing",
+   "label": "yes",
+   "reason": "medical writer II (borderline)"
+  },
+  {
+   "company": "Rezolute",
+   "title": "Senior Manager, Scientific Communications & Medical Education",
+   "location": "Redwood City",
+   "family": "medical_scientific_writing",
+   "label": "no",
+   "reason": "senior manager, 5+ years medical communications"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Research Development Strategist/Grant Writer",
+   "location": "Stanford, CA, United States",
+   "family": "medical_scientific_writing",
+   "label": "yes",
+   "reason": "research development and grant writing"
+  },
+  {
+   "company": "Summit Therapeutics",
+   "title": "Medical Writer, Medical Communications & Publications",
+   "location": "Palo Alto, California, United States",
+   "family": "medical_scientific_writing",
+   "label": "no",
+   "reason": "6+ years medical writing"
+  },
+  {
+   "company": "Labcorp",
+   "title": "Lab Assistant - Microbiology",
+   "location": "Dublin OH",
+   "family": "microbiologist",
+   "label": "no",
+   "reason": "Dublin, Ohio; high-school lab assistant",
+   "queue": 13
+  },
+  {
+   "company": "Denali Therapeutics",
+   "title": "Postdoctoral Fellow, PD and Rare Disease",
+   "location": "South San Francisco",
+   "family": "postdoc",
+   "label": "yes",
+   "reason": "cell biology postdoc"
+  },
+  {
+   "company": "Genentech",
+   "title": "Postdoctoral Fellow - Multimodal Technologies & Complex Human Models, Regev and Chen Labs",
+   "location": "South San Francisco",
+   "family": "postdoc",
+   "label": "yes",
+   "reason": "single-cell genomics postdoc"
+  },
+  {
+   "company": "Gladstone Institutes",
+   "title": "Postdoctoral Scholar - Conklin Lab",
+   "location": "San Francisco",
+   "family": "postdoc",
+   "label": "yes",
+   "reason": "molecular biology and cell culture postdoc"
+  },
+  {
+   "company": "Merck (MSD)",
+   "title": "Associate Scientist, Postdoctoral Research Fellow - Translational Imaging",
+   "location": "USA - California - South San Francisco (Gateway Blvd)",
+   "family": "postdoc",
+   "label": "no",
+   "reason": "MRI physics postdoc"
+  },
+  {
+   "company": "Bionova Scientific",
+   "title": "MSAT Engineer/ Senior Engineer - Temporary/ Full-time",
+   "location": "Fremont, CA",
+   "family": "process_dev_fermentation",
+   "label": "yes",
+   "reason": "MSAT engineer; fermentation equipment, PhD accepted (borderline)"
+  },
+  {
+   "company": "GeneFab",
+   "title": "Bioprocess Specialist - CONTRACT",
+   "location": "Alameda, CA",
+   "family": "process_dev_fermentation",
+   "label": "no",
+   "reason": "manufacturing technician: 3-4 years GMP manufacturing"
+  },
+  {
+   "company": "GeneFab",
+   "title": "Process Engineer II / III, MSAT",
+   "location": "Alameda, CA",
+   "family": "process_dev_fermentation",
+   "label": "no",
+   "reason": "process engineer: cell therapy manufacturing years"
+  },
+  {
+   "company": "Gilead Sciences",
+   "title": "Senior Scientist, Process Development",
+   "location": "United States - California - Foster City",
+   "family": "process_dev_fermentation",
+   "label": "no",
+   "reason": "purification process engineering"
+  },
+  {
+   "company": "NewLimit",
+   "title": "Scientist, mRNA Downstream Purification",
+   "location": "South San Francisco",
+   "family": "process_dev_fermentation",
+   "label": "yes",
+   "reason": "nucleic acid purification (borderline)"
+  },
+  {
+   "company": "Abbott",
+   "title": "Associate Quality Specialist",
+   "location": "United States - California - Alameda",
+   "family": "quality_validation",
+   "label": "yes",
+   "reason": "entry quality specialist"
+  },
+  {
+   "company": "Bionova Scientific",
+   "title": "QA Associate - Temporary and Full Time",
+   "location": "Fremont, CA",
+   "family": "quality_validation",
+   "label": "yes",
+   "reason": "QA associate"
+  },
+  {
+   "company": "Cytokinetics",
+   "title": "Senior Quality Assurance Specialist - Drug Substance",
+   "location": "South San Francisco, California",
+   "family": "quality_validation",
+   "label": "no",
+   "reason": "senior QA: 5 years, oral solid dose"
+  },
+  {
+   "company": "Denali Therapeutics",
+   "title": "Senior Specialist, Quality Assurance",
+   "location": "South San Francisco",
+   "family": "quality_validation",
+   "label": "no",
+   "reason": "senior QA: 5+ years cGMP QA"
+  },
+  {
+   "company": "Gator Bio",
+   "title": "Quality Assurance Specialist",
+   "location": "Palo Alto, CA",
+   "family": "quality_validation",
+   "label": "yes",
+   "reason": "QA specialist (borderline)"
+  },
+  {
+   "company": "GeneFab",
+   "title": "Senior QC Analyst, QC Analytical",
+   "location": "Alameda, CA",
+   "family": "quality_validation",
+   "label": "no",
+   "reason": "senior QC analyst: 5+ years GMP QC"
+  },
+  {
+   "company": "Gilead Sciences",
+   "title": "Senior Scientist, Quality Control",
+   "location": "United States - California - Foster City",
+   "family": "quality_validation",
+   "label": "no",
+   "reason": "senior QC scientist: commercial QC experience"
+  },
+  {
+   "company": "Gilead Sciences",
+   "title": "Senior Specialist, Quality Assurance",
+   "location": "United States - California - Foster City",
+   "family": "quality_validation",
+   "label": "no",
+   "reason": "senior QA: 6+ years GMP"
+  },
+  {
+   "company": "Thermo Fisher Scientific",
+   "title": "QC Reviewer - Biologics Data Review",
+   "location": "Foster City, California, USA",
+   "family": "quality_validation",
+   "label": "yes",
+   "reason": "QC data reviewer (borderline)"
+  },
+  {
+   "company": "Thermo Fisher Scientific",
+   "title": "QC Specialist - Biologics Stability",
+   "location": "Foster City, California, USA",
+   "family": "quality_validation",
+   "label": "yes",
+   "reason": "QC stability specialist; equivalency accepted (borderline)"
+  },
+  {
+   "company": "Thermo Fisher Scientific",
+   "title": "QC Specialist -Biologics Raw Materials",
+   "location": "Foster City, California, USA",
+   "family": "quality_validation",
+   "label": "no",
+   "reason": "raw materials and supplier quality: 5 years"
+  },
+  {
+   "company": "4D Molecular Therapeutics",
+   "title": "Regulatory Affairs Associate (Contract)",
+   "location": "Emeryville, California",
+   "family": "regulatory_affairs",
+   "label": "yes",
+   "reason": "regulatory affairs associate"
+  },
+  {
+   "company": "Abbott",
+   "title": "Principal Regulatory Affairs Specialist - Diabetes Care (on-site)",
+   "location": "United States - California - Alameda",
+   "family": "regulatory_affairs",
+   "label": "no",
+   "reason": "principal RA specialist: 5 years devices"
+  },
+  {
+   "company": "Abbott",
+   "title": "Principal Regulatory Affairs Specialist - Vascular (on-site)",
+   "location": "United States - California - Santa Clara | United States - California - Temecula",
+   "family": "regulatory_affairs",
+   "label": "no",
+   "reason": "principal RA specialist: 6-8 years devices"
+  },
+  {
+   "company": "Abbott",
+   "title": "Regulatory Affairs Manager - APAC - Diabetes Care (on-site)",
+   "location": "United States - California - Alameda",
+   "family": "regulatory_affairs",
+   "label": "no",
+   "reason": "RA manager"
+  },
+  {
+   "company": "Abbott",
+   "title": "Regulatory Affairs Manager - Diabetes Care (on-site)",
+   "location": "United States - California - Alameda | United States > Texas > Austin : 12501B Research Boulevard | United States - California - Milpitas",
+   "family": "regulatory_affairs",
+   "label": "no",
+   "reason": "RA manager"
+  },
+  {
+   "company": "Abbott",
+   "title": "Regulatory Affairs Specialist II - Lingo (on-site)",
+   "location": "United States - California - Alameda",
+   "family": "regulatory_affairs",
+   "label": "yes",
+   "reason": "RA specialist II; R&D experience counts (borderline)"
+  },
+  {
+   "company": "Abbott",
+   "title": "Regulatory Affairs Specialist II - Structural Heart (on-site)",
+   "location": "United States - California - Santa Clara",
+   "family": "regulatory_affairs",
+   "label": "no",
+   "reason": "needs 2 years regulatory experience"
+  },
+  {
+   "company": "Abbott",
+   "title": "Senior Regulatory Affairs Specialist - Lingo (on-site)",
+   "location": "United States - California - Alameda",
+   "family": "regulatory_affairs",
+   "label": "no",
+   "reason": "senior RA specialist"
+  },
+  {
+   "company": "Amgen",
+   "title": "Regulatory Writing Senior Manager",
+   "location": "United States - Remote",
+   "family": "regulatory_affairs",
+   "label": "no",
+   "reason": "senior manager, 5+ years writing"
+  },
+  {
+   "company": "Corcept Therapeutics",
+   "title": "Associate I, Regulatory Affairs",
+   "location": "Redwood City, California, United States",
+   "family": "regulatory_affairs",
+   "label": "yes",
+   "reason": "entry regulatory affairs associate"
+  },
+  {
+   "company": "Gilead Sciences",
+   "title": "Manager, Regulatory Data and Content, Regulatory Affairs CMC",
+   "location": "United States - California - Foster City",
+   "family": "regulatory_affairs",
+   "label": "no",
+   "reason": "manager, regulatory data"
+  },
+  {
+   "company": "Gilead Sciences",
+   "title": "Sr Manager, Regulatory Affairs CMC",
+   "location": "United States - California - Santa Monica | United States - California - Foster City | United States - California - Thousand Oaks | United States - California - El Segundo",
+   "family": "regulatory_affairs",
+   "label": "no",
+   "reason": "senior manager RA CMC"
+  },
+  {
+   "company": "Johnson & Johnson",
+   "title": "Senior Regulatory Affairs Program Lead (OTTAVA) - MedTech Surgery",
+   "location": "Santa Clara, California, United States of America | Remote (US)",
+   "family": "regulatory_affairs",
+   "label": "no",
+   "reason": "senior RA program lead, 6+ years"
+  },
+  {
+   "company": "Revolution Medicines",
+   "title": "Senior Manager, Regulatory Affairs Labeling",
+   "location": "Remote (United States)",
+   "family": "regulatory_affairs",
+   "label": "no",
+   "reason": "senior manager RA labeling, 7+ years"
+  },
+  {
+   "company": "Vera Therapeutics",
+   "title": "Manager, Regulatory Operations",
+   "location": "Remote",
+   "family": "regulatory_affairs",
+   "label": "no",
+   "reason": "manager regulatory operations, 5-6 years"
+  },
+  {
+   "company": "Vir Biotechnology",
+   "title": "SVP, Regulatory Affairs",
+   "location": "San Francisco, California, United States",
+   "family": "regulatory_affairs",
+   "label": "no",
+   "reason": "senior vice president"
+  },
+  {
+   "company": "Altos Labs",
+   "title": "Scientific Lab Manager",
+   "location": "San Francisco Bay Area, CA",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "scientific lab manager (borderline)"
+  },
+  {
+   "company": "Arc Institute",
+   "title": "Lab Operations Assistant (Fixed-Term Contract)",
+   "location": "Palo Alto, CA",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "lab operations assistant (overqualified, plausible)"
+  },
+  {
+   "company": "Arc Institute",
+   "title": "Research Associate II, Pluvinage Lab",
+   "location": "Palo Alto, CA",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "molecular biology research associate"
+  },
+  {
+   "company": "Arc Institute",
+   "title": "Senior Research Associate, Genetic Perturbation Screening (Fixed-Term Contract)",
+   "location": "Palo Alto, CA",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "stem cell culture and flow"
+  },
+  {
+   "company": "Arc Institute",
+   "title": "Senior Research Associate, Viral Production (Fixed-Term Contract)",
+   "location": "Palo Alto, CA",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "lentivirus production, cell culture"
+  },
+  {
+   "company": "BigHat Biosciences",
+   "title": "Lab Operations Assistant (Part-Time)",
+   "location": "San Mateo, CA",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "lab operations assistant (overqualified, plausible)"
+  },
+  {
+   "company": "BigHat Biosciences",
+   "title": "Research Associate I, Production",
+   "location": "San Mateo, CA",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "DNA prep and protein expression"
+  },
+  {
+   "company": "BigHat Biosciences",
+   "title": "Research Associate II, Production",
+   "location": "San Mateo, CA",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "DNA prep and protein expression"
+  },
+  {
+   "company": "BillionToOne",
+   "title": "Clinical Laboratory Associate, Prenatal",
+   "location": "Union City",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "clinical laboratory associate, BS biology"
+  },
+  {
+   "company": "BillionToOne",
+   "title": "Clinical Laboratory Associate, Prenatal and Oncology",
+   "location": "Union City",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "clinical laboratory associate, BS biology"
+  },
+  {
+   "company": "Calico Life Sciences",
+   "title": "Lab Operations Specialist",
+   "location": "South San Francisco, CA",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "lab operations specialist"
+  },
+  {
+   "company": "Gladstone Institutes",
+   "title": "Research Associate I",
+   "location": "San Francisco",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "research associate"
+  },
+  {
+   "company": "Labcorp",
+   "title": "Lab Assistant",
+   "location": "South San Francisco CA",
+   "family": "research_associate_lab_tech",
+   "label": "no",
+   "reason": "requires current or prior Labcorp employment"
+  },
+  {
+   "company": "Labcorp",
+   "title": "Lab Assistant",
+   "location": "Dublin OH",
+   "family": "research_associate_lab_tech",
+   "label": "no",
+   "reason": "Dublin, Ohio"
+  },
+  {
+   "company": "Maze Therapeutics",
+   "title": "SRA I, Compound Management",
+   "location": "South San Francisco, CA",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "compound and sample management RA"
+  },
+  {
+   "company": "Natera",
+   "title": "Lab Assistant I",
+   "location": "San Carlos, CA",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "lab assistant (overqualified, plausible)"
+  },
+  {
+   "company": "Natera",
+   "title": "Lab Associate",
+   "location": "San Carlos, CA",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "lab support associate"
+  },
+  {
+   "company": "NewLimit",
+   "title": "Senior/Research Associate, mRNA Engineering",
+   "location": "South San Francisco",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "molecular biology RA"
+  },
+  {
+   "company": "Nurix Therapeutics",
+   "title": "Senior Research Associate, Preclinical Pharmacology",
+   "location": "Brisbane, California",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "in vivo pharmacology RA (borderline)"
+  },
+  {
+   "company": "Oxford BioTherapeutics",
+   "title": "SRA (Multispecific Antibody Characterization)",
+   "location": "San Jose, California",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "antibody binding and cytotoxicity cell assays"
+  },
+  {
+   "company": "Pacific Biosciences",
+   "title": "Research Assistant, Applications Lab",
+   "location": "US - California - Menlo Park",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "molecular biology sample prep"
+  },
+  {
+   "company": "Pendulum Therapeutics",
+   "title": "Senior/Staff Research Associate",
+   "location": "San Francisco, CA",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "microbiome research associate"
+  },
+  {
+   "company": "Prolific Machines",
+   "title": "Research Associate I, Analytical Chemistry",
+   "location": "Emeryville, California",
+   "family": "research_associate_lab_tech",
+   "label": "no",
+   "reason": "analytical chemistry RA"
+  },
+  {
+   "company": "Prolific Machines",
+   "title": "Research Associate, Cell Line Development Automation",
+   "location": "Emeryville, California",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "cell line development RA"
+  },
+  {
+   "company": "Revolution Medicines",
+   "title": "Senior Research Associate, Biophysics, Mechanism of Action",
+   "location": "Redwood City, California, United States",
+   "family": "research_associate_lab_tech",
+   "label": "no",
+   "reason": "SPR/BLI biophysics RA"
+  },
+  {
+   "company": "Sapho Bio",
+   "title": "Research Associate- Analytical Chemistry",
+   "location": "San Carlos, California",
+   "family": "research_associate_lab_tech",
+   "label": "no",
+   "reason": "HPLC analytical chemistry RA"
+  },
+  {
+   "company": "Stanford Health Care",
+   "title": "Category Manager - Clinical, Laboratory & Med/Surg",
+   "location": "2465 Faber - PALO ALTO",
+   "family": "research_associate_lab_tech",
+   "label": "no",
+   "reason": "procurement category manager"
+  },
+  {
+   "company": "Stanford Health Care",
+   "title": "Outreach Lab Assistant III-P - Clin Lab Offsite PSCS Multi Site - .5 FTE, Day - 08 hrs",
+   "location": "211 Quarry - Hoover Pavilion - STANFORD",
+   "family": "research_associate_lab_tech",
+   "label": "no",
+   "reason": "phlebotomy duties"
+  },
+  {
+   "company": "Stanford Health Care",
+   "title": "Outreach Lab Assistant III-P - Full Time - Day, 8 hrs",
+   "location": "321 Middlefield Rd - MENLO PARK",
+   "family": "research_associate_lab_tech",
+   "label": "no",
+   "reason": "phlebotomy duties"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Lab Assistant",
+   "location": "Stanford, CA, United States",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "bioengineering lab assistant (cell culture, ELISA)"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Laboratory Operations Associate",
+   "location": "Stanford, CA, United States",
+   "family": "research_associate_lab_tech",
+   "label": "no",
+   "reason": "nanofabrication cleanroom operations"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Laboratory Services Manager (24-Month Fixed-Term)",
+   "location": "Stanford, CA, United States",
+   "family": "research_associate_lab_tech",
+   "label": "no",
+   "reason": "lab facilities and operations manager"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Senior Research Assistant",
+   "location": "Stanford, CA, United States",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "lab research professional / lab manager"
+  },
+  {
+   "company": "Stanford University",
+   "title": "Social Science Research Assistant",
+   "location": "Stanford, CA, United States",
+   "family": "research_associate_lab_tech",
+   "label": "no",
+   "reason": "social science research"
+  },
+  {
+   "company": "Synthego",
+   "title": "Laboratory Associate II, Pre-Clinical (Night Shift)",
+   "location": "Redwood City, CA",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "CRISPR production lab associate"
+  },
+  {
+   "company": "UCSF",
+   "title": "ECG Hospital Lab Technician 3",
+   "location": "CA, United States",
+   "family": "research_associate_lab_tech",
+   "label": "no",
+   "reason": "ECG technician training and CPR/BLS"
+  },
+  {
+   "company": "UCSF",
+   "title": "Hospital Lab Technician 1",
+   "location": "San Francisco, CA, United States",
+   "family": "research_associate_lab_tech",
+   "label": "no",
+   "reason": "CPT phlebotomy license required"
+  },
+  {
+   "company": "UCSF",
+   "title": "Hospital Lab Technician 1 - Evenings",
+   "location": "San Francisco, CA, United States",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "clinical lab specimen processing (borderline)"
+  },
+  {
+   "company": "UCSF",
+   "title": "Lab Assistant",
+   "location": "San Francisco, CA, United States",
+   "family": "research_associate_lab_tech",
+   "label": "no",
+   "reason": "third-year medical knowledge required"
+  },
+  {
+   "company": "UCSF",
+   "title": "Lab Assistant I",
+   "location": "San Francisco, CA, United States",
+   "family": "research_associate_lab_tech",
+   "label": "no",
+   "reason": "third-year medical knowledge required"
+  },
+  {
+   "company": "UCSF",
+   "title": "Laboratory Assistant",
+   "location": "San Francisco, CA, United States",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "lab assistant"
+  },
+  {
+   "company": "UCSF",
+   "title": "Part-time Staff Research Associate",
+   "location": "San Francisco, CA, United States",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "fungal culture and cell biology"
+  },
+  {
+   "company": "UCSF",
+   "title": "Part-time Staff Research Associate",
+   "location": "San Francisco, CA, United States",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "mouse lung biology RA"
+  },
+  {
+   "company": "UCSF",
+   "title": "Research Assistant",
+   "location": "San Francisco, CA, United States",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "immunology research assistant"
+  },
+  {
+   "company": "UCSF",
+   "title": "Research Associate - Preclinical Imaging",
+   "location": "San Francisco, CA, United States",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "rodent in vivo imaging RA (borderline)"
+  },
+  {
+   "company": "UCSF",
+   "title": "Staff Research Associate",
+   "location": "San Francisco, CA, United States",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "gut histology RA"
+  },
+  {
+   "company": "UCSF",
+   "title": "Staff Research Associate - Radiology",
+   "location": "San Francisco, CA, United States",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "imaging study RA (borderline)"
+  },
+  {
+   "company": "UCSF",
+   "title": "Staff Research Associate 1/2 - Neurological Surgery",
+   "location": "United States",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "cell culture RA"
+  },
+  {
+   "company": "UCSF",
+   "title": "Staff Research Associate 2",
+   "location": "San Francisco, CA, United States",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "molecular and microbiology lab manager"
+  },
+  {
+   "company": "Verily",
+   "title": "Operations Manager - Laboratory Testing Programs",
+   "location": "South San Francisco - EGA2",
+   "family": "research_associate_lab_tech",
+   "label": "yes",
+   "reason": "lab testing program operations (borderline)"
+  }
+ ]
+}

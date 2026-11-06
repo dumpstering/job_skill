@@ -144,8 +144,9 @@ def files_approval(vdir):
 
 
 def entry_hash(entry):
-    """sha256 of one library entry as a variant relies on it: its role heading and text."""
-    return hashlib.sha256(f"{entry.heading}\n{entry.text}".encode("utf-8")).hexdigest()
+    """sha256 of one library entry as a variant relies on it: its role heading
+    and text (library.entry_hash, the form a Tier A final.json uses too)."""
+    return library.entry_hash(entry)
 
 
 def cited_ids(vdir):

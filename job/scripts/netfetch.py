@@ -5,23 +5,37 @@ Usage:
                              [--allow-host H ...] [--robots] [--offline DIR]
 
 check prints ALLOW <host> (exit 0) or DENY <reason> (exit 7). Reasons:
-job-board <domain>, r3-list <host>, non-public <host>, bad-url, not-https <host>,
-host-not-allowed <host>, post-not-allowed <host>, robots <host>,
-robots-unreachable <host>. The static rules need no network; --robots also
-reads robots.txt (live, or from --offline fixtures).
+job-board <domain>, r3-list <host>, non-public <host>, bad-url [<detail>],
+not-https <host>, host-not-allowed <host>, post-not-allowed <host>,
+robots <host>, robots-unreachable <host>, crawl-delay <host>. The static rules
+need no network; --robots also reads robots.txt (live, or from --offline
+fixtures).
 
 What it enforces (spec 8.2, 3.3, 3.14):
+- One canonical host (host_of, canon_host): urlparse's hostname, lowercased,
+  one trailing dot removed. A host with any character outside a-z 0-9 . -,
+  an empty label or a label over 63 characters is refused (bad-url), so a
+  spelling the socket layer would map to another name (a soft hyphen, a
+  fullwidth letter, an ideographic dot) never reaches a check or a socket.
 - Public addresses only. Every address a name resolves to is checked and the
   socket connects to one of those same addresses (no DNS rebinding); every
-  redirect is re-checked; with a proxy configured nothing is fetched.
-- A hard deny for job boards (LinkedIn, Indeed, Glassdoor, SimplyHired,
-  ZipRecruiter) and the R3 list endpoints, before every request and redirect,
-  even when robots.txt cannot be read.
+  redirect is re-checked; with a proxy configured nothing is fetched. The
+  socket layer re-checks the name it resolves (canonical, not a job board).
+- A hard deny for job boards (any host with a label linkedin, indeed,
+  glassdoor, simplyhired, ziprecruiter or remotive, whatever the top-level
+  domain, plus lnkd.in and licdn.com) and the R3 list endpoints, before every
+  request and redirect, even when robots.txt cannot be read. Paths are
+  compared after decoding percent-escaped unreserved characters (RFC 9309
+  2.2.2); unattended, a path still holding %2F or %5C is refused.
 - Unattended runs: https only, and only allowlisted hosts (ATS and aggregator
   APIs, watch-list careers_url hosts, hosts a validated request named).
 - robots.txt for our User-Agent and *, cached 24 h in state/robots_cache.json.
-- At least max(1 s, Crawl-delay) between requests to one host, Retry-After on
-  429/503, a 20 MB cap and a 20 s timeout.
+  Rules over 256 characters or with more than 10 wildcards are ignored, and
+  matching never backtracks.
+- At least max(1 s, Crawl-delay) between requests to one host. A Crawl-delay
+  that is not a finite number from 0 to 10 s means the host is skipped for
+  the run (crawl-delay <host>). Retry-After on 429/503 up to 120 s, a 20 MB
+  cap, a 20 s timeout per socket read and 60 s wall-clock per fetch.
 
 Offline mode (tests and `--offline`): DIR/index.json maps "URL" or "POST URL"
 to {"file": name, "status": 200, "headers": {}, "url": final_url} or to
@@ -30,14 +44,16 @@ A robots.txt with no entry counts as 404 (no rules).
 Stdlib only.
 """
 import argparse
+import contextlib
 import csv
 import http.client
 import ipaddress
 import json
+import math
 import re
 import socket
+import ssl
 import sys
-import math
 import threading
 import time
 from email.utils import parsedate_to_datetime
@@ -53,13 +69,16 @@ import jobfs  # noqa: E402  (needs the script folder on sys.path)
 
 USER_AGENT = "JobSearchRunner/1.2 (personal job search; github.com/dumpstering/job_skill)"
 UA_TOKEN = "jobsearchrunner"
-TIMEOUT = 20
+TIMEOUT = 20              # per socket read
+FETCH_DEADLINE = 60.0     # wall-clock seconds for one whole fetch (connect, headers, body)
 MAX_BYTES = 20_000_000
 MIN_INTERVAL = 1.0
-MAX_CRAWL_DELAY = 30.0    # a robots Crawl-delay above this (or not a finite number) means: do not crawl that host
+MAX_CRAWL_DELAY = 10.0    # a robots Crawl-delay above this (or not a finite number) means: skip that host this run
 MAX_RETRY_AFTER = 120
 ROBOTS_TTL = 24 * 3600
 ROBOTS_MAX = 512_000
+ROBOTS_RULE_MAX = 256     # longer robots rules are ignored
+ROBOTS_WILDCARDS = 10     # rules with more wildcards are ignored
 EXIT_DENY = 7
 
 
@@ -89,8 +108,11 @@ class Denied(FetchError):
 # agent then fetches with its own tool (exit 3, TRY).
 
 def check_public(url):
-    u = urlparse(url)
-    host = (u.hostname or "").lower()
+    try:
+        u = urlparse(url)
+        host = (u.hostname or "").lower()
+    except ValueError:  # an unbalanced [ in the host part
+        raise FetchError(f"refused {str(url)[:80]}: not a well-formed link")
     if u.scheme not in ("http", "https") or not host:
         raise FetchError(f"refused {url[:80]}: only public http(s) links are fetched")
     if any(ch in u.netloc for ch in "@%\\"):
@@ -105,27 +127,109 @@ def check_public(url):
         raise FetchError(f"refused {host}: not a public address")
 
 
-def connect_public(host, port, timeout):
+# One wall-clock deadline per fetch (FETCH_DEADLINE): a server that answers one
+# byte every 19 s never trips the 20 s socket timeout, so every socket read
+# (headers and body, TLS included) waits at most until the deadline. A
+# Fetcher sets one deadline for the whole request, redirects included; any
+# other connection made through these handlers gets its own.
+_deadline = threading.local()
+
+
+@contextlib.contextmanager
+def fetch_deadline(seconds=None):
+    """Every socket read inside this block shares one deadline (nested blocks
+    keep the outer one)."""
+    outer = getattr(_deadline, "at", None)
+    if outer is None:
+        _deadline.at = time.monotonic() + (FETCH_DEADLINE if seconds is None else seconds)
     try:
-        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+        yield
+    finally:
+        if outer is None:
+            _deadline.at = None
+
+
+def check_deadline():
+    at = getattr(_deadline, "at", None)
+    if at is not None and time.monotonic() >= at:
+        raise TimeoutError(f"no complete answer within {FETCH_DEADLINE:.0f} s")
+
+
+class _DeadlineReads:
+    """Arms each socket read with min(socket timeout, time left)."""
+
+    deadline = None
+    base_timeout = None
+
+    def _arm(self):
+        if self.deadline is None:
+            return
+        left = self.deadline - time.monotonic()
+        if left <= 0:
+            raise TimeoutError(f"no complete answer within {FETCH_DEADLINE:.0f} s")
+        self.settimeout(left if self.base_timeout is None else min(self.base_timeout, left))
+
+    def _late(self):
+        if self.deadline is not None and time.monotonic() >= self.deadline - 0.05:  # a timer may fire a tick early
+            return TimeoutError(f"no complete answer within {FETCH_DEADLINE:.0f} s")
+        return None
+
+    def recv(self, *args, **kwargs):
+        self._arm()
+        try:
+            return super().recv(*args, **kwargs)
+        except TimeoutError:
+            raise self._late() or TimeoutError("timed out") from None
+
+    def recv_into(self, *args, **kwargs):
+        self._arm()
+        try:
+            return super().recv_into(*args, **kwargs)
+        except TimeoutError:
+            raise self._late() or TimeoutError("timed out") from None
+
+
+class DeadlineSocket(_DeadlineReads, socket.socket):
+    pass
+
+
+class DeadlineSSLSocket(_DeadlineReads, ssl.SSLSocket):
+    pass
+
+
+def connect_public(host, port, timeout):
+    # The name the socket resolves is checked again here: the same canonical
+    # form and job-board test as the policy, whatever parsed the URL upstream.
+    name = canon_host(host)
+    board = job_board(name)
+    if board:
+        raise Denied(f"job-board {board}")
+    deadline = getattr(_deadline, "at", None) or time.monotonic() + FETCH_DEADLINE
+    base = None if timeout is socket._GLOBAL_DEFAULT_TIMEOUT else timeout
+    try:
+        infos = socket.getaddrinfo(name, port, type=socket.SOCK_STREAM)
     except socket.gaierror as e:
-        raise FetchError(f"cannot resolve {host}: {e}")
+        raise FetchError(f"cannot resolve {name}: {e}")
     for info in infos:
         ip = ipaddress.ip_address(info[4][0].split("%")[0])
         if not ip.is_global:
-            raise FetchError(f"refused {host}: resolves to a non-public address ({ip})")
+            raise FetchError(f"refused {name}: resolves to a non-public address ({ip})")
     last = None
     for family, socktype, proto, _, addr in infos:
-        s = socket.socket(family, socktype, proto)
-        if timeout is not socket._GLOBAL_DEFAULT_TIMEOUT:
-            s.settimeout(timeout)
+        s = DeadlineSocket(family, socktype, proto)
+        s.deadline, s.base_timeout = deadline, base
+        left = deadline - time.monotonic()
+        if left <= 0:
+            s.close()
+            raise TimeoutError(f"no complete answer within {FETCH_DEADLINE:.0f} s")
+        s.settimeout(left if base is None else min(base, left))
         try:
             s.connect(addr)
             return s
         except OSError as e:
             last = e
             s.close()
-    raise last or OSError(f"cannot connect to {host}")
+    raise last or OSError(f"cannot connect to {name}")
 
 
 class PublicHTTPConnection(http.client.HTTPConnection):
@@ -136,7 +240,13 @@ class PublicHTTPConnection(http.client.HTTPConnection):
 class PublicHTTPSConnection(http.client.HTTPSConnection):
     def connect(self):
         sock = connect_public(self.host, self.port, self.timeout)
-        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+        ctx = self._context  # the handler's own context (made per handler), so this class choice stays ours
+        if ctx.sslsocket_class is not DeadlineSSLSocket:
+            ctx.sslsocket_class = DeadlineSSLSocket
+        ssock = ctx.wrap_socket(sock, server_hostname=self.host)
+        ssock.deadline = getattr(sock, "deadline", None)
+        ssock.base_timeout = getattr(sock, "base_timeout", None)
+        self.sock = ssock
 
 
 class PublicHTTPHandler(HTTPHandler):
@@ -171,15 +281,57 @@ def on_domain(host, domain):
     return host == domain or host.endswith("." + domain)
 
 
+HOST_CHARS = re.compile(r"[a-z0-9.-]+")
+
+
+def shown(text, limit=80):
+    """A host or URL as it may appear in a reason or log line: ASCII only."""
+    return str(text)[:limit].encode("ascii", "backslashreplace").decode("ascii")
+
+
+def canon_host(host):
+    """The one host form every allow and deny decision uses: lowercase, one
+    trailing dot removed, only a-z 0-9 . - (so a soft hyphen, a sharp s, a
+    fullwidth letter or an ideographic dot, which the socket layer would map
+    to another name, is refused), no empty label, no label over 63 characters.
+    Raises Denied('bad-url ...') for anything else."""
+    h = str(host or "").lower()
+    if h.endswith("."):
+        h = h[:-1]
+    if not h or len(h) > 253 or not HOST_CHARS.fullmatch(h):
+        raise Denied(f"bad-url host {shown(host)}")
+    labels = h.split(".")
+    if any(not label or len(label) > 63 for label in labels):
+        raise Denied(f"bad-url host {shown(host)}")
+    return h
+
+
 def host_of(url):
-    return (urlparse(url).hostname or "").lower().rstrip(".")
+    """The canonical host of url (canon_host of urlparse's hostname); '' when
+    the URL names no host at all. Raises Denied('bad-url ...') for a host it
+    refuses, or a URL urlparse cannot read."""
+    try:
+        raw = urlparse(str(url or "")).hostname
+    except ValueError:
+        raise Denied(f"bad-url {shown(url)}")
+    return canon_host(raw) if raw else ""
+
+
+def host_or_blank(url):
+    """host_of for display and grouping only: '' instead of raising. Never use
+    it for an allow or deny decision."""
+    try:
+        return host_of(url)
+    except Denied:
+        return ""
 
 
 def idna_host(host):
-    """The ASCII name the socket layer resolves for host: http.client spells a
-    non-ASCII name with the IDNA codec, which drops soft hyphens and maps
-    fullwidth letters, sharp s and ideographic dots ('www.link<soft hyphen>edin.com'
-    reaches www.linkedin.com). '' when the name has no such spelling."""
+    """The ASCII name the socket layer would resolve for a non-ASCII host
+    (http.client spells it with the IDNA codec, which drops soft hyphens and
+    maps fullwidth letters, sharp s and ideographic dots). Used only to name
+    the job board such a spelling points at; the host itself is refused.
+    '' when the name has no such spelling."""
     host = (host or "").lower().rstrip(".")
     if host.isascii():
         return host
@@ -189,34 +341,74 @@ def idna_host(host):
         return ""
 
 
-BOARD_NAMES = ("linkedin", "indeed", "glassdoor", "simplyhired", "ziprecruiter")
-SECOND_LEVEL = {"co", "com", "org", "net", "ac", "gov"}
+BOARD_NAMES = ("linkedin", "indeed", "glassdoor", "simplyhired", "ziprecruiter", "remotive")
+BOARD_DOMAINS = ("lnkd.in", "licdn.com")  # LinkedIn's link shortener and media host
 
 
 def job_board(host):
-    """The job-board domain a host belongs to (linkedin.com, uk.indeed.com ->
-    indeed.com, indeed.co.uk), else None. These are never fetched (R2). A
-    non-ASCII spelling is judged by the name it resolves to (idna_host)."""
-    labels = (idna_host(host) or (host or "").lower().rstrip(".")).split(".")
-    for i, label in enumerate(labels[:-1]):
-        if label not in BOARD_NAMES:
-            continue
-        rest = labels[i + 1:]
-        if len(rest) == 1 and 2 <= len(rest[0]) <= 3:
-            return ".".join(labels[i:])
-        if len(rest) == 2 and rest[0] in SECOND_LEVEL and len(rest[1]) == 2:
+    """The job-board domain a host belongs to, else None. These are never
+    fetched (R2). A host with a label linkedin, indeed, glassdoor, simplyhired,
+    ziprecruiter or remotive is one whatever follows it (www.linkedin.com ->
+    linkedin.com, uk.indeed.com -> indeed.com, indeed.jobs, indeed.co.uk), and
+    so is lnkd.in or licdn.com. A spelling the socket layer would map (a soft
+    hyphen, fullwidth letters) is judged by the name it maps to."""
+    raw = str(host or "")
+    try:
+        h = canon_host(raw)
+    except Denied:
+        h = idna_host(raw) or raw.lower().rstrip(".")
+    for domain in BOARD_DOMAINS:
+        if on_domain(h, domain):
+            return domain
+    labels = h.split(".")
+    for i, label in enumerate(labels):
+        if label in BOARD_NAMES:
             return ".".join(labels[i:])
     return None
 
 
+UNRESERVED = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+PCT = re.compile(r"%([0-9A-Fa-f]{2})")
+
+
+def norm_path(path):
+    """A URL path (and query) as RFC 9309 2.2.2 compares it: percent-escaped
+    unreserved characters decoded (%4A -> J), other escapes in upper case,
+    non-ASCII characters percent-encoded as UTF-8. One pass, so %2541 stays."""
+    def one(m):
+        ch = chr(int(m.group(1), 16))
+        return ch if ch in UNRESERVED else "%" + m.group(1).upper()
+    s = PCT.sub(one, str(path or ""))
+    if not s.isascii():
+        s = "".join(c if c.isascii() else "".join(f"%{b:02X}" for b in c.encode("utf-8", "replace")) for c in s)
+    return s
+
+
+def dot_free(path):
+    """A path with repeated slashes collapsed and . and .. segments resolved,
+    as a server would read it (for the R3 list test only)."""
+    out = []
+    for seg in re.sub(r"/{2,}", "/", path or "/").split("/"):
+        if seg == ".":
+            continue
+        if seg == "..":
+            if len(out) > 1:
+                out.pop()
+            continue
+        out.append(seg)
+    return "/".join(out) or "/"
+
+
 def r3_list(host, path):
-    """True for the R3 list endpoints: never called, whatever robots says (3.3)."""
-    path_l = (path or "/").lower()
+    """True for the R3 list endpoints: never called, whatever robots says (3.3).
+    The path is compared decoded (norm_path, and an encoded slash read as a
+    slash, since a server may decode it) with dot segments resolved."""
+    path_l = dot_free(re.sub(r"%(?:2f|5c)", "/", norm_path(path or "/").lower()))
     if host == "api.smartrecruiters.com" or on_domain(host, "recruitingbypaycor.com"):
         return True
     if "/jobboardview" in path_l:  # UKG search (its robots: Disallow */JobBoardView)
         return True
-    if on_domain(host, "icims.com") and path_l.startswith("/jobs/search"):
+    if on_domain(host, "icims.com") and re.match(r"/jobs(?:;[^/]{0,200})?/search", path_l):
         return True
     if re.fullmatch(r"portal-applicant-tracking\.[a-z0-9-]+\.paycomonline\.net", host) and "search" in path_l:
         return True
@@ -224,17 +416,29 @@ def r3_list(host, path):
 
 
 def hard_deny(url):
-    """The DENY reason that holds for every fetch, attended or not, else None.
-    A host spelled with anything but ASCII is refused (host-not-ascii): the
-    policy checks ASCII names, and a lookalike spelling resolves elsewhere."""
-    raw = host_of(url)
-    host = idna_host(raw)
+    """The DENY reason that holds for every fetch, attended or not, else None;
+    never raises. A host canon_host refuses is bad-url, or job-board <domain>
+    when its spelling maps to a job board. A URL naming no host is left to the
+    policy (bad-url there)."""
+    try:
+        host = host_of(url)
+    except Denied as d:
+        try:
+            raw = urlparse(str(url or "")).hostname or ""
+        except ValueError:
+            raw = ""
+        board = job_board(raw) if raw else None
+        return f"job-board {board}" if board else d.reason
+    if not host:
+        return None
     board = job_board(host)
     if board:
         return f"job-board {board}"
-    if raw and not raw.isascii():
-        return "host-not-ascii " + raw.encode("ascii", "backslashreplace").decode("ascii")
-    if r3_list(host, urlparse(url).path):
+    try:
+        path = urlparse(str(url)).path
+    except ValueError:
+        return "bad-url"
+    if r3_list(host, path):
         return f"r3-list {host}"
     return None
 
@@ -278,12 +482,25 @@ def watchlist_hosts(root):
         try:
             with open(path, encoding="utf-8-sig", newline="") as f:
                 for row in csv.DictReader(f):
-                    h = host_of((row.get("careers_url") or "").strip())
-                    if h:
+                    h = host_or_blank((row.get("careers_url") or "").strip())
+                    if h and not job_board(h):
                         hosts.add(h)
-        except OSError:
+        except (OSError, csv.Error, UnicodeDecodeError):
             continue
     return hosts
+
+
+def canon_hosts(hosts):
+    out = set()
+    for h in hosts:
+        try:
+            out.add(canon_host(h))
+        except Denied:
+            continue  # a host canon_host refuses is never allowed
+    return out
+
+
+ENCODED_SLASH = re.compile(r"%(?:2f|5c)", re.I)
 
 
 class Policy:
@@ -291,30 +508,36 @@ class Policy:
 
     def __init__(self, root=None, unattended=True, extra_hosts=()):
         self.unattended = unattended
-        self.extra = {h.lower() for h in extra_hosts}
+        self.extra = canon_hosts(extra_hosts)
         if root is not None:
             self.extra |= watchlist_hosts(root)
 
     def allow_host(self, host):
-        """A host a validated request named (spec 8.2)."""
-        self.extra.add(host.lower())
+        """A host a validated request named (spec 8.2); a host canon_host
+        refuses is never added."""
+        self.extra |= canon_hosts([host])
 
     def reason(self, url, method="GET"):
         """The DENY reason for url, or None when it may be fetched."""
+        deny = hard_deny(url)
+        if deny:
+            return deny
         try:
             check_public(url)
         except FetchError:
-            host = host_of(url)
+            host = host_of(url)  # hard_deny passed, so this does not raise
             u = urlparse(url)
             if u.scheme in ("http", "https") and host and not any(ch in u.netloc for ch in "@%\\"):
-                return hard_deny(url) or f"non-public {host}"
+                return f"non-public {host}"
             return "bad-url"
-        deny = hard_deny(url)
-        if deny or not self.unattended:
-            return deny
+        if not self.unattended:
+            return None
+        u = urlparse(url)
         host = host_of(url)
-        if urlparse(url).scheme != "https":
+        if u.scheme != "https":
             return f"not-https {host}"
+        if ENCODED_SLASH.search(u.path or ""):
+            return f"bad-url encoded slash in the path ({host})"
         if not (host_matches(host, ALLOW_HOSTS) or host in self.extra):
             return f"host-not-allowed {host}"
         if method.upper() == "POST" and not host_matches(host, POST_HOSTS):
@@ -327,10 +550,46 @@ class Policy:
 # "Allow: */JobBoard/"; this follows RFC 9309: the group for our token, else *,
 # the longest matching rule wins, Allow wins a tie, and * and $ are wildcards.
 
-def _rule_regex(path):
-    anchored = path.endswith("$")
-    body = re.escape(path[:-1] if anchored else path).replace(r"\*", ".*")
-    return re.compile(body + ("$" if anchored else ""))
+def robots_rule(value):
+    """(pieces, anchored) for one Allow/Disallow path, or None when the rule is
+    ignored: over ROBOTS_RULE_MAX characters or more than ROBOTS_WILDCARDS
+    wildcards. '*' splits the pieces; a final '$' anchors the end."""
+    if len(value) > ROBOTS_RULE_MAX or value.count("*") > ROBOTS_WILDCARDS:
+        return None
+    value = norm_path(value)
+    anchored = value.endswith("$")
+    return (value[:-1] if anchored else value).split("*"), anchored
+
+
+def rule_matches(pieces, anchored, path):
+    """Glob match with no backtracking: the first piece is a prefix, each
+    middle piece is found leftmost after the previous one (leftmost is always
+    safe for '*'), and an anchored last piece must end the path."""
+    first = pieces[0]
+    if not path.startswith(first):
+        return False
+    pos = len(first)
+    if len(pieces) == 1:
+        return pos == len(path) if anchored else True
+    for mid in pieces[1:-1]:
+        i = path.find(mid, pos)
+        if i < 0:
+            return False
+        pos = i + len(mid)
+    last = pieces[-1]
+    if anchored:
+        return len(path) - len(last) >= pos and path.endswith(last)
+    return path.find(last, pos) >= 0
+
+
+def crawl_delay_value(value):
+    """Seconds from a Crawl-delay line; inf when it is not a finite number of
+    0 or more (inf, nan, negative, words), which skips the host."""
+    try:
+        delay = float(value)
+    except ValueError:
+        return float("inf")
+    return delay if math.isfinite(delay) and delay >= 0 else float("inf")
 
 
 class RobotRules:
@@ -348,7 +607,7 @@ class RobotRules:
             key, value = (s.strip() for s in line.split(":", 1))
             key = key.lower()
             if key == "content-signal":
-                self.signals.append(value)
+                self.signals.append(value[:500])
             elif key == "user-agent":
                 if not last_was_agent and agents:
                     self.groups.append((agents, rules, delay))
@@ -357,16 +616,11 @@ class RobotRules:
                 last_was_agent = True
                 continue
             elif key in ("allow", "disallow") and agents:
-                if value:
-                    rules.append((len(value), key == "allow", _rule_regex(value)))
+                rule = robots_rule(value) if value else None
+                if rule:
+                    rules.append((len(value), key == "allow", rule))
             elif key == "crawl-delay" and agents:
-                try:
-                    delay = float(value)
-                except ValueError:
-                    pass
-                else:  # 'inf', 'nan' or negative: no usable delay, so the host is not crawled
-                    if not math.isfinite(delay) or delay < 0:
-                        delay = float("inf")
+                delay = crawl_delay_value(value)
             last_was_agent = False
         if agents:
             self.groups.append((agents, rules, delay))
@@ -382,9 +636,11 @@ class RobotRules:
 
     def allowed(self, path):
         rules, _ = self._group()
+        path = norm_path(path)
         best = None
-        for length, allow, rx in rules:
-            if rx.match(path) and (best is None or length > best[0] or (length == best[0] and allow)):
+        for length, allow, (pieces, anchored) in rules:
+            if rule_matches(pieces, anchored, path) and (best is None or length > best[0]
+                                                         or (length == best[0] and allow)):
                 best = (length, allow)
         return True if best is None else best[1]
 
@@ -404,6 +660,7 @@ class Robots:
         self.cache_path = Path(cache_path) if cache_path else None
         self.ttl, self.clock = ttl, clock
         self.mem = {}
+        self.parsed = {}  # host -> (entry time, RobotRules), so a big robots.txt is parsed once
         self._loaded = False
 
     def _load(self):
@@ -450,23 +707,38 @@ class Robots:
             self._save()
         return e
 
+    def rules(self, host, e):
+        got = self.parsed.get(host)
+        if got and got[0] == e.get("at"):
+            return got[1]
+        rules = RobotRules(e.get("text") or "")
+        self.parsed[host] = (e.get("at"), rules)
+        return rules
+
     def check(self, url):
-        """(allowed, crawl_delay, reason). reason is robots <host> or
-        robots-unreachable <host> when not allowed."""
-        u = urlparse(url)
-        host = (u.hostname or "").lower()
-        e = self.entry(u.scheme or "https", host)
+        """(allowed, crawl_delay, reason). reason is robots <host>,
+        robots-unreachable <host>, crawl-delay <host> (a Crawl-delay that is
+        not a finite number from 0 to MAX_CRAWL_DELAY: the host is skipped)
+        or a bad-url reason when not allowed. Never raises for an odd URL."""
+        try:
+            host = host_of(url)
+            u = urlparse(url)
+        except (Denied, ValueError) as d:
+            return False, None, getattr(d, "reason", "bad-url")
+        if not host or u.scheme not in ("http", "https"):
+            return False, None, "bad-url"
+        e = self.entry(u.scheme, host)
         if e["status"] == "unreachable":
             return False, None, f"robots-unreachable {host}"
         if e["status"] == "none":
             return True, None, None
-        rules = RobotRules(e["text"])
-        path = (u.path or "/") + (f"?{u.query}" if u.query else "")
+        rules = self.rules(host, e)
         delay = rules.crawl_delay()
+        if delay is not None and not 0 <= delay <= MAX_CRAWL_DELAY:
+            return False, delay, f"crawl-delay {host}"  # slower than one request per 10 s: skip the host this run
+        path = (u.path or "/") + (f"?{u.query}" if u.query else "")
         if not rules.allowed(path):
             return False, delay, f"robots {host}"
-        if delay is not None and delay > MAX_CRAWL_DELAY:
-            return False, delay, f"robots {host}"  # one request a minute or slower: leave the host alone
         return True, delay, None
 
 
@@ -519,10 +791,10 @@ class Response:
         return 200 <= self.status < 300
 
     def text(self):
-        m = re.search(r"charset=([\w.-]+)", self.headers.get("content-type", ""), re.I)
+        m = re.search(r"charset=([\w.-]{1,40})", str(self.headers.get("content-type", ""))[:500], re.I)
         try:
             return self.body.decode(m.group(1) if m else "utf-8", errors="replace")
-        except LookupError:
+        except (LookupError, UnicodeError, ValueError):  # charset=idna has no 'replace'; rot13 is no text codec
             return self.body.decode("utf-8", errors="replace")
 
     def json(self):
@@ -531,14 +803,26 @@ class Response:
     def check(self):
         """Raise FetchError (with .status) unless 2xx; returns self."""
         if not self.ok:
-            e = FetchError(f"HTTP {self.status} from {host_of(self.url)}")
+            e = FetchError(f"HTTP {self.status} from {host_or_blank(self.url) or 'the site'}")
             e.status = self.status
             raise e
         return self
 
 
 def read_capped(fp, limit=MAX_BYTES):
-    raw = fp.read(limit + 1) if fp is not None else b""
+    """(body, truncated): at most limit bytes, read in pieces with the fetch
+    deadline checked between them."""
+    if fp is None:
+        return b"", False
+    chunks, total = [], 0
+    while total <= limit:
+        check_deadline()
+        chunk = fp.read(min(1 << 20, limit + 1 - total))
+        if not chunk:
+            break
+        chunks.append(chunk)
+        total += len(chunk)
+    raw = b"".join(chunks)
     return (raw[:limit], True) if len(raw) > limit else (raw, False)
 
 
@@ -653,18 +937,25 @@ class Fetcher:
             raise FetchError("a web proxy is configured, so this script does not fetch directly")
         hdrs = {"User-Agent": self.user_agent, "Accept-Language": "en-US,en;q=0.9"}
         hdrs.update(headers or {})
-        req = Request(url, data=data, headers=hdrs, method=method)
         try:
-            with self.opener.open(req, timeout=TIMEOUT) as resp:
-                body, truncated = read_capped(resp)
-                r = Response(resp.geturl(), resp.status, dict(resp.headers), body, truncated)
-        except HTTPError as e:
-            body, truncated = read_capped(e)
-            r = Response(e.geturl() or url, e.code, dict(e.headers or {}), body, truncated)
-        except Denied:
-            raise
-        except (OSError, ValueError, http.client.HTTPException) as e:
-            raise FetchError(f"{host}: {e}")
+            req = Request(url, data=data, headers=hdrs, method=method)
+        except ValueError as e:
+            raise FetchError(f"{host}: {str(e)[:120]}")
+        with fetch_deadline():  # one wall-clock limit for the request, its redirects and its body
+            try:
+                with self.opener.open(req, timeout=TIMEOUT) as resp:
+                    body, truncated = read_capped(resp)
+                    r = Response(resp.geturl(), resp.status, dict(resp.headers), body, truncated)
+            except HTTPError as e:
+                try:
+                    body, truncated = read_capped(e)
+                except (OSError, ValueError, http.client.HTTPException):
+                    body, truncated = b"", False  # the status is the answer; a broken error body is not
+                r = Response(e.geturl() or url, e.code, dict(e.headers or {}), body, truncated)
+            except Denied:
+                raise
+            except (OSError, ValueError, http.client.HTTPException) as e:
+                raise FetchError(f"{host}: {str(e)[:200]}")
         self.log.append((method, url, r.status))
         return r
 
@@ -730,7 +1021,8 @@ def main(argv=None):
     c.add_argument("--allow-host", action="append", help="a host a validated request named")
     c.add_argument("--robots", action="store_true", help="also read robots.txt for the host")
     c.add_argument("--offline", help="fixture folder with index.json instead of the network")
-    args = ap.parse_args(argv)
+    import argfile  # outside text (the URL) arrives in a JSON file, never inline
+    args = argfile.parse(ap, argv)
     return cmd_check(args)
 
 

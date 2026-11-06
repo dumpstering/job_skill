@@ -42,6 +42,24 @@
 # - "Pre-clinical" and "clinical laboratory associate" titles stay in the
 #   research associate family; clinical research and licensed clinical lab
 #   titles stay out of it.
+#
+# Fixes from live day 2 (271 pooled postings, each labeled by "could a
+# microbiology PhD, casting a wide net in the Bay Area, plausibly be hired
+# for it?"; tests/fixtures/pool/labeled_2026-11-06.json):
+# - Another field's training is out: formulation* (also "Formulations"),
+#   developability, biophysics, LNP and drug delivery, pharmaceutics,
+#   packaging, mass spectrometry, PKPD, pathologist and beamline titles leave
+#   the scientist family, and its avoid_any (G9) drops a job whose
+#   requirements name more chemistry, LC-MS, biophysics or machine-learning
+#   words than wet-lab words. "Business development" and SVP/EVP are global
+#   excludes.
+# - "Materials" means materials science only ("Reference Materials" stays).
+#   Bare "engineering" is out only as process, device, systems, chemical,
+#   mechanical or manufacturing engineering (vector engineering stays).
+# - Senior, manager, principal and lead titles leave the regulatory and
+#   clinical research families (they need years in that field); senior MSL
+#   and senior writer titles too.
+# - QA reviewer and QC supervisor titles join quality and validation.
 
 version = 1
 
@@ -68,9 +86,10 @@ relocate = false
 # The global exclude (research design implication, plus the verifier's intern
 # and co-op leaks). Director is left to each family's title_none, so the
 # proposed study-director family can still see "Associate Director".
-exclude_title_words = ["Vice President", "VP", "Chief", "head of", "Intern", "Interns", "Internship",
+exclude_title_words = ["Vice President", "VP", "SVP", "EVP", "Chief", "head of", "Intern", "Interns", "Internship",
                        "co-op", "coop", "graduate intern", "student", "undergraduate", "sales",
-                       "account executive", "account manager", "customer success", "titling", "payroll",
+                       "business development", "account executive", "account manager", "customer success",
+                       "titling", "payroll",
                        "benefits", "recruiter", "recruiting", "talent", "human resources", "marketing",
                        "help desk", "helpdesk", "desktop support", "software", "web", "seo", "accounting",
                        "finance", "legal", "paralegal", "facilities", "security officer", "driver",
@@ -148,8 +167,9 @@ adjacent_titles = []
 title_any = ["postdoctoral", "postdoc*", "post doc*",
              "fellow+biolog*|microbio*|cell|cellular|molecular|genetic*|genomic*|immunolog*|biochem*|neuro*|bio|life science*|research|science|sciences|scientist|lab"]
 title_none = ["coordinator", "administrator", "program manager", "affairs", "office", "director", "physician", "nurse",
-              "nursing", "pharmacy", "clinical fellow", "clinical research fellow", "medical fellow", "materials",
-              "microfabrication"]
+              "nursing", "pharmacy", "clinical fellow", "clinical research fellow", "medical fellow",
+              "materials science|materials engineering|materials scientist", "microfabrication", "mri",
+              "magnetic resonance", "translational imaging"]
 require_any = []
 terms = ["microbiology", "molecular biology", "bacterial genetics", "microbiome", "CRISPR", "sequencing",
          "publications", "grant writing"]
@@ -192,7 +212,7 @@ title_any = ["fermentation", "bioprocess*", "cell culture", "process development
              "strain engineering|strain development|strain engineer",
              "upstream|downstream|purification|scale up|scaleup+bio*|scientist|associate|protein*|cell*|ferment*"]
 title_none = ["director", "vp", "head of", "maintenance", "mechanic", "electrician", "software", "data", "supply chain",
-              "warehouse", "operator", "oil", "gas", "semiconductor"]
+              "warehouse", "operator", "oil", "gas", "semiconductor", "process engineer"]
 require_any = ["bioreactor*", "fermentation", "fermenter*", "microb*", "cell culture", "biolog*", "protein*",
                "yeast", "e coli", "strain*", "biologics"]
 terms = ["fermentation", "bioreactor", "DoE", "tech transfer", "scale-up", "upstream", "downstream", "GMP",
@@ -213,7 +233,8 @@ adjacent_titles = []
 title_any = ["assay", "assays", "immunoassay", "elisa", "pcr", "qpcr",
              "diagnostic|diagnostics+scientist|development|r d"]
 title_none = ["director", "vp", "head of", "sales", "software", "account", "chemist", "cheminformatic*",
-              "bioinformatic*", "materials", "microfabrication"]
+              "bioinformatic*", "materials science|materials engineering|materials scientist", "microfabrication",
+              "formulation*", "developability", "biophysic*"]
 require_any = []
 terms = ["assay development", "assay validation", "qPCR", "ELISA", "NGS", "flow cytometry", "ISO 13485",
          "21 CFR 820", "CLIA", "design controls", "infectious disease"]
@@ -257,7 +278,8 @@ core_titles = ["Medical Science Liaison", "Regional MSL", "Medical Affairs Scien
 adjacent_titles = []
 title_any = ["medical science liaison", "msl", "scientific liaison",
              "medical affairs|medical information+scientist|specialist|associate|manager"]
-title_none = ["director", "vp", "head of", "executive director", "sales"]
+title_none = ["director", "vp", "head of", "executive director", "sales",
+              "senior medical science liaison|senior msl|senior scientific liaison"]
 require_any = []
 terms = ["infectious disease", "vaccines", "anti-infective", "microbiome", "KOL", "medical affairs", "scientific exchange"]
 seniority_ok = []
@@ -277,7 +299,8 @@ title_any = ["regulatory affairs", "regulatory science", "regulatory scientist",
              "regulatory associate", "regulatory operations", "regulatory cmc", "regulatory writer|regulatory writing",
              "regulatory submission*"]
 title_none = ["director", "vp", "head of", "counsel", "attorney", "lawyer", "financial", "banking", "bank", "tax",
-              "trade", "insurance", "energy", "utility", "aml", "compliance officer"]
+              "trade", "insurance", "energy", "utility", "aml", "compliance officer", "senior", "principal", "manager",
+              "lead"]
 require_any = []
 terms = ["eCTD", "IND", "BLA", "510(k)", "CMC", "regulatory submissions", "RAC", "FDA"]
 seniority_ok = ["i", "ii", "1", "2", "associate"]
@@ -291,12 +314,13 @@ label = "Clinical research"
 status = "active"
 mode = "industry"
 core_titles = ["Clinical Scientist", "Clinical Development Scientist", "Clinical Research Associate",
-               "Clinical Research Coordinator", "Clinical Trial Associate", "Clinical Trial Assistant", "Study Manager"]
+               "Clinical Research Coordinator", "Clinical Trial Associate", "Clinical Trial Assistant"]
 adjacent_titles = []
-title_any = ["clinical scientist", "clinical development scientist", "cra", "study manager|study coordinator",
-             "clinical research|clinical trial*|clinical study|clinical operations+associate|coordinator|scientist|specialist|manager|assistant"]
+title_any = ["clinical scientist", "clinical development scientist", "cra", "study coordinator",
+             "clinical research|clinical trial*|clinical study|clinical operations+associate|coordinator|scientist|specialist|assistant"]
 title_none = ["director", "vp", "head of", "nurse", "rn", "physician", "medical director", "pharmacist", "data manager",
-              "clinical microbiolog*", "clinical lab*"]
+              "clinical microbiolog*", "clinical lab*", "manager", "senior", "experienced", "principal", "lead",
+              "pharmacovigilance"]
 require_any = []
 terms = ["GCP", "ICH E6", "clinical trials", "monitoring", "CCRP", "ACRP", "protocol", "IRB"]
 seniority_ok = ["i", "ii", "1", "2", "associate"]
@@ -316,7 +340,8 @@ title_any = ["medical writ*", "scientific writ*", "regulatory writ*", "science w
              "medical communication*", "scientific communication*",
              "publication|publications+manager|specialist|lead",
              "technical writer+bio*|life science*|scientific|medical|clinical|pharma*|regulatory|laboratory"]
-title_none = ["director", "vp", "head of", "copywriter", "marketing", "ux", "software", "api", "developer"]
+title_none = ["director", "vp", "head of", "copywriter", "marketing", "ux", "software", "api", "developer",
+              "senior manager", "senior medical writer|senior scientific writer|senior regulatory writer"]
 require_any = ["clinical", "scientific", "regulatory", "medical", "biolog*", "pharma*", "life science*", "drug*",
                "therap*", "research"]
 terms = ["clinical study report", "protocol", "investigator brochure", "ICH E3", "AMWA", "manuscripts", "grants"]
@@ -354,9 +379,9 @@ core_titles = ["Validation Scientist", "Validation Specialist", "QA Specialist",
 adjacent_titles = []
 title_any = ["capa", "deviation specialist|deviation investigator|deviation analyst",
              "validation+scientist|specialist|engineer|associate|analyst",
-             "quality assurance+specialist|associate|scientist|analyst", "qa+specialist|associate|analyst",
-             "quality specialist", "quality systems specialist",
-             "qc|quality control+analyst|specialist|associate|technician|scientist|reviewer|inspector"]
+             "quality assurance+specialist|associate|scientist|analyst|reviewer",
+             "qa+specialist|associate|analyst|reviewer", "quality specialist", "quality systems specialist",
+             "qc|quality control+analyst|specialist|associate|technician|scientist|reviewer|inspector|supervisor"]
 title_none = ["software", "sdet", "qa engineer", "test engineer", "automation engineer", "director", "vp", "head of",
               "call center"]
 require_any = ["gmp", "cgmp", "glp", "gxp", "laborator*", "biolog*", "biologics", "pharma*", "biopharma*", "assay*",
@@ -436,7 +461,8 @@ title_any = ["research associate", "research assistant", "staff research associa
              "biology technician|biological technician|research technician|life science technician"]
 title_none = ["clinical+research|trial*|study|studies|operations|coordinator|nurse|technician|technologist|scientist|specialist|data",
               "clinical laboratory scientist", "cls", "mlt", "medical lab*", "phlebotom*", "animal",
-              "vivarium", "husbandry", "director", "vp", "undergraduate", "student", "intern"]
+              "vivarium", "husbandry", "director", "vp", "undergraduate", "student", "intern", "chemist", "chemistry",
+              "biophysic*", "social science", "category manager", "procurement", "outreach", "ecg|ekg"]
 require_any = []
 terms = ["cell culture", "PCR", "qPCR", "ELISA", "Western blot", "aseptic technique", "molecular cloning",
          "lab management", "inventory"]
@@ -498,10 +524,16 @@ title_any = ["staff scientist", "project scientist", "research scientist", "life
              "specialist+lab|laboratory|microbio*|biolog*"]
 title_none = ["director", "vp", "head of", "data", "ai", "ml", "software", "computer", "sales", "social science",
               "admissions", "communications", "nurse", "informatics", "clinical lab*", "clinical laboratory",
-              "student services", "administrative", "clinical research coordinator"]
+              "student services", "administrative", "clinical research coordinator", "chemist", "chemistry", "physics",
+              "physicist", "beamline", "computation*"]
 require_any = ["biolog*", "microbiolog*", "microb*", "bacteri*", "cell", "cells", "cellular", "molecular", "protein*",
                "biochem*", "immunolog*", "genetic*", "genom*", "neuro*", "life science*", "biomedical", "tissue*",
                "dna", "rna", "pcr", "assay*", "antibod*", "vir*", "pathogen*"]
+avoid_any = ["machine learning", "deep learning", "pytorch", "tensorflow", "neural network*", "foundation model*",
+             "computational neuroscience", "fmri", "meg", "neuroimaging", "magnetic resonance", "electrophysiolog*",
+             "patch clamp", "whole cell recording*", "ion channel*", "calcium imaging", "physics", "x ray",
+             "spectroscopy", "beamline", "organic chemistry",
+             "synthetic chemistry", "mass spectrometr*", "bioconjugation"]
 terms = ["microbiology", "molecular biology", "grant-funded", "publications", "lab management", "mentoring"]
 seniority_ok = []
 needs_license = []
@@ -517,17 +549,38 @@ core_titles = ["Associate Scientist", "Scientist I", "Scientist II", "Scientist 
                "Senior Scientist", "Staff Scientist", "Principal Scientist"]
 adjacent_titles = []
 title_any = ["scientist"]
-title_none = ["data", "computer", "software", "machine learning", "ml", "ai", "computational", "clinical laboratory",
+title_none = ["data", "computer", "software", "machine learning", "ml", "ai", "computation*", "clinical laboratory",
               "clinical lab*", "cls", "clinical microbiology scientist", "clinical microbiologist", "director", "vp",
-              "vice president", "head of", "materials", "polymer", "formulation", "process engineer",
-              "physical scientist", "social science", "chemist", "chemistry", "chemical", "cheminformatic*",
-              "statistic*", "biostatistic*", "toxicolog*", "safety", "pharmacovigilance", "bioinformatic*", "imaging",
-              "engineer", "engineering"]
+              "vice president", "head of", "materials science|materials engineering|materials scientist", "polymer",
+              "formulation*", "process engineer", "physical scientist", "social science", "chemist", "chemistry",
+              "chemical", "cheminformatic*", "statistic*", "biostatistic*", "toxicolog*", "safety",
+              "pharmacovigilance", "bioinformatic*", "imaging", "engineer",
+              "process engineering|device engineering|systems engineering|chemical engineering|mechanical engineering|manufacturing engineering",
+              "developability", "biophysic*", "biomolecular characterization|biophysical characterization", "lnp*",
+              "tlnp*", "lipid nanoparticle*", "drug delivery",
+              "pharmaceutics", "solid dosage|solid dose", "packaging", "fpd", "mass spectrometry|mass spec",
+              "pkpd|pk pd|dmpk", "pharmacokinetic*", "pharmacometric*", "pathologist", "veterinar*", "beamline",
+              "synchrotron", "laboratory animal|animal resources", "vivarium", "husbandry", "portfolio",
+              "group leader", "clinical research|clinical trial*|clinical operations"]
 require_any = ["cell culture", "assay*", "pcr", "qpcr", "elisa", "western", "flow cytometry", "microscop*",
-               "cloning", "crispr", "bench", "laborator*", "lab", "wet lab", "in vitro", "in vivo", "aseptic",
-               "ferment*", "purification", "chromatograph*", "hplc", "sequencing", "ngs", "culture*", "mammalian",
-               "bacteri*", "microb*", "tissue", "antibod*", "protein expression", "transfection", "biochemical",
-               "cellular"]
+               "cloning", "crispr", "bench", "wet lab", "in vitro", "in vivo", "aseptic", "ferment*", "sequencing",
+               "ngs", "cultures", "culturing", "cultured", "mammalian", "bacteri*", "microb*", "tissue",
+               "protein expression", "transfection",
+               "biochemical", "cellular", "cell based", "immunoassay*", "molecular biology", "cell biology",
+               "immunolog*", "virolog*", "primary cells", "ipsc*", "organoid*", "laborator*", "lab", "antibod*"]
+avoid_any = ["organic chemistry", "synthetic chemistry", "medicinal chemistry", "process chemistry",
+             "synthetic route*", "organic synthesis", "chemical synthesis", "lc ms", "lc ms ms", "lcms",
+             "mass spectrometr*", "mass spec", "uplc", "uhplc", "ce sds", "cief", "icief", "peptide mapping",
+             "intact mass", "karl fischer", "xrpd", "nmr", "dissolution", "metabolomic*", "lipidomic*", "formulation*",
+             "drug product", "lyophiliz*", "excipient*", "lipid nanoparticle*", "lnp", "lnps", "tlnp*", "liposom*",
+             "bioconjugation", "drug delivery", "pharmaceutics", "solid dosage", "spr", "surface plasmon resonance",
+             "bli", "biolayer interferometry", "octet", "biacore", "carterra", "binding kinetics", "dls", "dsf",
+             "itc", "biophysic*", "developability", "hic", "machine learning", "deep learning", "pytorch",
+             "tensorflow", "jax", "neural network*", "foundation model*", "language model*", "pre training",
+             "pretraining", "post training", "model architecture*", "computational biology", "gwas",
+             "statistical genetics", "x ray", "spectroscopy",
+             "materials science", "mechanical engineering", "beamline", "pkpd", "pharmacokinetic*",
+             "pharmacometric*", "packaging"]
 terms = ["PCR", "qPCR", "cell culture", "assay development", "ELISA", "flow cytometry", "CRISPR", "microbiology",
          "aseptic technique", "Western blot", "NGS"]
 seniority_ok = ["associate", "i", "ii", "iii", "1", "2", "3", "senior"]

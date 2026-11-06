@@ -6,7 +6,9 @@ traced to a source. The day's list uses the same filling rules in a faster
 loop: [apply_batch.md](apply_batch.md), which also has the failure table
 and the account block.
 
-Commands are shortened (SKILL.md "Scripts"); each takes `--root "<folder>"`.
+Commands are shortened (SKILL.md "Scripts"); each takes `--root "<folder>"`,
+and outside text (a company, an email address, a question, an answer) goes
+in `claude/args.json` with `--args-file claude/args.json`, never inline.
 Tracker writes go through the transport: in mode L, use the P- ID that `add`
 printed.
 
@@ -51,8 +53,8 @@ one they use most (`REUSE <email>`). On Workday, Oracle, iCIMS and
 SuccessFactors every employer's site is its own account. The user creates
 the account and verifies the email; you never create one, never retry a
 sign-up, and never type or store a password. Once they are in, record it:
-`tracker.py account --site <host> --email <email> --employer "<Company>"
---ats <ats> --used`.
+write `{"email": "<email>", "employer": "<Company>"}` and run `tracker.py
+account --site <host> --ats <ats> --used --args-file claude/args.json`.
 
 ## Filling
 
@@ -84,7 +86,8 @@ screenshots. Work one page at a time:
    - A bank answer (`answers.md`) is used only when its scope covers this
      job's country. A sensitive one is entered only after this job's
      confirmation. A years-of-experience number comes from `answers.py years
-     --skill <technique>` and never goes above it.
+     --args-file claude/args.json` (the file `{"skill": "<technique>"}`) and
+     never goes above it.
    - Match fields by meaning, not shared words: a phone number never goes in
      an extension or country-code field, and the user's own name never goes
      in an emergency-contact or reference field. When a type-ahead offers
@@ -108,9 +111,10 @@ screenshots. Work one page at a time:
    until a pass finds nothing new.
 
 An answer the user gives that will recur on other applications goes into
-the bank (backup first): `answers.py add --question "<question>" --answer
-"<answer>" --kind text|yesno|number|choice --scope any|US|Canada --sensitive
-yes|no --source user:<date>` (Canada, not CA: `answers.py add` refuses CA,
+the bank (backup first): write `{"question": "<question>", "answer":
+"<answer>", "kind": "text|yesno|number|choice", "scope": "any|US|Canada",
+"sensitive": "yes|no", "source": "user:<date>"}` and run `answers.py add
+--args-file claude/args.json` (Canada, not CA: `answers.py add` refuses CA,
 which reads as California). Company-specific answers stay in the job
 folder's `notes.md`. Answers about criminal history, and attestations, are
 never stored.
@@ -179,11 +183,13 @@ update <ID> status="Filled - awaiting submit"`.
 
 ## /job log (a job applied for by hand)
 
-Run `tracker.py check` with whatever the user gives (company, role, link).
-If it finds `SAME POSTING` or `LIKELY REPOST` of a row already in the
-tracker, update that row (`status=Applied applied=<date>`) instead of adding
-one. Otherwise `tracker.py add --company --role [--location] [--url]
---source "By hand" --tier "By hand" --status Applied --applied <date>`. A
-loose date ("last week") becomes your best single `YYYY-MM-DD`, with the
-user's words in `--notes`. `log e1 e3` logs do-yourself items the same way
-(apply_batch.md "Do-yourself list").
+Run `tracker.py check` with whatever the user gives (`company`, `title`,
+`url` in `claude/args.json`). If it finds `SAME POSTING` or `LIKELY REPOST`
+of a row already in the tracker, update that row (`status=Applied
+applied=<date>`) instead of adding one. Otherwise write `company`, `role`
+and any `location` and `url` to `claude/args.json` and run `tracker.py add
+--source "By hand" --tier "By hand" --status Applied --applied <date>
+--args-file claude/args.json`. A loose date ("last week") becomes your
+best single `YYYY-MM-DD`, with the user's words as `notes` in the file.
+`log e1 e3` logs do-yourself items the same way (apply_batch.md
+"Do-yourself list").

@@ -338,7 +338,9 @@ ones ("Mar 2026", not "last March"); where a detail is unknown, leave it out
 rather than noting it as unknown. The Truthfulness rules apply here as much as
 in Block A: record what I did, not an overstated way I described it. Use the
 same titles, dates and values as Block A. If you corrected an existing entry,
-start it with "Replaces: <first few words of the old entry>". If a library
+start it with "Replaces: <first few words of the old entry>": a correction
+always replaces the old entry, never adds a note after it (a note leaves
+the old wording in the entry, so resumes built from it keep it). If a library
 heading is wrong, say so above the code block and output that whole section
 under the corrected heading. List things I said I don't have under `###
 Skills, Certifications & Education` as "Not held: ...". Record each Quick
@@ -375,8 +377,8 @@ Truthfulness rules and the banned-word list apply; a gap is never recast as
 met, and facts about the employer come only from the posting. Write it to
 `cover_letter.json` in the job folder, dated from the system clock, and build
 it after the resume with the same strict command, without `--terms` and
-`--mode`, with `--posting "<job folder>/posting.md"` and
-`--base "<Name> Cover Letter"`. Its `final.json` entry needs a passing resume
+`--mode`, with `--posting "<job folder>/posting.md"` (the files are named
+`<Name> Cover Letter`). Its `final.json` entry needs a passing resume
 there first:
 
 ```json
@@ -478,10 +480,12 @@ Everything above still applies. This part adds what the daily batch needs.
   A variant's mode and page cap come from its `approved.json`.
 - Every resume build (a pasted link, Tier A, a variant) uses this strict
   command, with the mode fit_and_questions.md names and `--publications
-  "<folder>/publications.md"` when that file exists. In cv mode the base is
-  `"<Name> CV"` (cv_publications.md):
+  "<folder>/publications.md"` when that file exists. The files are named
+  from the JSON's `name`: `<Name> Resume`, `<Name> CV` in cv mode
+  (cv_publications.md), `<Name> Cover Letter` for a letter, so the name
+  never goes on the command line:
 
-  `python "<skill>/scripts/build_resume.py" "<job folder>/resume.json" --out "<job folder>" --base "<Name> Resume" --sources "<folder>/master_resume.md" "<folder>/achievement_library.md" "<folder>/profile.md" "<job folder>/notes.md" --terms "<job folder>/terms.json" --mode industry --publications "<folder>/publications.md" --strict`
+  `python "<skill>/scripts/build_resume.py" "<job folder>/resume.json" --out "<job folder>" --sources "<folder>/master_resume.md" "<folder>/achievement_library.md" "<folder>/profile.md" "<job folder>/notes.md" --terms "<job folder>/terms.json" --mode industry --publications "<folder>/publications.md" --strict`
 
   `notes.md` counts only for its `## Answers` section; EVIDENCE reads
   `achievement_library.md` and TECHNIQUE `techniques.md` beside it.
@@ -495,7 +499,10 @@ Everything above still applies. This part adds what the daily batch needs.
   under their final names (`wrote:` lines) only on `VERDICT ok`, then writes
   `final.json` in the job folder: `{"v": 1, "resume": "<Name> Resume.pdf",
   "letter": "<Name> Cover Letter.pdf" or null, "built_at": ..., "verdict":
-  "ok"}`. That file is what the runner stages and the handover attaches. A
+  "ok", "entries": {...}}`. That file is what the runner stages and the
+  handover attaches. `entries` holds a hash of each library entry the resume
+  cites: when one of them is corrected later, the build no longer counts
+  and the item goes back to its Tier B file until you build again. A
   failed build prints `FINAL none`, keeps nothing under the final names and
   removes a stale `final.json`, so a resume that failed a check is never
   uploaded.

@@ -17,6 +17,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from urllib.parse import urlparse
 
 HERE = Path(__file__).resolve().parent
 FIX = HERE / "fixtures" / "boards"
@@ -417,6 +418,35 @@ def test_workday_state_facet_and_no_local():
     assert row["status"] == "active" and row["empty_runs"] == "0", row  # nothing local is not a dead site
 
 
+def test_place_lines_bounded():
+    """D3: a feed's location 'US - ' followed by thousands of spaces is read in
+    linear time (the old dashed-place pattern took cubic time: about 7 s for
+    2,000 spaces); the Workday and Oracle forms still read as before."""
+    import time
+    from types import SimpleNamespace
+    for loc, want in (("United States - California - Foster City", ("Foster City", "CA", "US")),
+                      ("US-CA-Menlo Park", ("Menlo Park", "CA", "US")),
+                      ("United States - North Carolina - Winston-Salem", ("Winston-Salem", "NC", "US")),
+                      ("us - " + " " * 5000 + "x", ("", "", "")), ("US - " + "a " * 5000, ("", "", ""))):
+        rec = SimpleNamespace(location=loc, city="", state="", country="", us_eligible=False)
+        t = time.perf_counter()
+        boards.fix_place(rec)
+        assert time.perf_counter() - t < 2.0, (loc[:20], time.perf_counter() - t)
+        assert (rec.city, rec.state, rec.country) == want, (loc[:40], rec)
+
+
+def test_facet_city_state_without_comma():
+    """L2-01: a Workday location facet value 'City ST' with no comma ('Dublin
+    OH', 'Newark DE') names its state, so a home place of the same name
+    ('Dublin', 'Newark' in California) does not pull it into the walk."""
+    d = {"facets": [{"facetParameter": "locations", "values": [
+        {"descriptor": "Dublin OH", "id": "oh"}, {"descriptor": "Newark DE", "id": "de"},
+        {"descriptor": "Albany NY", "id": "ny"}, {"descriptor": "Dublin, CA", "id": "dca"},
+        {"descriptor": "Newark CA", "id": "nca"}, {"descriptor": "San Carlos CA", "id": "sc"}]}]}
+    facets, why = boards.location_facets(d, ["Dublin", "Newark", "Albany", "San Carlos"], home_states={"CA"})
+    assert facets == {"locations": ["dca", "nca", "sc"]} and why == "", (facets, why)
+
+
 def test_workday_fallback_terms():
     """A tenant with no location facet is searched one term at a time, each
     at most 2 pages, under the 10-page cap; terms rotate by day."""
@@ -522,11 +552,12 @@ def test_offline_mornings():
 
 def test_odd_answers_stay_on_their_board():
     """One board answering {"jobs": [null]}, a list of numbers, or JSON nested
-    thousands deep is that board's ERROR line; it never stops the poll (one
-    such answer used to stop the whole daily with no queue)."""
+    thousands deep is that board's EMPTY or ERROR line (a row that is not an
+    object is skipped); it never stops the poll (one such answer used to stop
+    the whole daily with no queue)."""
     tmp = Path(tempfile.mkdtemp())
     deep = "[" * 100000 + "]" * 100000
-    bodies = {"https://boards-api.greenhouse.io/v1/boards/acme/jobs?content=true": '{"jobs": [null]}',
+    bodies = {"https://boards-api.greenhouse.io/v1/boards/acme/jobs?content=true": '{"jobs": [null, 2]}',
               "https://api.lever.co/v0/postings/acme?mode=json&skip=0&limit=100": "[1, 2, 3]",
               "https://api.ashbyhq.com/posting-api/job-board/acme?includeCompensation=true": deep,
               "https://boards-api.greenhouse.io/v1/boards/good/jobs?content=true": json.dumps({"jobs": [
@@ -541,11 +572,144 @@ def test_odd_answers_stay_on_their_board():
     (tmp / "index.json").write_text(json.dumps(index), encoding="ascii")
     for spec in ("greenhouse:acme", "lever:acme", "ashby:acme"):
         res = boards.read_board(boards.parse_spec(spec), fetcher(tmp), details=False, first_seen="2026-11-05")
-        assert res.status == "ERROR", res.line()
+        assert res.status in ("EMPTY", "ERROR"), res.line()  # rows that are not objects are skipped
     res = boards.read_board(boards.parse_spec("greenhouse:good"), fetcher(tmp), details=False,
                             first_seen="2026-11-05")
     assert res.status == "OK" and [rd.posting.title for rd in res.readings][-1] == "QC Microbiologist", res.line()
     shutil.rmtree(tmp)
+
+
+FUZZ = json.loads((FIX / "fuzz" / "bodies.json").read_text(encoding="ascii"))
+
+
+def fuzz_bodies():
+    bodies = dict(FUZZ["bodies"])
+    n = FUZZ["generated"]["deep"]["nest"]
+    bodies["deep"] = "[" * n + "]" * n
+    return bodies
+
+
+class FuzzSource(netfetch.OfflineSource):
+    """Answers every request but robots.txt with HTTP 200 and the body chosen
+    for the request's host (bodies[host] or bodies[None])."""
+
+    def __init__(self, bodies):
+        self.bodies, self.requests, self.index, self.served = bodies, [], {}, {}
+
+    def respond(self, method, url, data=None):
+        self.requests.append((method, url))
+        if url.endswith("/robots.txt"):
+            return netfetch.Response(url, 404, {}, b"")
+        body = self.bodies.get(urlparse(url).hostname, self.bodies.get(None, "{}"))
+        ctype = "text/xml" if body.lstrip().startswith("<?xml") else "application/json"
+        return netfetch.Response(url, 200, {"content-type": ctype}, body.encode("utf-8", "surrogatepass"))
+
+
+def fuzz_fetcher(bodies, extra_hosts=()):
+    f = netfetch.Fetcher(offline=FIX, cookies=True, extra_hosts=extra_hosts)
+    f.offline = FuzzSource(bodies)
+    return f
+
+
+def test_fuzz_bodies_stay_on_their_board():
+    """D2 regression (security probe fuzz_boards.py, widened): every reader,
+    against every odd-but-valid answer in fixtures/boards/fuzz/bodies.json
+    (null, numbers, wrong types per key, NaN, huge numbers, JSON nested
+    200,000 deep, odd XML and HTML, non-http links), returns a status and
+    never raises; no reading carries a link that is not http(s). Prints
+    nothing per pair; a failure names the reader, the body and the status."""
+    allowed = {"OK", "EMPTY", "ERROR", "GONE", "DENY", "SKIP"}
+    statuses = {}
+    for name, body in fuzz_bodies().items():
+        for key, text in sorted(SPECS.items()):
+            spec = boards.parse_spec(text)
+            f = fuzz_fetcher({None: body}, extra_hosts=(spec.host,) if spec.host else ())
+            try:
+                res = boards.read_board(spec, f, searches=["scientist"], max_pages=1, details=True,
+                                        first_seen="2026-11-05")
+            except Exception as e:  # noqa: BLE001
+                raise AssertionError(f"{spec.ats} / {name}: RAISED {type(e).__name__}")
+            assert res.status in allowed, (spec.ats, name, res.status)
+            for rd in res.readings:
+                for link in (rd.posting.url, rd.posting.apply_url):
+                    assert re.match(r"https?://[a-z0-9.-]+[/:?#]", link or "", re.I), \
+                        (spec.ats, name, "non-http link kept")
+            statuses.setdefault(spec.ats, set()).add(res.status)
+    assert set(statuses) == {boards.parse_spec(t).ats for t in SPECS.values()}, statuses
+    # the poll goes on past every one of them: one board per body, one good board, all lines printed
+    tmp = Path(tempfile.mkdtemp())
+    try:
+        root = tmp / "JobSearch"
+        (root / "config").mkdir(parents=True)
+        (root / "state").mkdir()
+        rows = ["employer,ats,board,site,host,status"]
+        bodies, names = {}, list(fuzz_bodies().items())
+        for i, (name, body) in enumerate(names):
+            rows.append(f"Fuzz {i},greenhouse,fuzz{i},,,active")
+            bodies[f"boards-api.greenhouse.io/v1/boards/fuzz{i}/"] = body
+        rows.append("Vaxcyte,greenhouse,vaxcyte,,,active")
+        (root / "config" / "watchlist.csv").write_text("\n".join(rows) + "\n", encoding="ascii")
+        good = (FIX / "greenhouse_vaxcyte_list.json").read_text(encoding="utf-8")
+
+        class PathSource(FuzzSource):
+            def respond(self, method, url, data=None):
+                self.requests.append((method, url))
+                if url.endswith("/robots.txt"):
+                    return netfetch.Response(url, 404, {}, b"")
+                for prefix, body in bodies.items():
+                    if prefix in url:
+                        return netfetch.Response(url, 200, {}, body.encode("utf-8", "surrogatepass"))
+                return netfetch.Response(url, 200, {}, good.encode("utf-8"))
+        f = netfetch.Fetcher(offline=FIX, cookies=True)
+        f.offline = PathSource({})
+        lines = []
+        results = boards.poll(root, fetcher=f, details=False, emit=lines.append)
+        board_lines = [ln for ln in lines if ln.startswith("BOARD ")]
+        assert len(board_lines) == len(names) + 1, (len(board_lines), len(names))
+        assert any(ln.startswith("BOARD greenhouse:vaxcyte OK") for ln in board_lines), board_lines[-1]
+        assert len(results) == len(names) + 1 and (root / "state" / "board_health.csv").exists()
+    finally:
+        shutil.rmtree(tmp)
+
+
+def test_crawl_delay_skip_noted():
+    """D2: a board whose host asks for a Crawl-delay over 10 s is skipped for
+    the run with a 'SKIP crawl-delay <host>' line and a board_health note; it
+    takes no error strike and its status stays active."""
+    tmp = Path(tempfile.mkdtemp())
+    try:
+        root = tmp / "JobSearch"
+        (root / "config").mkdir(parents=True)
+        (root / "state").mkdir()
+        (root / "config" / "watchlist.csv").write_text("employer,ats,board,status\nSlow Bio,lever,slowbio,active\n",
+                                                       encoding="ascii")
+        fx = tmp / "fx"
+        fx.mkdir()
+        (fx / "robots.txt").write_text("User-agent: *\nCrawl-delay: 3600\n", encoding="ascii")
+        (fx / "index.json").write_text(json.dumps({"https://api.lever.co/robots.txt": {"file": "robots.txt"}}),
+                                       encoding="ascii")
+        for _ in range(2):
+            lines = []
+            boards.poll(root, fetcher=fetcher(fx), emit=lines.append)
+            assert lines == ["BOARD lever:slowbio SKIP crawl-delay api.lever.co"], lines
+        health = boards.load_health(root)["lever:slowbio"]
+        assert health["last_error"].startswith("skip: crawl-delay api.lever.co"), health
+        assert health["status"] == "active" and health["consecutive_errors"] in ("", "0"), health
+    finally:
+        shutil.rmtree(tmp)
+
+
+def test_list_titles_unescaped():
+    """L2-06: a list-stage title read from page links has its HTML entities
+    decoded ('Clinical Sample &amp; Data Coordinator' -> '... & ...'), so the
+    gates, dedup and discards.csv see the real title; a non-http link in a
+    list page is never taken."""
+    page = ('<a href="/apply/jobs/details/AbC123">Clinical Sample &amp; Data Coordinator</a>'
+            '<a href="file://files.example.com/apply/jobs/details/Zz9">Lab Tech</a>'
+            '<a href="/apply/jobs/details/Qq7?x=1&amp;y=2">R&amp;D Associate &lt;II&gt;</a>')
+    got = boards.page_links(page, r"/apply/jobs/details/", "https://example.applytojob.com/apply/jobs")
+    assert got == [("https://example.applytojob.com/apply/jobs/details/AbC123", "Clinical Sample & Data Coordinator"),
+                   ("https://example.applytojob.com/apply/jobs/details/Qq7", "R&D Associate <II>")], got
 
 
 def test_jazzhr_page_without_jsonld():
@@ -602,7 +766,9 @@ def main():
               test_flags_and_xml_guard, test_templates_and_presets, test_search_terms, test_workday_location_walk,
               test_workday_state_facet_and_no_local, test_workday_fallback_terms, test_workday_caller_search,
               test_workday_empty_tenant_flagged, test_oracle_stale_stop, test_offline_mornings,
-              test_jazzhr_page_without_jsonld, test_odd_answers_stay_on_their_board):
+              test_jazzhr_page_without_jsonld, test_odd_answers_stay_on_their_board,
+              test_fuzz_bodies_stay_on_their_board, test_crawl_delay_skip_noted, test_list_titles_unescaped,
+              test_facet_city_state_without_comma, test_place_lines_bounded):
         t()
         print("ok", t.__name__)
     if os.environ.get("JOB_SKILL_LIVE") == "1":

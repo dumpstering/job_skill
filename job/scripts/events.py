@@ -12,7 +12,8 @@ Usage:
     python events.py overlay --root R [--date YYYY-MM-DD]
 
 emit prints EVENT <id>. J is the payload object, or an object holding
-"payload" plus any of job_key, n, date, session.
+"payload" plus any of job_key, n, date, session. emit writes every type but
+`added`, which only add writes.
 
 add puts one job folder from a link into today's list (spec 5.11,
 addendum_user): an `added` event holding the whole queue item, numbered
@@ -21,6 +22,10 @@ overlay read it at once; the next tick writes it into
 queue/<date>/addendum_user.json (the runner stays the only writer of queue
 files). --via pasted is a /job <link> folder (Tier A, the single-job flow);
 --via add is a /job add <link> folder (Tier B when resume_B.pdf is there).
+posting.md's URL must be a plain web address (netfetch's canonical host) and
+no job board. An added event whose apply_url is refused, whose upload name
+does not carry its own number, or that reuses a number or job key given
+today is never used.
     ADDED #<n> <job_key> (addendum_user)
     IN QUEUE <date> #<n>          (already in today's list; nothing written)
     NO LIST <date> (mode M): the tracker row is the record
@@ -39,7 +44,7 @@ overlay prints the day's merged view of pending and applied events:
 The library (validate, emit, read_file, pending_files, recent, move_done,
 reject, note_failure, overlay, user_items) is what tracker.py apply-events,
 today_view, jobqueue and caps use. Stdlib only (add also reads the queue
-through jobqueue).
+through jobqueue; an added event's link is checked with netfetch).
 
 Exit codes: 0 ok, 1 bad input (ERROR ...).
 """
@@ -54,6 +59,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import argfile  # noqa: E402
 import jobfs  # noqa: E402
 
 MAX_BYTES = 64 * 1024
@@ -64,6 +70,9 @@ RECENT_DAYS = 7          # how far back the overlay reads events_done
 QUEUE_TYPES = ("started", "handed_over", "applied", "skipped", "later", "parked", "unparked", "blocked")
 # "added" is a job from a link joining today's list (addendum_user, spec 5.11).
 TYPES = ("tracker",) + QUEUE_TYPES + ("answer_used", "usage", "added")
+# What `emit` may write: an added event comes only from `events.py add`, which
+# numbers it and names its upload file itself (SEC-14).
+EMIT_TYPES = tuple(t for t in TYPES if t != "added")
 VIAS = ("pasted", "add")
 ADDED_TEXT = ("company", "role", "location", "ats", "host", "apply_url", "folder", "family", "tier", "variant",
               "account", "attach", "upload", "resume_status", "answers_status")
@@ -211,9 +220,48 @@ def check_added_payload(ev, p, root):
     folder = str(it.get("folder", "")).replace("\\", "/")
     if not folder.startswith("applications/") or not _inside(root, folder):
         return "payload.item.folder must be a job folder under applications/"
-    if it.get("apply_url") and not re.match(r"^https?://", it["apply_url"], re.I):
-        return "payload.item.apply_url must be an http(s) URL"
+    url = it.get("apply_url") or ""
+    if url:
+        if not re.match(r"^https?://", url, re.I):
+            return "payload.item.apply_url must be an http(s) URL"
+        why = url_refusal(url)
+        if why:
+            return f"payload.item.apply_url refused: {why}"
+        import netfetch
+        if it.get("host") and it["host"] != netfetch.host_of(url):
+            return "payload.item.host must be the apply_url's host"
+    upload = it.get("upload") or ""
+    if upload and not upload_fits(upload, ev["n"]):
+        return f"payload.item.upload must be upload/{ev['n']:02d}_<Last>_Resume_<Employer>.pdf (this event's n)"
     return None
+
+
+UPLOAD_RE = re.compile(r"^upload/(\d{2,3})[cw]?_[A-Za-z0-9]{1,30}_(?:Resume|Cover)_[A-Za-z0-9]{1,12}\.(?:pdf|docx)$")
+
+
+def upload_fits(upload, n):
+    """True when an added item's upload name carries its own number, so it
+    never names (and a stage replaces) another item's file (SEC-14)."""
+    m = UPLOAD_RE.match(str(upload).replace("\\", "/"))
+    return bool(m) and int(m.group(1)) == int(n)
+
+
+def url_refusal(url):
+    """Why a link may not join today's list (shared decision 1), else None:
+    a host that is not a plain web address (bad-url), a job board, or a
+    private or local address, judged on netfetch's canonical host."""
+    import netfetch  # stdlib and jobfs only
+    reason = netfetch.hard_deny(url) or ""
+    if reason.split(" ", 1)[0] in ("bad-url", "job-board", "host-not-ascii"):
+        return reason
+    try:
+        host = netfetch.host_of(url)
+        netfetch.check_public(url)
+    except netfetch.Denied as e:
+        return e.reason
+    except netfetch.FetchError:
+        return f"non-public {host}"
+    return None if host else "bad-url (no host)"
 
 
 def validate(ev, root, name=None):
@@ -427,17 +475,45 @@ def fold(evs, day):
     return items
 
 
+def runner_given(root, day):
+    """(job keys, numbers) the runner's queue files for the day gave:
+    queue.json and its addenda, but not addendum_user.json (the added jobs
+    themselves) or a *.prev.json copy."""
+    qd = jobfs.Folder(root).queue_dir(day)
+    keys, numbers = set(), set()
+    if not qd.exists():
+        return keys, numbers
+    for p in [qd / "queue.json"] + sorted(qd.glob("addendum_*.json")):
+        if p.name == "addendum_user.json" or p.name.endswith(".prev.json") or not p.exists():
+            continue
+        try:
+            data = json.loads(p.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError):
+            continue
+        for it in (data.get("items") or []) if isinstance(data, dict) else []:
+            if isinstance(it, dict):
+                keys.add(it.get("job_key"))
+                numbers.add(it.get("n"))
+    return keys, numbers
+
+
 def user_items(root, day=None, evs=None):
     """The day's jobs from links (added events, pending and applied) as queue
     items in number order: the event's item plus n, job_key and added_by.
-    The first event for a job key wins."""
+    The first event for a job key wins, and so does the first for a number;
+    a number or job key the runner's own queue files gave today is never
+    taken: an event reusing one is ignored (SEC-14), so no two items of the
+    day share a number or an upload name."""
     day = jobfs.iso_date(day) if day else jobfs.today(root).isoformat()
     evs = recent(root) if evs is None else evs
-    out, keys = [], set()
+    keys, numbers = runner_given(root, day)
+    out = []
     for ev in evs:
-        if ev["type"] != "added" or (ev.get("date") or "") != day or ev["job_key"] in keys:
+        if ev["type"] != "added" or (ev.get("date") or "") != day or ev["job_key"] in keys \
+                or ev.get("n") in numbers:
             continue
         keys.add(ev["job_key"])
+        numbers.add(ev.get("n"))
         it = dict(ev["payload"]["item"])
         it.update(n=ev["n"], job_key=ev["job_key"], added_by=ev["payload"]["via"])
         it.setdefault("needs", [])
@@ -522,10 +598,13 @@ def add(root, folder, via, family="", day=None, session=None):
     key = head.get("Job key") or jobkey.job_key(head.get("URL", ""))
     if not key:
         raise EventError("posting.md has no Job key or URL line")
-    board = netfetch.job_board(netfetch.host_of(head.get("URL", ""))) if head.get("URL") else None
-    if board:
-        raise EventError(f"posting.md's URL is a job board ({board}): it goes on the do-yourself list, "
-                         "never in today's list")
+    why = url_refusal(head["URL"]) if head.get("URL") else None
+    if why and why.startswith("job-board"):
+        raise EventError(f"posting.md's URL is a job board ({why.partition(' ')[2] or why}): "
+                         "it goes on the do-yourself list, never in today's list")
+    if why:
+        raise EventError(f"posting.md's URL is refused ({why}): its address is not a plain web address; ask "
+                         "the user for the employer's own link")
     if str(jobfs.settings(root)["runner"].get("mode", "L")).upper() == "M":
         return f"NO LIST {day} (mode M): the tracker row is the record", None
     if not jobfs.Folder(root).queue_json(day).exists():
@@ -592,7 +671,7 @@ def build_parser():
     sub = ap.add_subparsers(dest="cmd", required=True, metavar="command")
     p = sub.add_parser("emit", help="Write one create-only event file; prints EVENT <id>.")
     p.add_argument("--root", required=True)
-    p.add_argument("--type", required=True, choices=TYPES)
+    p.add_argument("--type", required=True, choices=EMIT_TYPES)
     src = p.add_mutually_exclusive_group(required=True)
     src.add_argument("--json", help="the payload, or {payload, job_key, n, date, session}")
     src.add_argument("--json-file", help="the same JSON from a file")
@@ -622,7 +701,7 @@ def main(argv=None):
             stream.reconfigure(encoding="utf-8", errors="replace")
         except (AttributeError, ValueError):
             pass
-    args = build_parser().parse_args(argv)
+    args = argfile.parse(build_parser(), argv)  # outside text arrives in a JSON file, never inline
     try:
         return args.func(args)
     except (EventError, jobfs.ConfigError, OSError) as e:
