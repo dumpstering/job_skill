@@ -23,14 +23,21 @@ zero-token work. Version 1.2.
 
 - **The watch list** (`config/watchlist.csv`; the life-science preset has
   about 280 Bay Area employer boards) gives a backlog in the first week and
-  then a few applications a day: on the live run of 2026-11-06 about 4 new
-  eligible postings a day passed the per-company caps, about 3 of them jobs
-  the user would want.
+  then a few applications a day: on the live runs of 2026-11-06 and
+  2026-11-10 about 5 eligible postings a day passed the per-company caps,
+  about 3.7 of them jobs the user would want.
 - **Job-alert emails** (LinkedIn job alerts in Gmail, read for company,
-  title and place only, then resolved to the employer's own posting) and the
-  **free Adzuna and USAJOBS keys** are what fill the rest of the day's list.
-  SETUP_GUIDE.md puts both near the top, about 5 minutes each; running
-  `install_runner.cmd` again asks for a key that was skipped.
+  title and place only, then resolved to the employer's own posting) add a
+  few more. In a 2026-11-10 test, 8 of 31 alert leads at employers off the
+  watch list resolved to the employer's posting on the day; most of the rest
+  go to the do-it-yourself list. The **free Adzuna and USAJOBS keys** add
+  postings too; their yield was not measured. SETUP_GUIDE.md puts both near
+  the top, about 5 minutes each; running `install_runner.cmd` again asks for
+  a key that was skipped.
+- **20 a day takes more than the queue.** The rest comes from the
+  do-it-yourself list, LinkedIn Easy Apply done by hand, or looser
+  per-company caps ("more to one company" in `/job settings`; with no caps
+  the 2026-11-10 pool gave about 7 a day).
 - The card adds one line when no alert lead has arrived for 3 days, and
   `/job alerts` gets them coming again in one short exchange.
 

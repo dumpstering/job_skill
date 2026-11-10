@@ -22,15 +22,16 @@ Submit, never creates accounts, never handles passwords or verification
 codes, and never solves CAPTCHAs. Submit is always yours.
 
 **Where your daily jobs come from.** The job finder's list of employers
-finds a backlog of fitting jobs in the first week, then a few new ones a
-day. Two things you set up once fill the rest of each day's list, so do
-both:
+finds a backlog of fitting jobs in the first week, then about 5 new ones a
+day. Two things you set up once add more, so do both:
 - **Job-alert emails** (Day 1 step 7): LinkedIn job alerts sent to your
   Gmail. About 5 minutes.
 - **Two free keys, Adzuna and USAJOBS** (Day 2 step 2). About 5 minutes
   each.
 If no alert email has come in for 3 days, the morning card says so; type
-`/job alerts` and Claude fixes it with you.
+`/job alerts` and Claude fixes it with you. To reach 20 a day, add the
+do-it-yourself list Claude shows you, and LinkedIn's Easy Apply by hand;
+or say "more to one company" to loosen the per-company limits.
 
 ## Day 1: install and set up (about 30-45 minutes)
 
@@ -60,8 +61,8 @@ If no alert email has come in for 3 days, the morning card says so; type
    are claiming unemployment), in one list. "Skip" is fine for anything. It
    also asks where you applied recently, so reposts get caught, and shows
    your publications and lab techniques for a yes.
-7. **Create job alerts on LinkedIn: most of your daily jobs come from
-   them.** When Claude suggests them: 5 now, daily, by email, one per broad
+7. **Create job alerts on LinkedIn: they add jobs the employer list
+   misses.** When Claude suggests them: 5 now, daily, by email, one per broad
    job title; Claude suggests 3 more each of the next few days, up to 20.
    Claude never opens LinkedIn; it only reads the alert emails for the
    company, title and place.
