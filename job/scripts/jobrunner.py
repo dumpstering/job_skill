@@ -140,6 +140,9 @@ EXIT_MISSING = 2
 LOCK_WAIT_SECONDS = 12 * 60     # a daily waits this long for a tick (the Tick task's limit is 10 minutes)
 LOCK_GRACE_SECONDS = 5          # anything else waits this long (Windows frees a dead run's lock within moments)
 DAILY_LIMIT_SECONDS = 2 * 3600  # the Daily task's limit; a daily started as a plain process stops itself too
+DISCOVERY_SECONDS = 75 * 60     # no discovery step (or board) starts later than this into a daily: the gates,
+                                # the queue build and its Tier B files keep the last 45 minutes of the limit
+RETRY_SECONDS = 45 * 60         # the boards' end-of-poll retry starts no board later than this into a daily
 DAILY_AT = (5, 30)              # the Daily task's start time (install_runner.ps1)
 DAILY_STARTS_MAX = 3            # starts of a missed or failed daily a tick makes per day
 DAILY_RETRY_MINUTES = 30        # ... at least this far apart
@@ -643,7 +646,8 @@ def prep_existing(run, day, prep):
             before = json.dumps(q, sort_keys=True)
             missing = not (folder / "resume_B.pdf").exists() or not (folder / "fill_plan.json").exists()
             if missing and not (folder / ".claimed").exists():
-                prep.item(q, folder)
+                # one item's prep that raises is one ERROR line, as in the build (V4-01)
+                unit(run, f"prep #{q.get('n')} {q.get('job_key', '')}", prep.item, q, folder)
                 changed += 1
             dirty |= json.dumps(q, sort_keys=True) != before
         if dirty and not jobqueue.events_for(run.root, day):
@@ -668,6 +672,19 @@ def load_keys(run):
 GATE_COUNTS = ("seen", "passed", "discarded", "parked", "diy", "skipped")
 
 
+def too_late(run, step, seconds=DISCOVERY_SECONDS):
+    """True (with one WARN line and a status error) when the run has used
+    `seconds` already: the step is skipped so the queue build always runs
+    inside the daily's 2-hour limit."""
+    used = time.monotonic() - run.started
+    if used < seconds:
+        return False
+    line = f"{step} skipped: the daily has run {used / 60:.0f} minutes; today's list is built first"
+    run.out(f"WARN {line}")
+    run.errors.append(line)
+    return True
+
+
 def discover(run):
     """Boards, aggregators, the resolver and the gates. Returns (counts, results, lanes).
     Each stage fails soft (shared decision 2): one that raises is one ERROR
@@ -681,7 +698,12 @@ def discover(run):
     f = run.fetcher()
     gate_run = unit(run, "gates", lambda: gates.GateRun(run.root, run.day, fetcher=f, emit=run.out))
     keep = gate_run.keep if gate_run is not None else None
-    results = unit(run, "boards", lambda: boards.poll(run.root, fetcher=f, keep=keep, emit=run.out), default=[])
+    # V4-05: time budgets from the daily's start, so a morning of stalled
+    # boards (each read up to the fetch deadline) still leaves the queue build
+    # its share of the 2-hour limit: no board read and no retry start past them.
+    results = unit(run, "boards", lambda: boards.poll(
+        run.root, fetcher=f, keep=keep, emit=run.out, deadline=run.started + DISCOVERY_SECONDS,
+        retry_deadline=run.started + RETRY_SECONDS), default=[])
     offline = bool(results) and boards.no_network(results)
     if offline:  # the PC had no network yet: say so, never a silent day
         run.errors.append(f"offline {run.day.isoformat()}: no job board answered this morning")
@@ -690,12 +712,14 @@ def discover(run):
     # A tick retries discovery once a job site answers (offline_retry); a run
     # that reached the boards clears the flag.
     run.write_status(discovery_offline=run.day.isoformat() if offline else None)
-    lanes = unit(run, "aggregators", lambda: aggregators.run(run.root, fetcher=f, keys=load_keys(run),
-                                                            salt=leads.salt(run.root), emit=run.out), default=[])
+    lanes = [] if too_late(run, "aggregators") else unit(
+        run, "aggregators", lambda: aggregators.run(run.root, fetcher=f, keys=load_keys(run),
+                                                    salt=leads.salt(run.root), emit=run.out), default=[])
     readings = [rd for res in results for rd in res.readings] + [rd for ln in lanes for rd in ln.postings]
     extra = [ld for ln in lanes for ld in ln.leads]
-    out = unit(run, "leads", lambda: resolve.Resolver(run.root, run.day, f, emit=run.log).run(
-        readings=readings, extra_leads=extra), default=resolve.Outcome())
+    out = resolve.Outcome() if too_late(run, "leads") else unit(
+        run, "leads", lambda: resolve.Resolver(run.root, run.day, f, emit=run.log).run(
+            readings=readings, extra_leads=extra), default=resolve.Outcome())
     # resolve logged its RESOLVE line itself: print it, never log it twice (L2-07)
     run.echo(next((ln for ln in reversed(run.log_lines) if ln.startswith("RESOLVE ")), "RESOLVE leads=0"))
     counts = dict.fromkeys(GATE_COUNTS, 0)
@@ -1263,6 +1287,8 @@ def daily(run):
     written = jobqueue.build(run.root, run.day, prep=prep.item, emit=lines.append)
     for line in lines:
         run.out(line)
+        if line.startswith("ERROR "):  # an item the build skipped (its own try): status.json names it
+            run.errors.append(line[len("ERROR "):])
     if written is None:
         written = verified(qpath, {})
         if any(ln.startswith("WAIT") for ln in lines):
@@ -1731,14 +1757,21 @@ def liveness(run, items, clock=time.monotonic):
 def prune_request_starts(run, now=None):
     """Remove state/request_starts markers whose request was answered (its
     result file exists) or that are older than 30 days (a request file
-    deleted by hand). Returns how many were removed."""
+    deleted by hand). A marker whose request file is still waiting in
+    runner/in/requests is always kept: it is the count that stops a third
+    start (a file that could not be moved after its answer is moved by the
+    next handle_request, which then clears the marker). Returns how many were
+    removed."""
     base = run.folder.state / "request_starts"
     if not base.is_dir():
         return 0
     now = now if now is not None else time.time()
+    waiting = {m.group(1) for m in (REQ_NAME.match(p.name) for p in pending_requests(run.folder)) if m}
     removed = 0
     for p in base.glob("*.json"):
         try:
+            if p.stem in waiting:
+                continue
             answered = run.folder.result(p.stem).exists()
             old = now - p.stat().st_mtime > REQUEST_START_KEEP_DAYS * 86400
             if answered or old:
@@ -1907,9 +1940,12 @@ def write_result(run, req_id, op, ok, lines, result=None):
 
 
 def finish_request(run, path):
+    """Move an answered request file to requests_done/<date>/, waiting out a
+    scanner or OneDrive holding it for a moment (jobfs._rename); still held
+    after that, it raises, its marker stays, and the next run moves it."""
     dest = run.folder.runner_out / "requests_done" / run.day.isoformat()
     dest.mkdir(parents=True, exist_ok=True)
-    os.replace(path, dest / path.name)
+    jobfs._rename(path, dest / path.name)
 
 
 def handle_request(run, path, in_tick=False):
@@ -1933,6 +1969,13 @@ def handle_request(run, path, in_tick=False):
         return True
     if req is None and why is None:
         return False  # still arriving
+    if run.folder.result(req_id).exists():
+        # Answered on an earlier run whose move of the file failed (held by
+        # another program): move it now and never run it again (decision 3).
+        finish_request(run, path)
+        clear_request_start(run, req_id)
+        run.log(f"REQUEST {req_id} {op} answered earlier; file moved to requests_done")
+        return True
     if req is None:
         write_result(run, req_id, op, False, [f"REJECTED {why}"])
         run.out(f"REQUEST {req_id} {op} REJECTED {why}")
@@ -2475,7 +2518,7 @@ def main(argv=None):
     except ImportError as e:
         run.out(f"MISSING {e.name or e}: run the installer again (pip install --require-hashes)")
         return EXIT_MISSING
-    except (jobfs.ConfigError, ValueError) as e:
+    except jobfs.ConfigError as e:  # a config file the user can fix; any other error is a bug or bad data
         run.out(f"ERROR {e}")
         return 1
     except Exception as e:  # unattended under pythonw: the log and status.json are all the user has

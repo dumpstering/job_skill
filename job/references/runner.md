@@ -38,7 +38,7 @@ files, and never write the runner's files.
 | `runner/out/results/<id>.json` | one per request: `{id, op, ok, at, lines, result}` |
 | `runner/out/staged.json` | Tier A files staged by `stage_tier_a`, with their sha256 |
 | `runner/out/liveness.json` | the next items' postings re-read by the tick: `{items: {job_key: {checked, closed, why}}}`; only through the URL discovery read (the posting's own url), and only when the unattended policy allows it or its ATS API endpoint; a board's apply link is never a fallback (`why` "skip ..." otherwise); written after each item, and an item starts only while the tick has room for its reads inside its 10 minutes (`LIVENESS budget: <n> items left for the next tick`) |
-| `state/request_starts/<id>.json` | the attempt marker of a request being answered (removed when it ends; a tick removes one whose request was answered or that is over 30 days old) |
+| `state/request_starts/<id>.json` | the attempt marker of a request being answered (removed when it ends; a tick removes one whose request was answered or that is over 30 days old, never one whose request file still waits in `runner/in/requests`) |
 | `runner/in/bad/` | event and request files that cannot be read as JSON (over 64 KB, nested deeper than 64, or not JSON after 3 tries), each with a `.reason.txt`; never deleted |
 | `reports/funnel.csv`, `logs/runner_<date>.log` | metrics and the log (keys redacted) |
 
@@ -176,6 +176,10 @@ only a `STALE LOCK` line for the next one).
 
 - Both tasks start and keep running on battery. A daily keeps the PC awake
   while it runs and stops itself after 2 hours; a tick stops after 10 minutes.
+  On a slow network the daily keeps time for today's list: after 75 minutes
+  it reads no more boards and skips the aggregators and leads, and the
+  boards' one retry runs only in its first 45 minutes and only when 20
+  boards or fewer failed (one `WARN` line names the boards left out).
 - A missed daily (the PC asleep or off at 05:30, a daily stopped, or one that
   waited for a session) is started by the first tick after 05:30 (`TICK started
   the daily (missed|failed|waited|requests; ...)`), at most 3 times a day 30

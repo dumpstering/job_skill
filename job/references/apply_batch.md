@@ -270,7 +270,11 @@ Skipped, parked and deferred items never get a row.
 LinkedIn Easy Apply jobs, Ashby spam rejections, chat-apply and SSO-only
 items. `today_view.py diy` prints them in the order the runner staged
 them: `DIY E1 | <company> | <title> | <location> | upload/E1_...pdf`, at
-most `[daily] easy_apply_list_max` (5), never a link. Each has an answer
+most `[daily] easy_apply_list_max` (5), never a link. A `DIY MORE <n>`
+line says how many more wait: tell the user, and on "diy all" run
+`today_view.py diy --all` (those past the first five have no upload or
+sheet staged). Leads whose title or place the gates would not take are
+never listed (`DIY SET-ASIDE <n>`). Each listed item up to the fifth has an answer
 sheet in `applications/_diy/<date>/`. The user applies in their own browser
 at their own pace. `log e1 e3`: for each, write `{"company": "<company>",
 "role": "<title>", "location": "<location>"}` exactly as listed and run

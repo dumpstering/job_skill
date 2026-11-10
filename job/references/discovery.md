@@ -32,21 +32,22 @@ Run every command as SKILL.md "Scripts" says: `python "<skill>/scripts/<name>.py
 1. Known board (watch lists, earlier resolutions in `state/company_ats.json`): it matches today's list, or reads that board once. A match is a title at least 85% alike and a compatible location (same city, a `[home]` place, or remote-US). Each match is its own posting.
 2. Unknown company: it probes slug guesses on Greenhouse, Lever, Ashby, Workable, BambooHR, Breezy, JazzHR, Pinpoint, Personio, Teamtailor, Rippling, Recruitee (after its selftest) and Jobvite, in that order. Misses are cached 30 days; an empty board is unknown. A hit joins `state/watchlist_auto.csv`.
 3. Still unknown, or an R3 lead-only employer: listed in `runner/out/needs_search.json`.
-4. Unresolved on 2 different days: LinkedIn leads go to the do-yourself list (company, title and location only; `queue/<date>/diy.md` records only that day's new give-ups, and the list the user works from is `today_view.py diy`: leads with status diy, then chat-apply pool items, in the order the runner stages them, at most `easy_apply_list_max`); other leads are discarded with reason `unresolved`. A lead that step 3 lists waits until `needs_search.json` has listed it on 2 different days, so a job-morning (or a batch break) had it to search; a lead still pending 30 days after it was seen gives up the same way (`UNRESOLVED <id> <company> day=<n> expired`), never silently.
+4. Unresolved on 2 different days: LinkedIn leads go to the do-yourself list (company, title and location only). The list has one order everywhere (`today_view.py diy`, the runner's staging and E numbers, and `queue/<date>/diy.md`): leads with status diy that pass the title and place gates a read posting would (G3, G4, the G7 title knockouts), the better family match first and then the newest, then chat-apply pool items by fit; at most `easy_apply_list_max`, then `DIY MORE <n>` for the rest (`diy all` shows them: `today_view.py diy --all`) and `DIY SET-ASIDE <n>` for leads the gates would not take, which are never listed. Other leads are discarded with reason `unresolved`. A lead that step 3 lists waits until `needs_search.json` has listed it on 2 different days, so a job-morning (or a batch break) had it to search; a lead still pending 30 days after it was seen gives up the same way (`UNRESOLVED <id> <company> day=<n> expired`), never silently.
 
 ### needs_search.json (job-morning, or the session at a batch break)
 
 `{"v":1,"date":"...","companies":[{"company","company_norm","why":"unknown|lead_only","titles":[...],"leads":n}]}`, at most 10 a day.
-- Run one web search per company: `"<company> careers"` (for `lead_only`, `"<company> <title> careers"` to find the single posting).
+- Run one web search per company: `"<company> <title> careers"`, with one of its `titles`, and send a job page from the results (the posting itself, on the company's own domain or a known ATS host). A job page names the employer's board in its apply link; a careers landing page often names none.
 - Keep only a known ATS host or the company's own domain. Drop results on linkedin.com, lnkd.in, licdn.com, indeed.*, glassdoor.*, simplyhired.*, ziprecruiter.* or remotive.com without opening them.
 - Send a `probe_url` request: write `{"url": "<careers page or posting URL>", "company": "...", "title": "...", "location": "..."}` to `claude/args_morning.json` (a session: `claude/args.json`) and run `jobrunner.py request probe_url --json-file claude/args_morning.json`; a URL from a search result never goes on the command line.
 
 The runner then runs `resolve.py probe-url`:
 - `DENY job-board <domain>` (exit 7): refused unopened. Any other `DENY <reason>` (`bad-url ...`, `non-public <host>`) is the same: that link is never opened or fetched by any tool, the browser included; try a better search result tomorrow.
 - `DETECT <ats>:<board>[/<site>][@<host>]`: found on the careers page or its iframe; the board joins `watchlist_auto.csv`. Workday sites always come from the real URL.
+- `PHENOM <url>` before a `DETECT` line: the page was a Phenom career site with no board link (Sutter Health, Eli Lilly), so the runner read that site's own job search, whose apply links name the board (usually a Workday tenant).
 - `READ <job key>`: a posting URL on an ATS host, read directly.
 - `BROWSER_READ <url>`: robots.txt disallows that page (iCIMS hosts always do), or asks for more than 10 s between requests. The item is queued with `posting_status = browser_read`; read the page text in the tab already open for applying and run `posting.py --html-file`.
-- `DETECT none <host>`: nothing found; try a better search result tomorrow.
+- `DETECT none <host>`: nothing found on that page. On the next search for that company, send a job page for one of its titles (`"<company> <title> careers"`), never the same landing page again.
 
 ## The gates (runner; spec 3.8)
 

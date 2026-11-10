@@ -11,6 +11,7 @@ from jobfs.today() in the configured time zone (pinned here so a run that
 crosses midnight cannot flake).
 """
 import contextlib
+import io
 import json
 import os
 import shutil
@@ -867,6 +868,61 @@ def test_5000_rows():
     print(f"   (add on a 5,000-row workbook: {took:.1f}s)")
 
 
+def drop_event(root, i, argv):
+    """A tracker event file in runner/in/events, written as ASCII JSON (every
+    non-ASCII character an escape, a lone surrogate too), old enough to read."""
+    eid = f"20261106T1200{i:02d}Z_0000ab{i:02d}"
+    ev = {"v": 1, "id": eid, "type": "tracker", "at": "2026-11-06T04:00:00-08:00", "session": "s1",
+          "job_key": "", "n": None, "date": "2026-11-06", "payload": {"argv": argv}}
+    path = root / "runner" / "in" / "events" / f"{eid}_tracker.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(ev, ensure_ascii=True), encoding="ascii")
+    old = time.time() - 60
+    os.utime(path, (old, old))
+    return path
+
+
+def test_events_broken_text():
+    """V4-02: an event whose text the workbook cannot hold (half of a UTF-16
+    pair, U+FFFE, a control character) never stops apply-events: the text is
+    cleaned (U+FFFD, or dropped) and every event lands, the plain ones after
+    it included. One event whose command raises is rejected with its reason
+    and the others still apply."""
+    root = new_root()
+    lone = chr(0xD800)
+    for i, argv in enumerate((["add", "--company", "Acme" + lone, "--role", "QC"],
+                              ["add", "--company", "Beta", "--role", "QC", "--notes", "a" + chr(0xFFFE) + "b"],
+                              ["add", "--company", "Gamma", "--role", "QC", "--notes", "x" + chr(1) + "y"],
+                              ["add", "--company", "Delta", "--role", "QC"]), 1):
+        drop_event(root, i, argv)
+    assert run(root, "apply-events").strip() == "APPLIED 4 PENDING 0 REJECTED 0"
+    rows = sheet_rows(root / "applications.xlsx")
+    assert [r["Company"] for r in rows] == ["Acme" + chr(0xFFFD), "Beta", "Gamma", "Delta"], ascii(rows)
+    assert [r["Notes"] for r in rows[1:3]] == ["a" + chr(0xFFFD) + "b", "xy"], ascii(rows)
+    assert not list((root / "runner" / "in" / "events").glob("*.json"))
+    # one event whose command raises (a bug, an odd value): that event is rejected, the next one lands
+    bad = drop_event(root, 5, ["add", "--company", "Epsilon", "--role", "QC"])
+    drop_event(root, 6, ["add", "--company", "Zeta", "--role", "QC"])
+    real = tracker.run_event
+
+    def run_event(store, ev, root_):
+        if ev["id"] == bad.name.split("_tracker")[0]:
+            raise RuntimeError("boom")
+        return real(store, ev, root_)
+    tracker.run_event = run_event
+    out = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(out):
+            code = tracker.main(["apply-events", "--root", str(root)])
+    finally:
+        tracker.run_event = real
+    got = [ln for ln in out.getvalue().splitlines() if ln.strip()]
+    assert code == 0 and got == [f"REJECTED {bad.name}: ERROR RuntimeError: boom",
+                                 "APPLIED 1 PENDING 0 REJECTED 1"], (code, got)
+    assert [r["Company"] for r in sheet_rows(root / "applications.xlsx")][-1] == "Zeta"
+    assert (root / "runner" / "out" / "events_rejected" / bad.name).exists()
+
+
 def main():
     test_cli_basics()
     print("ok cli_basics")
@@ -884,7 +940,7 @@ def main():
     print("ok locked_file")
     for fn in (test_v11_upgrade, test_upgrade_on_first_write, test_followup_tiers, test_new_sheets,
                test_events_transport, test_events_locked, test_auto_transport, test_check_v12, test_archive,
-               test_5000_rows, test_add_same_job, test_referral_urls):
+               test_5000_rows, test_add_same_job, test_referral_urls, test_events_broken_text):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

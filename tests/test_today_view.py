@@ -453,6 +453,69 @@ def test_diy():
     print("ok the do-yourself list follows the runner's staging and drops jobs logged by hand")
 
 
+def test_diy_one_order():
+    """L4-02: 21 leads gave up on one day and the list showed 5, picked by
+    lead id (today_view diy) or company name (diy.md), with titles the gates
+    would reject and no word about the rest. Now there is one order: leads
+    that pass the title and place gates (G3, G4, the G7 title knockouts),
+    the core title first, then the newest give-up; diy.md and the session
+    list agree on every E number; the rest are counted (DIY MORE, and diy
+    --all lists them); leads the gates would not take are counted, never
+    listed; a job logged by hand on an earlier day leaves the list so the
+    next one moves up, and one logged today keeps its number."""
+    from datetime import date
+    import resolve
+    root = make_root("diy_order", morning=QUIET_MORNING, workday=False)
+    f = jobfs.Folder(root)
+    (f.config / "search_profile.toml").write_text(
+        'version = 1\n[home]\nlabel = "Springfield, IL"\nplaces = ["Springfield"]\nremote = "us"\n'
+        '[[knockout]]\nid = "ca_cls"\nname = "Clinical Laboratory Scientist license"\n'
+        "title_patterns = ['(?i)\\bCLS\\b']\n"
+        '[[family]]\nid = "qc_micro"\nstatus = "active"\nmode = "industry"\ncore_titles = ["QC Microbiologist"]\n'
+        'title_any = ["microbiolog*"]\npriority = 1\n', encoding="ascii")
+
+    def lead(i, company, title, loc, done):
+        return {"lead_id": f"l{i:02d}", "status": "diy", "company": company, "title": title, "location": loc,
+                "done_on": done, "source": "linkedin_alert", "tries": [], "job_keys": []}
+    here = "Springfield, IL"
+    rows = [lead(1, "Acme Bio", "QC Microbiologist", here, "2026-11-10"),
+            lead(2, "Bravo Labs", "Microbiology Lab Technician", here, "2026-11-12"),
+            lead(3, "Cobalt Bio", "Microbiologist II", here, "2026-11-11"),
+            lead(4, "Delta Pharma", "QC Microbiologist", here, "2026-11-12"),
+            lead(5, "Echo Health", "Microbiology Associate", here, "2026-11-09"),
+            lead(6, "Foxtrot Bio", "Senior Microbiologist", here, "2026-11-08"),
+            lead(7, "Golf Chem", "Chemistry Technician I", here, "2026-11-12"),
+            lead(8, "Hotel Health", "CLS Microbiology", here, "2026-11-12"),
+            lead(9, "India Bio", "QC Microbiologist", "Boston, MA", "2026-11-12"),
+            lead(10, "Juliet Bio", "Microbiologist", here, "2026-11-11"),
+            lead(11, "Kilo Bio", "Microbiology Scientist", here, "2026-11-07")]
+    f.state.mkdir(parents=True, exist_ok=True)
+    (f.state / "leads_state.json").write_text(json.dumps({"leads": {r["lead_id"]: r for r in rows}}), encoding="ascii")
+    tr = json.loads(f.tracker_json.read_text(encoding="utf-8"))
+    tr["applications"] += [{"ID": 300, "Date": "2026-11-11", "Company": "Juliet Bio", "Role": "Microbiologist",
+                            "Status": "Applied", "Applied": "2026-11-11", "Source": "By hand"},
+                           {"ID": 301, "Date": DAY, "Company": "Kilo Bio", "Role": "Microbiology Scientist",
+                            "Status": "Applied", "Applied": "2026-11-11", "Source": "By hand"}]
+    jobfs.atomic_write_json(f.tracker_json, tr)
+    first5 = ["Delta Pharma | QC Microbiologist", "Acme Bio | QC Microbiologist",
+              "Bravo Labs | Microbiology Lab Technician", "Cobalt Bio | Microbiologist II",
+              "Echo Health | Microbiology Associate"]
+    tail = ("DIY SET-ASIDE 3 leads whose title or place the gates would not take (not listed)")
+    assert run_args(root, "diy") == [f"DIY E{i} | {r} | {here}" for i, r in enumerate(first5, 1)] + [
+        "DIY MORE 2 more waiting; say `diy all` to see them (today_view.py diy --all)", tail], run_args(root, "diy")
+    assert run_args(root, "diy", "--all") == [f"DIY E{i} | {r} | {here}" for i, r in enumerate(first5, 1)] + [
+        f"DIY E6 | Foxtrot Bio | Senior Microbiologist | {here}", tail], "Kilo Bio (E7) was logged today: hidden"
+    resolve.write_diy(root, date(2026, 11, 12), [])
+    md = f.diy_md(DAY).read_text(encoding="utf-8").splitlines()
+    assert [ln for ln in md if ln.startswith("- E")] == [f"- E{i} | {r} | {here}" for i, r in enumerate(first5, 1)], md
+    assert md[-2:] == ["And 2 more waiting: say `diy all` to see them.",
+                       "3 more leads were set aside: the gates would not take the title or place."], md
+    listed, aside = resolve.diy_leads(root, date(2026, 11, 12))
+    assert sorted((a["company"], a["set_aside"]) for a in aside) == [
+        ("Golf Chem", "G4 title"), ("Hotel Health", "G7 knockout:ca_cls"), ("India Bio", "G3 location")], aside
+    print("ok the do-yourself list: one order everywhere, gated, the rest counted")
+
+
 def test_job_from_link():
     """A pasted /job <link> (events.py add) is #25 at once: the card, next and
     progress count it before any tick, with the single-job flow's resume."""
@@ -1176,7 +1239,7 @@ def test_wording():
 def main():
     only = sys.argv[1:]
     tests = (test_spec_card, test_zero_lines, test_missing_morning, test_resume_and_next, test_tier_a_final,
-             test_letter, test_one_selector, test_waiting_variants, test_notes_and_diy, test_diy, test_job_from_link,
+             test_letter, test_one_selector, test_waiting_variants, test_notes_and_diy, test_diy, test_diy_one_order, test_job_from_link,
              test_sensitive_check, test_sensitive_line, test_short_day, test_short_card, test_stale_morning,
              test_card_after_break, test_drafts, test_config_typo, test_no_runner_card, test_runner_state_lines,
              test_computed_checks, test_stale_upload_copy, test_no_variant_line, test_corrected_today,

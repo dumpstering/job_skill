@@ -276,10 +276,27 @@ def url_refusal(url):
     return netfetch.web_refusal(url)
 
 
+def unicode_refusal(ev):
+    """Why an event cannot be written as UTF-8 text, else None: a string or
+    key holding half of a UTF-16 pair (a lone surrogate) would stop the
+    workbook write and every event after it (V4-02). Files read through
+    jobfs.loads_json come back cleaned; this catches one made in memory."""
+    try:
+        json.dumps(ev, ensure_ascii=False).encode("utf-8")
+    except UnicodeEncodeError:
+        return "holds a broken character (half of an emoji): not valid Unicode text"
+    except (TypeError, ValueError, RecursionError):
+        return "holds a value that is not JSON"
+    return None
+
+
 def validate(ev, root, name=None):
     """None when the event is well formed, else the reason it is not."""
     if not isinstance(ev, dict):
         return "not a JSON object"
+    bad = unicode_refusal(ev)
+    if bad:
+        return bad
     if ev.get("v") != jobfs.EVENT_SCHEMA:
         return f"schema version {ev.get('v')!r} (want {jobfs.EVENT_SCHEMA})"
     if not isinstance(ev.get("id"), str) or not ID_RE.match(ev["id"]):

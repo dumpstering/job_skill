@@ -1,0 +1,7 @@
+{
+ "https://careers.lilly.com/us/en": "lilly_home.html",
+ "https://careers.lilly.com/us/en/search-results?keywords=": "lilly_search.html",
+ "https://jobs.sutterhealth.org/us/en": "sutter_home.html",
+ "https://jobs.sutterhealth.org/us/en/job/R-144891/Lab-Associate-III-Microbiology-Short-Hour": "sutter_job.html",
+ "https://jobs.sutterhealth.org/us/en/search-results?keywords=": "sutter_search.html"
+}

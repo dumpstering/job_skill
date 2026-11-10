@@ -6,13 +6,20 @@ Hidden text is text a sighted reader does not see. An element hides its text
 when it carries the hidden attribute or a screen-reader-only class, or when
 its inline style or a <style> rule on the page sets one of these:
     display:none, visibility:hidden or collapse, content-visibility:hidden,
-    opacity (or filter:opacity) under 0.1, a font size of 1px or less (px, pt,
-    em, rem, %, keywords; em and % against the parent's size), color or
+    opacity (or filter:opacity) under 0.1, filter:blur of 20px or more, a
+    font size of 1px or less (px, pt, em, rem, %, keywords; em and % against
+    the parent's size) after the scale, transform scale or matrix and zoom
+    of the element and its ancestors (the smaller axis), color or
     -webkit-text-fill-color transparent (unless the text is painted by a
-    background clip, a shadow or a stroke) or equal to its own background,
-    a transform or scale with a zero factor, a translate, offset, margin or
-    text-indent of -500px or more, clip or clip-path to nothing, or a width
-    or height of 1px or less with overflow hidden or clip.
+    background clip, a shadow or a stroke) or equal to its own background or
+    to the background an ancestor's inline style or bgcolor paints (through
+    elements with no class or id), <font color> read as color, a transform
+    or scale with a zero factor, a translate, offset, margin or text-indent
+    of -500px or more, or of +5000px or more where that moves the element
+    itself (left, top, right, bottom, margin-left, margin-top, text-indent),
+    clip or clip-path to nothing, or a width or height of 1px or less with
+    overflow hidden or clip (unless it opens with a transition: an
+    accordion). <datalist> content is never drawn.
 Style values are normalized first: CSS comments and escapes decoded, case
 and whitespace folded, !important read as a priority. <style> rules are
 read with selector lists, type, class, id and attribute selectors,
@@ -23,22 +30,28 @@ wins, as in a browser. Rules inside @media or @container, or under a state
 pseudo-class (:hover, :focus), hide only sometimes and are left out.
 visibility, color and font size are inherited and a child may set them back;
 the rest hide the whole subtree. Not read: linked style sheets and scripts,
-a text color matched only against a parent's or the page's background, the
-closed part of <details>, and aria-hidden (that text is on the screen).
+a text color matched against the page's own background or one a style
+sheet paints, var() colors, the closed part of <details>, and aria-hidden
+(that text is on the screen).
 
 AI-addressed text is matched on a folded copy (NFKC compatibility forms,
 accents and invisible characters removed, Cyrillic, Greek and small-capital
-look-alikes mapped to Latin): instructions to ignore or disregard earlier
-text, 'you are now', a 'system:' line, lines addressed to an AI, assistant,
-agent, language model or LLM, and the same in Spanish, French, German and
-Portuguese. Visible text is flagged only for instructions aimed at an AI
-(AI companies' postings name their products all the time); hidden text is
-flagged for an AI's name too.
+look-alikes mapped to Latin): instructions to ignore or disregard previous
+instructions, 'you are now' an AI or in a mode, a 'system:' line that
+speaks to someone, lines addressed to an AI, assistant, agent, language
+model or LLM, and the same in Spanish, French, German and Portuguese.
+Ordinary posting sentences that share those words are not flagged (V4-08:
+'If you are now in the final year of your PhD', 'System: Illumina
+NovaSeq X', 'Agent: select reagents', 'Override existing rules in the
+LIMS', 'close attention to AI-driven assay design'). Visible text is
+flagged only for instructions aimed at an AI (AI companies' postings name
+their products all the time); hidden text is flagged for an AI's name too.
 
 Every function here is linear in its input (D3): bounded patterns, capped
-style sheets and a work budget for selector matching that, once spent,
-counts an element a remaining rule could hide as hidden (fail closed).
-Stdlib only.
+style sheets and a work budget for selector matching. Once the budget is
+spent the rest of the page is read as shown (its text kept) and
+Hider.incomplete is set, which posting.py reports as WARN HIDDEN-SCAN
+incomplete. Stdlib only.
 """
 import math
 import re
@@ -54,11 +67,13 @@ SELECTORS_PER_RULE = 64
 SELECTOR_MAX = 500         # characters of one selector
 COMPOUNDS_MAX = 8          # compound selectors in one complex selector
 NEST_MAX = 32              # nesting depth of CSS blocks read
-MATCH_BUDGET = 400_000     # compound tests per page before failing closed
+MATCH_BUDGET = 400_000     # compound tests per page; once spent, the rest of the page is read as shown
 CLASSES_MAX = 64           # classes and attributes of one element looked up
 STYLE_CACHE_MAX = 4096
-FONT_MIN = 1.34            # px: a font this small (1px, 1pt) hides its text
+FONT_MIN = 1.34            # px: a font this small (1px, 1pt), after any scale or zoom, hides its text
 OFFSET_MIN = -500.0        # px: an offset this far left or up hides its text
+OFFSET_MAX = 5000.0        # px: an offset this far right or down hides its text
+BLUR_MIN = 20.0            # px: a blur this wide hides its text
 ALPHA_MIN = 0.1            # opacity or color alpha under this hides its text
 AI_SENTENCE_MAX = 200
 AI_FOUND_MAX = 20          # AI-addressed sentences kept per posting
@@ -306,9 +321,16 @@ OFFSET_PROPS = frozenset("left right top bottom text-indent margin-left margin-t
                          "margin-inline-start margin-inline-end margin-block-start margin-block-end "
                          "inset-inline-start inset-inline-end inset-block-start inset-block-end".split())
 OFFSET_SHORTHANDS = frozenset({"margin", "inset", "inset-inline", "inset-block", "margin-inline", "margin-block"})
+# Offsets that move the element itself right or down when positive (margin-right and margin-bottom move
+# what comes after it, not the element).
+OFFSET_POSITIVE = frozenset("left right top bottom text-indent margin-left margin-top margin-inline-start "
+                            "margin-block-start inset-inline-start inset-inline-end inset-block-start "
+                            "inset-block-end".split())
 BOX_DIMS = ("height", "width", "max-height", "max-width")
+# Groups that shrink text by a factor (extra) that a descendant's larger font or scale can make up for.
+SHRINK = ("shrink-transform", "shrink-scale", "zoom")
 # Groups whose hiding no descendant can undo; visibility, color and font-size are inherited and can be set back.
-SOFT = frozenset({"visibility", "color", "font-size"})
+SOFT = frozenset({"visibility", "color", "font-size"} | set(SHRINK))
 
 
 def font_entry(v):
@@ -364,9 +386,58 @@ def transform_hides(v):
         elif name in ("translate", "translatex", "translatey", "translate3d"):
             for a in args[:2]:
                 px = to_px(a)
-                if px is not None and (px <= OFFSET_MIN or px >= 5000):
+                if px is not None and (px <= OFFSET_MIN or px >= OFFSET_MAX):
                     return True
     return False if found else None
+
+
+def _min_axis(ns):
+    """The smaller of an x and a y scale factor (one factor is both)."""
+    if len(ns) == 1:
+        ns = ns * 2
+    return min(abs(ns[0]), abs(ns[1]))
+
+
+def transform_factor(v):
+    """The factor a transform shrinks its text by: the smaller axis of each
+    scale() and of each matrix() (its smaller singular value), multiplied;
+    1.0 for none, None for an unreadable value. 16px text under scale(0.05)
+    or scale(0.01, 1) is too small or too thin to read."""
+    if v in ("none", "initial", "unset", "inherit", "revert"):
+        return 1.0
+    f, found = 1.0, False
+    for m in _FUNC.finditer(v):
+        found = True
+        name, args = m.group(1), [a for a in _ARGS.split(m.group(2)) if a]
+        if name in ("scale", "scalex", "scaley", "scale3d"):
+            ns = _nums(args[:2] if name in ("scale", "scale3d") else args[:1])
+            if ns and None not in ns:
+                f *= abs(ns[0]) if name in ("scalex", "scaley") else _min_axis(ns)
+        elif name == "matrix" and len(args) == 6:
+            a, b, c, d = _nums(args[:4])
+            if None not in (a, b, c, d):
+                t, det = a * a + b * b + c * c + d * d, a * d - b * c
+                f *= math.sqrt(max(0.0, (t - math.sqrt(max(0.0, t * t - 4 * det * det))) / 2))
+    return f if found else None
+
+
+def scale_factor(v):
+    """The factor the scale property shrinks text by (its smaller axis), else None."""
+    if v == "none":
+        return 1.0
+    ns = _nums(v.split(" ")[:3])
+    return None if not ns or None in ns else _min_axis(ns[:2])
+
+
+def zoom_factor(v):
+    """The factor zoom shrinks text by, else None. zoom:0 is read as no zoom
+    (browsers treat it as 1; UNVERIFIED for every engine)."""
+    if v in ("normal", "reset", "initial", "unset", "inherit", "revert"):
+        return 1.0
+    n = number(v)
+    if n is None or n < 0:
+        return None
+    return 1.0 if n == 0 else n
 
 
 def scale_hides(v):
@@ -384,7 +455,7 @@ def translate_hides(v):
     pxs = [to_px(a) for a in v.split(" ")[:3]]
     if not pxs or None in pxs:
         return None
-    return any(p <= OFFSET_MIN or p >= 5000 for p in pxs[:2])
+    return any(p <= OFFSET_MIN or p >= OFFSET_MAX for p in pxs[:2])
 
 
 def clip_hides(v):
@@ -441,8 +512,9 @@ def clip_path_hides(v):
     return len(points) >= 1 and len(set(points)) == 1
 
 
-def offset_hides(v):
-    """True for an offset far enough left or up to put text out of sight."""
+def offset_hides(v, positive=True):
+    """True for an offset far enough left or up (OFFSET_MIN), or with
+    positive, right or down (OFFSET_MAX), to put text out of sight."""
     if v in ("auto", "initial", "unset", "inherit", "revert", "normal"):
         return False
     ln = length(v)
@@ -450,9 +522,116 @@ def offset_hides(v):
         return None
     n, unit = ln
     if unit == "%":
-        return n <= -1000
+        return n <= -1000 or (positive and n >= 1000)
     px = n * ABS_PX[unit] if unit in ABS_PX else n * REL[unit] * 16
-    return px <= OFFSET_MIN
+    return px <= OFFSET_MIN or (positive and px >= OFFSET_MAX)
+
+
+def shorthand_offsets_hide(prop, v):
+    """offset_hides over a margin or inset shorthand: each side by its place
+    (top right bottom left, or start end), a positive one only for a side
+    that moves the element itself (margin top and left, every inset side)."""
+    parts = v.split(" ")[:4]
+    if not parts:
+        return None
+    if prop in ("margin", "inset"):
+        idx = {1: (0, 0, 0, 0), 2: (0, 1, 0, 1), 3: (0, 1, 2, 1), 4: (0, 1, 2, 3)}[len(parts)]
+        moves = (True, prop == "inset", prop == "inset", True)  # top right bottom left
+        hs = [offset_hides(parts[idx[k]], moves[k]) for k in range(4)]
+    else:  # margin-inline, margin-block (start end); inset-inline, inset-block
+        two = parts[:2] if len(parts) > 1 else parts * 2
+        hs = [offset_hides(two[0]), offset_hides(two[1], prop.startswith("inset"))]
+    return True if True in hs else (False if None not in hs else None)
+
+
+def last_values(decls):
+    """{property: (value, important)}: the last declaration of each, unless an
+    earlier one is !important, in the order of the last declarations."""
+    vals = {}
+    for prop, val, imp in decls:
+        if prop in vals and vals[prop][1] and not imp:
+            continue
+        vals.pop(prop, None)  # keep the order of the last declarations (font-size, then a later font)
+        vals[prop] = (val, imp)
+    return vals
+
+
+def _painted(vals):
+    """The text is painted another way too: a background clip, a shadow or a stroke."""
+    return any("text" in vals.get(p, ("",))[0].split(" ") for p in ("background-clip", "-webkit-background-clip")) \
+        or vals.get("text-shadow", ("none",))[0] not in ("none", "initial", "unset") \
+        or (vals.get("-webkit-text-stroke-width", ("0",))[0] not in ("0", "0px")) \
+        or (vals.get("-webkit-text-stroke", ("0",))[0] not in ("0", "0px", "none"))
+
+
+UNSET = object()  # paint_of: the block does not set this
+
+
+def _back(c):
+    """A background color as the Hider keeps it: a color it paints (alpha 0.5
+    or more), None for one that lets the parent's show through, UNKNOWN_COLOR."""
+    if isinstance(c, tuple):
+        return c if c[3] >= 0.5 else None
+    return UNKNOWN_COLOR if c == UNKNOWN_COLOR else None
+
+
+def paint_of(vals):
+    """(text color, background, painted) a block sets: the text color as a
+    color tuple, None when its value is not known here, or UNSET; the
+    background as a painted color, None when it lets the parent's show
+    through, UNKNOWN_COLOR for an image or an unknown color, or UNSET;
+    painted True for a shadow, stroke or background clip."""
+    paint = UNSET
+    for p in ("-webkit-text-fill-color", "color"):
+        if p in vals:
+            c = parse_color(vals[p][0])
+            if c is not None:
+                paint = c if isinstance(c, tuple) else None
+                break
+    back = UNSET
+    if "background-image" in vals and vals["background-image"][0] not in ("none", "initial", "unset"):
+        back = UNKNOWN_COLOR
+    elif "background-color" in vals:
+        back = _back(parse_color(vals["background-color"][0]))
+    elif "background" in vals:
+        v = vals["background"][0]
+        if "url(" in v or "gradient(" in v or "image(" in v or "element(" in v:
+            back = UNKNOWN_COLOR
+        else:
+            back = _back(background_color(v))
+    return paint, back, _painted(vals)
+
+
+_PAINT_CACHE = {}
+
+
+def inline_paint(style):
+    """paint_of an inline style attribute (cached like inline_groups)."""
+    key = str(style or "")
+    got = _PAINT_CACHE.get(key)
+    if got is None:
+        got = paint_of(last_values(declarations(normalize_style(key))))
+        if len(key) <= 2000:
+            if len(_PAINT_CACHE) >= STYLE_CACHE_MAX:
+                _PAINT_CACHE.clear()
+            _PAINT_CACHE[key] = got
+    return got
+
+
+_LEGACY_HEX = re.compile(r"[0-9a-f]{6}|[0-9a-f]{3}")
+
+
+def legacy_color(v):
+    """A bgcolor or <font color> attribute as a color tuple, else None: a
+    color name or #hex, or hex digits with no '#'. 'transparent' is ignored
+    there, as HTML's legacy color parsing does."""
+    v = str(v or "").strip().lower()[:100]
+    if not v or v == "transparent":
+        return None
+    c = parse_color(v)
+    if c is None and _LEGACY_HEX.fullmatch(v):
+        c = parse_color("#" + v)
+    return c if isinstance(c, tuple) else None
 
 
 def style_groups(decls):
@@ -462,12 +641,7 @@ def style_groups(decls):
     its overflow); hides False means the block sets it back to visible.
     Within the block the last valid declaration wins, unless an earlier one
     is !important; an invalid value is ignored, as a browser does."""
-    vals = {}
-    for prop, val, imp in decls:
-        if prop in vals and vals[prop][1] and not imp:
-            continue
-        vals.pop(prop, None)  # keep the order of the last declarations (font-size, then a later font)
-        vals[prop] = (val, imp)
+    vals = last_values(decls)
     g = {}
 
     def put(group, hides, imp, extra=None):
@@ -492,15 +666,27 @@ def style_groups(decls):
         elif prop == "filter":
             m = re.search(r"(?<![a-z-])opacity\(([^()]{0,40})\)", v)
             n = number(m.group(1)) if m else None
-            put("filter", bool(m) and n is not None and n < ALPHA_MIN, imp)
+            b = re.search(r"(?<![a-z-])blur\(([^()]{0,40})\)", v)
+            px = to_px(b.group(1)) if b else None
+            put("filter", (bool(m) and n is not None and n < ALPHA_MIN) or (px is not None and px >= BLUR_MIN), imp)
         elif prop in ("font-size", "font"):
             e = font_entry(v) if prop == "font-size" else font_shorthand(v)
             if e is not None:
                 put("font-size", font_px(e, 16.0) <= FONT_MIN, imp, e)
         elif prop == "transform":
             put("transform", transform_hides(v), imp)
+            f = transform_factor(v)
+            if f is not None:  # read with the element's font size by the Hider; 16px on its own
+                put("shrink-transform", 16.0 * f <= FONT_MIN, imp, f)
         elif prop == "scale":
             put("scale", scale_hides(v), imp)
+            f = scale_factor(v)
+            if f is not None:
+                put("shrink-scale", 16.0 * f <= FONT_MIN, imp, f)
+        elif prop == "zoom":
+            f = zoom_factor(v)
+            if f is not None:
+                put("zoom", 16.0 * f <= FONT_MIN, imp, f)
         elif prop == "translate":
             put("translate", translate_hides(v), imp)
         elif prop == "clip":
@@ -508,15 +694,16 @@ def style_groups(decls):
         elif prop in ("clip-path", "-webkit-clip-path"):
             put("clip-path", clip_path_hides(v), imp)
         elif prop in OFFSET_PROPS:
-            put(prop, offset_hides(v), imp)
+            put(prop, offset_hides(v, prop in OFFSET_POSITIVE), imp)
         elif prop in OFFSET_SHORTHANDS:
-            hs = [offset_hides(t) for t in v.split(" ")[:4]]
-            put(prop, True if True in hs else (False if hs and None not in hs else None), imp)
+            put(prop, shorthand_offsets_hide(prop, v), imp)
 
-    # a box of 1px or less that hides its overflow
+    # a box of 1px or less that hides its overflow (an accordion that opens with a transition is shown:
+    # its text is the posting's, a click away)
     ov = [vals[p][0].split(" ") for p in ("overflow", "overflow-x", "overflow-y") if p in vals]
     ov_imp = any(vals[p][1] for p in ("overflow", "overflow-x", "overflow-y") if p in vals)
-    ov_hide = any(t in ("hidden", "clip") for parts in ov for t in parts)
+    ov_hide = any(t in ("hidden", "clip") for parts in ov for t in parts) and not any(
+        vals.get(p, ("none",))[0] not in ("none", "initial", "unset") for p in ("transition", "transition-property"))
     ov_show = bool(ov) and not ov_hide
     for dim in BOX_DIMS:
         if dim in vals:
@@ -545,11 +732,7 @@ def style_groups(decls):
         if paint == UNKNOWN_COLOR:
             put("color", False, paint_imp)
         else:
-            painted = any("text" in vals.get(p, ("",))[0].split(" ")
-                          for p in ("background-clip", "-webkit-background-clip")) \
-                or vals.get("text-shadow", ("none",))[0] not in ("none", "initial", "unset") \
-                or (vals.get("-webkit-text-stroke-width", ("0",))[0] not in ("0", "0px")) \
-                or (vals.get("-webkit-text-stroke", ("0",))[0] not in ("0", "0px", "none"))
+            painted = _painted(vals)
             if paint[3] < ALPHA_MIN:
                 put("color", not painted, paint_imp)
             else:
@@ -886,11 +1069,15 @@ class Rule:
 
 class Frame:
     __slots__ = ("desc", "hard", "vis", "color", "font", "hidden", "n", "types", "sib_first", "last_cids",
-                 "prev_cids")
+                 "prev_cids", "zoom", "bg", "paint", "shadow")
 
-    def __init__(self, desc, hard, vis, color, font, prev_cids):
+    def __init__(self, desc, hard, vis, color, font, prev_cids, zoom=1.0, bg=None, paint=None, shadow=False):
         self.desc, self.hard, self.vis, self.color, self.font = desc, hard, vis, color, font
-        self.hidden = hard or vis or color or font <= FONT_MIN
+        self.zoom = zoom          # scale and zoom factors of this element and its ancestors, multiplied
+        self.bg = bg              # the background behind its text when an inline style or bgcolor set it, else None
+        self.paint = paint        # its text color when an inline style or <font color> set it, else None
+        self.shadow = shadow      # a text shadow or stroke paints its text another way
+        self.hidden = hard or vis or color or font * zoom <= FONT_MIN
         self.n, self.types = 0, None  # children so far; tag -> children of that tag (made when needed)
         self.sib_first = None     # compound id -> child number of the first child that matched it
         self.last_cids = EMPTY    # compound ids the latest child matched
@@ -913,6 +1100,7 @@ class Hider:
         self.rules = 0
         self.css_read = 0
         self.budget = MATCH_BUDGET
+        self.incomplete = False  # the budget ran out: later rules were not checked and their text was kept
         self._sel_cache = {}
         self.hidden = False  # the innermost open element's text is hidden (kept by enter and leave)
 
@@ -1034,10 +1222,10 @@ class Hider:
         parent = self.frames[s - 1] if s >= 1 else self.top
         return (self.frames[s] if s < len(self.frames) else None), parent
 
-    def _match(self, rule, d, fail):
+    def _match(self, rule, d):
         """Does rule's selector match the element being entered (descriptor
         d)? Right to left over the open elements; when the budget is spent the
-        answer is fail (True for a rule that hides: fail closed)."""
+        answer is no and the page is marked incomplete (its text is kept)."""
         comps, combs = rule.comps, rule.combs
         if not self._test(comps[-1], d):
             return False
@@ -1045,7 +1233,8 @@ class Hider:
         pos = [n]
         for j in range(len(comps) - 2, -1, -1):
             if self.budget <= 0:
-                return fail
+                self.incomplete = True
+                return False
             c, cb = comps[j], combs[j]
             nxt = []
             if cb == ">":
@@ -1072,7 +1261,8 @@ class Hider:
                         if j == 0 or combs[j - 1] == " ":
                             break
                     if self.budget <= 0:
-                        return fail
+                        self.incomplete = True
+                        return False
             if not nxt:
                 return False
             pos = nxt
@@ -1100,28 +1290,38 @@ class Hider:
         d = (tag, id_, classes, a, parent.n, nt, not self.frames)
         prev_cids = parent.last_cids
         rules = self.hide or self.reset or self.sib
-        if not attrs and not rules and tag != "dialog":  # most elements of most pages: the parent's state
-            f = Frame(d, parent.hard, parent.vis, parent.color, parent.font, prev_cids)
+        if not attrs and not rules and tag not in ("dialog", "datalist"):  # most elements: the parent's state
+            f = Frame(d, parent.hard, parent.vis, parent.color, parent.font, prev_cids, parent.zoom, parent.bg,
+                      parent.paint, parent.shadow)
             self.frames.append(f)
             self.hidden = f.hidden
             return f.hidden
+        # a <datalist>'s options are never drawn; a <dialog> without open is closed
         hard = parent.hard or "hidden" in a or bool(classes & HIDDEN_CLASSES) \
-            or (tag == "dialog" and "open" not in a)
+            or (tag == "dialog" and "open" not in a) or tag == "datalist"
         own = {}
         if "style" in a:
             for g, e in inline_groups(a["style"]).items():
                 own[g] = (e, (e[1], 1, (0, 0, 0), 0))
         keys = self._keys(d) if rules else ()
         if not hard and (self.hide or self.reset):
-            hard = self._cascade(d, keys, own, parent)
+            self._cascade(d, keys, own, parent)
         if not hard and own:
             hard = any(e[0] for g, (e, _) in own.items() if g not in SOFT)
+        zoom = parent.zoom
         if own:
             vis = own["visibility"][0][0] if "visibility" in own else parent.vis
             color = own["color"][0][0] if "color" in own else parent.color
             font = font_px(own["font-size"][0][2], parent.font) if "font-size" in own else parent.font
+            for g in SHRINK:
+                if g in own:
+                    zoom *= own[g][0][2]
         else:
             vis, color, font = parent.vis, parent.color, parent.font
+        bg, paint, shadow = self._colors(a, tag, classes, id_, own, parent)
+        if not color and not shadow and isinstance(paint, tuple) and isinstance(bg, tuple) \
+                and _same_color(paint, bg):
+            color = True  # its text color is the background an ancestor's inline style or bgcolor paints
         if self.sib:
             cids = set()
             for key in keys:
@@ -1132,10 +1332,42 @@ class Hider:
                             parent.sib_first = {}
                         parent.sib_first.setdefault(cid, parent.n)
             parent.last_cids = frozenset(cids) if cids else EMPTY
-        f = Frame(d, hard, vis, color, font, prev_cids)
+        f = Frame(d, hard, vis, color, font, prev_cids, zoom, bg, paint, shadow)
         self.frames.append(f)
         self.hidden = f.hidden
         return f.hidden
+
+    @staticmethod
+    def _colors(a, tag, classes, id_, own, parent):
+        """(background, text color, shadow) of the element being entered, as
+        far as inline styles and the bgcolor and <font color> attributes tell:
+        a class or id lets a style sheet set either, so both become unknown
+        there unless the element sets them itself; a color a <style> rule set
+        is unknown too."""
+        plain = not classes and id_ is None
+        bg = parent.bg if plain else None
+        paint = parent.paint if plain else None
+        shadow = parent.shadow
+        if "bgcolor" in a:
+            c = legacy_color(a["bgcolor"])
+            if c is not None:
+                bg = _back(c) or bg
+        if tag == "font" and "color" in a:
+            c = legacy_color(a["color"])
+            if c is not None:
+                paint = c
+        if "style" in a:
+            p, b, painted = inline_paint(a["style"])
+            if p is not UNSET:
+                paint = p
+            if b is UNKNOWN_COLOR:
+                bg = None
+            elif b is not UNSET and b is not None:
+                bg = b
+            shadow = shadow or painted
+        if "color" in own and own["color"][1][1] == 0:
+            paint = None  # set by a <style> rule: its value is not kept
+        return bg, paint, shadow
 
     def leave(self):
         """The innermost open element closes."""
@@ -1155,8 +1387,9 @@ class Hider:
 
     def _cascade(self, d, keys, own, parent):
         """Merge the matching <style> rules into own (group -> (entry,
-        priority)) by the cascade; True when the budget ran out while a rule
-        that hides could still match (fail closed)."""
+        priority)) by the cascade. When the budget runs out first, the page
+        is marked incomplete and what the rules hid here is dropped: the text
+        is kept (a rule left unchecked might show it again)."""
         need = set()   # groups whose winner must be found: hidden by a rule, inline, or inherited
         for g, (e, _) in own.items():
             if e[0]:
@@ -1165,8 +1398,9 @@ class Hider:
             need.add("visibility")
         if parent.color:
             need.add("color")
-        if parent.font <= FONT_MIN:
+        if parent.font * parent.zoom <= FONT_MIN:
             need.add("font-size")
+            need.update(SHRINK)
         tested = set()
         hide, reset = self.hide, self.reset
         for key in keys:
@@ -1175,13 +1409,15 @@ class Hider:
                 continue
             for rule in rules:
                 if self.budget <= 0:
-                    return True
+                    return self._spent(own)
                 tested.add(id(rule))
-                if self._match(rule, d, True):
+                if self._match(rule, d):
                     self._consider(own, rule)
                     for g, e in rule.groups.items():
                         if e[0]:
                             need.add(g)
+        if self.incomplete and self.budget <= 0:
+            return self._spent(own)
         if need:
             for key in keys:
                 rules = reset.get(key)
@@ -1189,11 +1425,19 @@ class Hider:
                     continue
                 for rule in rules:
                     if self.budget <= 0:
-                        return False
+                        return self._spent(own)
                     if id(rule) in tested or need.isdisjoint(rule.groups):
                         continue
-                    if self._match(rule, d, False):
+                    if self._match(rule, d):
                         self._consider(own, rule)
+        return False
+
+    def _spent(self, own):
+        """The budget ran out: mark the page incomplete and keep the text
+        (drop what a <style> rule hid on this element; inline styles stand)."""
+        self.incomplete = True
+        for g in [g for g, (e, pr) in own.items() if e[0] and pr[1] == 0]:
+            del own[g]
         return False
 
     @staticmethod
@@ -1263,8 +1507,12 @@ def fold(text):
     return text if text.isascii() else unicodedata.normalize("NFKD", text).translate(_FOLD)
 
 
-_EARLY =(r"(?:previous|previously given|prior|above|earlier|preceding|foregoing|other|system|original|initial"
-          r"|old|former|existing|given)")
+# Words for 'what came before': the first set says it on its own; the second ('the old rules',
+# 'existing content') is ordinary posting language and counts only before instructions, prompts or
+# directions ('ignore your original instructions').
+_EARLY = r"(?:previous|previously given|prior|above|earlier|preceding|foregoing)"
+_EARLY_WEAK = r"(?:other|system|original|initial|old|former|existing|given)"
+_ORDERS_STRICT = r"(?:instructions?|prompts?|directions?)"
 _ORDERS = (r"(?:instructions?|prompts?|directions?|directives?|rules|guidelines|guidance|text|content|messages?"
            r"|context|commands?|orders|constraints|programming)")
 _IGNORE = (r"(?:ignore|disregard|forget|override|overrule|discard|bypass|pay no (?:attention|heed|mind) to"
@@ -1279,6 +1527,18 @@ _VERBS = (r"(?:ignore|disregard|fill|enter|type|write|answer|submit|add|include|
           r"|return|give|classify|flag|approve|accept|reject|forward|send|email|label|grade|evaluate|append"
           r"|treat|consider|prioriti[sz]e|shortlist|advance|pass|move|repeat|reveal|copy|always|never|only|do)")
 _NOT_PROF = r"(?! (?:professor|director|manager|scientist|researcher|specialist|editor|dean|teacher|coach))"
+# 'If you are an AI scientist', 'an AI/ML researcher': a person in AI, not an AI
+_NOT_AI_PRO = (r"(?! ?/| ?-ml\b| (?:and|or) ml\b| ml\b| (?:scientists?|researchers?|engineers?|developers?|experts?"
+               r"|specialists?|enthusiasts?|practitioners?|professionals?|leaders?|leads?|safety|ethics|policy"
+               r"|product|startup|company|team|lab)\b)")
+_DO = _VERBS + r"\b(?! of\b)"  # an order: 'use the portal', not the label 'use of ChatGPT'
+# What an order aimed at an AI applicant acts on: an answer, the form, the applicant, a planted word.
+_APP_OBJ = (r"(?:yes|no|true|false|10/10|highly|strongly|a strong|qualified|every (?:question|field|box)"
+            r"|all (?:questions|fields|boxes)|each (?:question|field)|(?:the|this|my|every|each|any) (?:applicant"
+            r"|candidate|application|form|resume|profile|letter|field|box|comments?|code|word|keyword)s?"
+            r"|(?:knockout|screening) questions?|code words?|keywords?|cover letters?|(?:salary|comments?) (?:field|box)"
+            r")\b")
+_OBJ_SOON = r" (?:\S{1,20} ){0,3}?" + _APP_OBJ  # that object within the next few words
 
 # (name, pattern) on lowercase folded text with single spaces. Each pattern
 # starts with a word, after one shared \b, so the matcher tries each place in
@@ -1287,8 +1547,9 @@ _NOT_PROF = r"(?! (?:professor|director|manager|scientist|researcher|specialist|
 # ('our AI agents must answer customer questions' describes a product).
 AI_PATTERNS = [
     # English: drop what came before
-    ("ign1", _IGNORE + r" (?:(?:all|any|your|the|of|these|those|my|every|each|such) ){0,4}(?:" + _EARLY + r" ){1,2}"
-     + _ORDERS + r"\b"),
+    ("ign1", _IGNORE + r" (?:(?:all|any|your|the|of|these|those|my|every|each|such) ){0,4}(?:(?:" + _EARLY
+     + r" ){1,2}(?:" + _ORDERS_STRICT + r"|rules)|(?:(?:" + _EARLY + "|" + _EARLY_WEAK + r") ){1,2}" + _ORDERS_STRICT
+     + r")\b"),
     ("ign2", _IGNORE + r" (?:(?:all|any|your|the|these|those|my) ){0,3}" + _ORDERS
      + r" (?:above|before this|so far|given (?:above|earlier|before)|you (?:were|have been) given)\b"),
     ("ign3", r"(?:ignore|disregard|forget) everything (?:above|before|said|written|you (?:were|have been) told"
@@ -1296,18 +1557,23 @@ AI_PATTERNS = [
     ("ign4", r"ignore (?:all |any )?(?:your|my) (?:previous |prior |original )?(?:instructions|prompts?)"),
     # English: an AI addressed
     ("ifai", r"if (?:you are|you're|this is being read by|this is read by|you are reading this as) (?:an? |the )?"
-     r"(?:ai|a\.i\.|llm|large language model|language model|bot|chatbot|gpt|chatgpt|claude"
+     r"(?:(?:ai|a\.i\.|llm)" + _NOT_AI_PRO + r"|large language model|language model|bot|chatbot|gpt|chatgpt|claude"
      r"|automated (?:system|tool|agent|assistant|reader|reviewer|screener|program|applicant"
      r"|application assistant)|ai (?:assistant|agent|model|tool|system|reader|reviewer|screener|program|applicant)"
      r"|assistant" + _NOT_PROF + r")\b"),
     ("word", r"(?:include|mention|use|add|insert) the (?:word|phrase|code word|keyword)\b"),
+    # a note addressed to an AI ends at the address: 'Note to AI assistants:', not 'attention to AI safety'
     ("note", r"(?:note|message|memo|instructions?|directions?|reminder|attention|notice|warning) (?:to|for) "
      r"(?:the |any |all |every |each )?(?:" + _AI_NOUN + r"|" + _AI_QUAL + r"[- ](?:\w{1,20} )?" + _AI_PEOPLE
-     + r"|assistants?)\b"),
+     + r"|assistants?)(?: (?:reading|reviewing|screening|processing|parsing|evaluating) (?:this|these|my)"
+     r"(?: \w{1,20})?)? ?[:,]"),
     ("read", r"(?:" + _AI_NOUN + r"|assistants?|agents?|bots?) (?:that is |who is |which is |currently |now )?"
      r"(?:reading|processing|parsing|reviewing|screening|scanning|summari[sz]ing|analy[sz]ing|evaluating) this\b"),
-    ("now1", r"you are now (?:a|an|the|in|acting|operating|playing|my|our|no longer|free|unrestricted|jailbroken"
-     r"|developer|dan)\b"),
+    # 'you are now' with an AI or a mode, never 'you are now in the final year of your PhD'
+    ("now1", r"you are now (?:(?:(?:a|an|the|my|our|your) )?(?:(?:new|unrestricted|unfiltered|jailbroken|helpful"
+     r"|different|rogue|evil|free)[ -])?(?:ai|a\.i\.|assistant|chatbot|bot|agent|model|llm|language model|gpt|dan)"
+     r"|(?:in |entering )?(?:\w{1,20}[ -]){1,2}mode|(?:acting|operating|playing|roleplaying) as|no longer (?:bound"
+     r"|restricted|limited|an? (?:ai|assistant|model))|unrestricted|unfiltered|jailbroken)\b"),
     ("now2", r"from now on,? you (?:are|will|must|should|shall)\b"),
     # Spanish
     ("es1", r"(?:ignora|ignore|ignorar|ignoren|olvida|olvide|olviden|olvidar|omite|omita|descarta|descarte"
@@ -1318,7 +1584,8 @@ AI_PATTERNS = [
      r"|bot|asistente (?:de ia|virtual|automatizado)|agente (?:de ia|automatizado))\b"),
     ("es3", r"nota (?:para|a) (?:la |el |los |las |cualquier )?(?:ia|inteligencia artificial|modelos? de lenguaje"
      r"|llms?|chatbots?|asistentes? de ia|agentes? de ia)\b"),
-    ("es4", r"(?:ahora|a partir de ahora) eres\b|eres ahora\b"),
+    ("es4", r"(?:(?:ahora|a partir de ahora) eres|eres ahora) (?:(?:una?|el|la|en) )?(?:\w{1,20} )?(?:ia|asistente"
+     r"|agente|bot|robot|chatbot|modelo|modo)\b"),
     # French
     ("fr1", r"(?:ignore|ignorez|ignorer|oublie|oubliez|oublier|ne tiens pas compte|ne tenez pas compte"
      r"|fais abstraction|faites abstraction) (?:de |des |d')?(?:(?:toutes|tous|les|tes|vos|ces|l') ?){0,3}"
@@ -1328,7 +1595,8 @@ AI_PATTERNS = [
      r"|robot|bot|assistant (?:ia|virtuel|automatise)|agent (?:ia|conversationnel|automatise))\b"),
     ("fr3", r"note (?:a|pour|aux) (?:l' ?|les |la )?(?:ia|intelligence artificielle|modeles? de langage|llms?"
      r"|assistants? (?:ia|virtuels?)|agents? ia)\b"),
-    ("fr4", r"(?:tu es|vous etes) (?:maintenant|desormais|a present)\b"),
+    ("fr4", r"(?:tu es|vous etes) (?:maintenant|desormais|a present) (?:(?:une?|le|la|l'|en) ?)?(?:\w{1,20} )?"
+     r"(?:ia|assistante?|agent|robot|bot|chatbot|modele|mode)\b"),
     # German
     ("de1", r"(?:ignoriere|ignorier|ignorieren sie|ignoriert|vergiss|vergessen sie|missachte|missachten sie"
      r"|uberspringe) (?:(?:alle|samtliche|die|deine|ihre|jegliche) ){0,3}(?:vorherigen|vorhergehenden|bisherigen"
@@ -1338,7 +1606,8 @@ AI_PATTERNS = [
      r"|ki-assistent\w{0,3}|ki-agent\w{0,3}) (?:bist|sind)\b"),
     ("de3", r"hinweis (?:an|fur) (?:die |alle |jede )?(?:ki|kunstliche intelligenz|sprachmodelle?|llms?"
      r"|ki-\w{1,20})\b"),
-    ("de4", r"(?:du bist|sie sind) (?:jetzt|nun|ab sofort|ab jetzt) (?:ein|eine|der|die|im|kein|keine)\b"),
+    ("de4", r"(?:du bist|sie sind) (?:jetzt|nun|ab sofort|ab jetzt) (?:(?:ein|eine|einen|der|die|das|im|kein|keine) )?"
+     r"(?:\w{1,20} )?(?:ki|ki-\w{1,20}|assistent\w{0,2}|agent\w{0,2}|bot|chatbot|sprachmodell|modell|\w{0,20}modus)\b"),
     # Portuguese
     ("pt1", r"(?:ignore|ignora|ignorar|ignorem|esqueca|esquece|esquecer|esquecam|desconsidere|desconsidera"
      r"|desconsiderar|despreze) (?:(?:todas|todos|as|os|suas|tuas|essas|estas|quaisquer) ){0,3}(?:instrucoes"
@@ -1348,19 +1617,27 @@ AI_PATTERNS = [
      r"|chatbot|bot|robo|assistente (?:de ia|virtual)|agente (?:de ia|virtual))\b"),
     ("pt3", r"nota (?:para|aos?|as) (?:a |o |as |os |qualquer )?(?:ia|inteligencia artificial|modelos? de linguagem"
      r"|llms?|assistentes? de ia|agentes? de ia)\b"),
-    ("pt4", r"(?:agora voce e|voce agora e|a partir de agora voce e|voce e agora)\b"),
+    ("pt4", r"(?:agora voce e|voce agora e|a partir de agora voce e|voce e agora) (?:(?:uma?|o|a|em) )?(?:\w{1,20} )?"
+     r"(?:ia|assistente|agente|bot|robo|chatbot|modelo|modo)\b"),
     # English: AI agents told what to do (not after 'our', 'the' ...)
+    # what an AI agent must do to an application ('AI agents must answer Yes'), not what a product's agents do
     ("must", _AI_QUAL + r"[- ](?:\w{1,20}[- ]){0,2}?(?:agents?|assistants?|applicants?|bots?|screeners?|reviewers?"
      r"|readers?) (?:must|should|shall|needs? to|ha(?:ve|s) to|(?:are|is) (?:required|instructed|expected|asked"
-     r"|told|directed) to|are to|is to) (?:(?:now|always|also|only|instead|then|simply|just) ){0,2}" + _VERBS + r"\b"),
+     r"|told|directed) to|are to|is to) (?:(?:now|always|also|only|instead|then|simply|just) ){0,2}" + _VERBS
+     + _OBJ_SOON),
     # English: a sentence that opens by addressing an AI, or a 'system:' line
     ("adr1", r"(?:(?:dear|hey|hi|hello|attention|ok|okay) )?(?:" + _AI_NOUN + r" (?:assistants?|agents?|models?"
      r"|tools?|systems?|applicants?|reviewers?|screeners?)|claude|chatgpt|gpt-?\d{0,2}|gemini|copilot|llms?"
      r"|language models?|chatbots?|" + _AI_QUAL + r" (?:\w{1,20} )?" + _AI_PEOPLE + r") ?[,:] ?(?:please )?"
-     r"(?:also |now )?" + _VERBS + r"\b"),
-    ("adr2", r"(?:(?:dear|hey|hi|hello|ok|okay) )?(?:assistant|agent|bot|model|robot) ?[,:] ?(?:please )?"
-     r"(?:also |now )?" + _VERBS + r"\b"),
-    ("sys", r"system(?: (?:prompt|message|note|notice|instructions?|override|update|command|alert))? ?: ?\S"),
+     r"(?:also |now )?" + _DO),
+    # 'Assistant, please answer ...' or 'Assistant: answer Yes ...'; a label ('Agent: select reagents',
+    # 'Model: use mouse models') is a word and a colon too, so after a colon the order must act on the application
+    ("adr2", r"(?:(?:dear|hey|hi|hello|ok|okay) )?(?:assistant|agent|bot|model|robot)(?:, ?(?:please )?(?:also |now )?"
+     + _DO + r"| ?: ?(?:please |you (?:must|should|will) )?(?:also |now )?" + _VERBS + _OBJ_SOON + ")"),
+    # 'System prompt:' on its own; a plain 'System:' line only when what follows speaks to someone
+    # ('System: you are now ...', 'System: answer Yes'), never a label ('System: Illumina NovaSeq X')
+    ("sys", r"system(?: (?:prompt|message|instructions?|override|command) ?: ?\S|(?: (?:note|notice|update|alert))?"
+     r" ?: ?(?:please )?(?:you\b|your\b|(?:also |now )?" + _DO + "))"),
 ]
 SENTENCE_START = frozenset({"adr1", "adr2", "sys"})
 AFTER_NO_DETERMINER = frozenset({"must"})

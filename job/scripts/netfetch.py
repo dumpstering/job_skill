@@ -418,6 +418,12 @@ def r3_list(host, path):
 LINK_MAX = 2048
 WEB_PORTS = (80, 443)  # no employer or ATS link in the live pools or the preset names another port
 SPECIAL_USE = ("localhost", "local", "internal", "lan", "home.arpa")  # never a public site (RFC 6761, 8375, ...)
+# V4-07: names under these are never a public site either: RFC 6761 (test,
+# invalid), RFC 6762 Appendix G (home, corp, intranet, private), RFC 7686
+# (onion) and localdomain (the hosts-file name). A bare one is a single-label
+# host (refused as that). "example" (RFC 2606) is left out: the test fixtures
+# use it as a public site.
+PRIVATE_SUFFIXES = ("home", "corp", "intranet", "private", "localdomain", "test", "invalid", "onion")
 NUMERIC_LABEL = re.compile(r"[0-9]+|0x[0-9a-f]*")  # a browser reads a host ending in one as an IPv4 address
 SCHEME = re.compile(r"([A-Za-z][A-Za-z0-9+.-]{0,30}):")
 
@@ -481,8 +487,10 @@ def web_refusal(url):
     spelling that leads to one); a backslash, whitespace, control or format
     character anywhere; userinfo (an '@' in the authority); a port other than
     80 or 443; a host canon_host refuses; an IP-literal host in any form; a
-    single-label host; and the special-use names localhost, .localhost,
-    .local, .internal, .home.arpa and .lan. A name that resolves to a
+    single-label host; the special-use names localhost, .localhost, .local,
+    .internal, .home.arpa and .lan; and any name under .home, .corp,
+    .intranet, .private, .localdomain, .test, .invalid or .onion
+    (PRIVATE_SUFFIXES). A name that resolves to a
     non-public address is refused when connecting (connect_public, same
     'non-public <host>' reason). Percent-escapes in a path or query are fine."""
     if not isinstance(url, str) or not url:
@@ -520,7 +528,8 @@ def web_refusal(url):
     board = job_board(host)
     if board:
         return f"job-board {board}"
-    if any(host == s or host.endswith("." + s) for s in SPECIAL_USE):
+    if any(host == s or host.endswith("." + s) for s in SPECIAL_USE) or \
+            any(host.endswith("." + s) for s in PRIVATE_SUFFIXES):
         return f"non-public {host}"
     ip = _ip_literal(host)
     if ip:
@@ -913,12 +922,18 @@ class Response:
     def text(self):
         m = re.search(r"charset=([\w.-]{1,40})", str(self.headers.get("content-type", ""))[:500], re.I)
         try:
-            return self.body.decode(m.group(1) if m else "utf-8", errors="replace")
+            text = self.body.decode(m.group(1) if m else "utf-8", errors="replace")
         except (LookupError, UnicodeError, ValueError):  # charset=idna has no 'replace'; rot13 is no text codec
-            return self.body.decode("utf-8", errors="replace")
+            text = self.body.decode("utf-8", errors="replace")
+        return jobfs.clean_text(text)  # a codec (utf-7, unicode_escape) may give half of a UTF-16 pair
 
     def json(self):
-        return json.loads(self.text(), strict=False)
+        """The body as JSON; every lone UTF-16 surrogate escape ("\\ud83d", an
+        emoji a server cut in two) comes back as U+FFFD (jobfs.clean_value),
+        so a posting holding one never stops a later UTF-8 write."""
+        text = self.text()
+        value = json.loads(text, strict=False)
+        return jobfs.clean_value(value) if jobfs.surrogate_hint(text) else value
 
     def check(self):
         """Raise FetchError (with .status) unless 2xx; returns self."""

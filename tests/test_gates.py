@@ -1032,6 +1032,46 @@ def test_untitled_list_records():
         assert [r["gate"] for r in discards(root)] == ["G4"], discards(root)
 
 
+def test_untitled_detail_never_pooled():
+    """L4-06: a Phenom list record with no title whose detail read failed (a
+    closed job's page answers 404, and the list-level record is kept) used to
+    pass G3 and G4 as unknown twice and be pooled with a blank title, place
+    and family, so a thin day queued it as 'AbbVie - Role'. It is never
+    pooled now: one SKIP line, no discard row, no seen record, so the next
+    run reads its detail again; the titled sibling is pooled as before."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = copy_root(tmp)
+        lines = []
+        run = gates.GateRun(root, DAY, emit=lines.append)
+        mk = make_gates_root.posting
+        recs = [mk(f"phenom:careers.abbvie.example:{j}", "", f"https://careers.abbvie.example/en/job/x-jid-{j}",
+                   ats="phenom", company="AbbVie", location="", city="", state="", country="", text="")
+                for j in ("29335", "34467", "40001")]
+        assert all(run.keep(jobfs.Posting.from_dict(dict(r))) for r in recs)
+        run.process([detail_reading(recs[0]), detail_reading(recs[1], title="  "),
+                     detail_reading(recs[2], title="QC Microbiologist", title_norm="qc microbiologist",
+                                    location="Springfield, IL", city="Springfield", text=make_gates_root.MICRO)])
+        run.save()
+        assert sorted(pool(root)) == [recs[2]["job_key"]], sorted(pool(root))
+        assert not any(r["job_key"] in (recs[0]["job_key"], recs[1]["job_key"]) for r in discards(root)), \
+            discards(root)
+        assert lines == [f"SKIP {r['job_key']} no title: the detail read gave none; judged again next run"
+                         for r in recs[:2]], lines
+        run2 = gates.GateRun(root, DAY)
+        assert run2.keep(jobfs.Posting.from_dict(dict(recs[0]))), "not recorded: judged again next run"
+        assert not run2.keep(jobfs.Posting.from_dict(dict(recs[2]))), "the pooled one is seen"
+        # a blank item pooled before this rule (the live day 4 pool held two) leaves the pool on the next save
+        data = gates.load_pool(root)
+        data["items"].append(dict(data["items"][0], job_key="phenom:careers.abbvie.example:1", title="",
+                                  family="", location=""))
+        jobfs.atomic_write_json(jobfs.Folder(root).pool_json, data)
+        lines.clear()
+        run3 = gates.GateRun(root, DAY, emit=lines.append)
+        run3.save()
+        assert sorted(pool(root)) == [recs[2]["job_key"]], sorted(pool(root))
+        assert lines == ["SKIP 1 pool item with no title dropped from the pool"], lines
+
+
 def test_pass_stops_halfway():
     """PIPE-05: a gate pass that stops partway (an exception, a kill) leaves
     no 'pooled' seen record for postings pool.json never got, so the next
@@ -1276,7 +1316,7 @@ def main():
     for fn in (test_every_gate, test_knockouts, test_freshness_and_repost, test_undated_board,
                test_ai_text_parked_once, test_profile_edit_reopens, test_two_stage_keep, test_dormant_board, test_explain, test_terms,
                test_preset, test_live_day_corpus, test_place_rules, test_detail_rejudged, test_untitled_list_records,
-               test_pass_stops_halfway, test_g9_requirements, test_pool_age_basis, test_g1_lookalike_host,
+               test_untitled_detail_never_pooled, test_pass_stops_halfway, test_g9_requirements, test_pool_age_basis, test_g1_lookalike_host,
                test_two_openings_one_title, test_link_schemes_and_canonical_hosts, test_one_bad_posting,
                test_requirement_scan_bounded, test_labeled_pool_d6, test_d6_title_rules, test_g9_avoid,
                test_fit_overlap, test_office_labels, test_second_ring_set_aside, test_labeled_pools_r6,

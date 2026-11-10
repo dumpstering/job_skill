@@ -855,12 +855,42 @@ def test_one_link_refusal():
         socket.getaddrinfo = real_gai
 
 
+def test_json_lone_surrogate():
+    """V4-01: a board answer whose JSON holds half of a UTF-16 pair (a lone
+    surrogate escape) comes back from Response.json with U+FFFD in its place,
+    a whole pair as its one character, so the posting never stops a later
+    UTF-8 write (posting.md, discards.csv)."""
+    bs = "\\"
+    body = ('[{"text": "QC ' + bs + 'ud83d", "t' + bs + 'udc00": "' + bs + 'ud83d' + bs + 'ude00"}]').encode("ascii")
+    r = netfetch.Response("https://api.lever.co/v0/postings/x", 200, {"Content-Type": "application/json"}, body)
+    assert r.json() == [{"text": "QC " + chr(0xFFFD), "t" + chr(0xFFFD): chr(0x1F600)}], ascii(r.json())
+    r = netfetch.Response("https://x.example/", 200, {"Content-Type": "application/json; charset=utf-7"},
+                          b'{"a": "+2D0-"}')  # utf-7 for a lone 0xD83D
+    assert "\ud83d" not in r.text() and r.json() == {"a": chr(0xFFFD)}, ascii(r.text())
+
+
+def test_special_use_names():
+    """V4-07: the private-use and special-use names (RFC 6761 test and
+    invalid, RFC 6762 Appendix G home, corp, intranet, private and lan, RFC
+    7686 onion, localdomain) are non-public to web_refusal, so no OPEN line,
+    hyperlink, TRY or fetch is ever made for one; a public name that only
+    starts or contains those words is not."""
+    for host in ("hr.corp", "router.home", "wiki.intranet", "files.private", "nas.localdomain",
+                 "localhost.localdomain", "x.test", "x.invalid", "abc.onion", "printer.local", "a.home.arpa",
+                 "HR.CORP", "hr.corp."):
+        assert netfetch.web_refusal(f"https://{host}/jobs/1") == f"non-public {host.lower().rstrip('.')}", host
+        assert netfetch.Policy(unattended=False).reason(f"https://{host}/jobs/1").startswith("non-public "), host
+    for host in ("jobs.homedepot.com", "careers.corporate.com", "jobs.private-equity.com", "testbio.com",
+                 "www.onion-labs.com", "careers.example.com"):
+        assert netfetch.web_refusal(f"https://{host}/jobs/1") is None, host
+
+
 def main():
     for t in (test_cli_policy, test_policy_rules, test_public_address_guard, test_proxy_means_no_fetch,
               test_robots_rules, test_robots_fetching_and_cache, test_politeness, test_size_cap,
               test_lookalike_hosts, test_canonical_host, test_encoded_paths, test_robots_bounded,
               test_fetch_deadline, test_odd_charset, test_crawl_delay_limits, test_robots_redirect_loop,
-              test_one_link_refusal):
+              test_one_link_refusal, test_json_lone_surrogate, test_special_use_names):
         t()
         print("ok", t.__name__)
     if os.environ.get("JOB_SKILL_LIVE") == "1":

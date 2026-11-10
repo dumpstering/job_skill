@@ -8,6 +8,8 @@ and copies that day for each case. Every case pins the clock (JOB_SKILL_NOW)
 and sets JOBRUNNER_HOME to a temp folder, so nothing touches the real
 %LOCALAPPDATA%\\JobRunner. Exits non-zero on the first failure and prints PASS.
 """
+import contextlib
+import io
 import json
 import re
 import os
@@ -1419,6 +1421,136 @@ def test_diy_sheets_per_item():
     print("ok one answer sheet per do-it-yourself job, even at one employer")
 
 
+def test_lone_surrogate_board():
+    """V4-01: a board answer holding half of a UTF-16 pair (a lone surrogate
+    escape in each Lever posting's text, an emoji a server cut in two) never
+    stops the daily: the postings are pooled and queued with U+FFFD in their
+    files, and status.json records the day."""
+    fresh = TMP / "lone_board" / "JobSearch"
+    shutil.copytree(FIXTURE, fresh)
+    pool_path = fresh / "state" / "pool.json"  # an empty pool: today's list is the boards' new postings
+    pool = json.loads(pool_path.read_text(encoding="utf-8"))
+    jobfs.atomic_write_json(pool_path, {k: v for k, v in pool.items() if k not in ("_rev", "_sha256", "items")}
+                            | {"items": []})
+    boards_fx = TMP / "lone_board" / "boards"
+    shutil.copytree(BOARDS, boards_fx)
+    lever = boards_fx / "lever_synthego.json"
+    text = lever.read_text(encoding="utf-8")
+    hits = 0
+    for p in json.loads(text):
+        frag = json.dumps((p.get("description") or "")[:40])[1:-1]
+        if len(frag) >= 20 and frag in text:
+            text = text.replace(frag, "\\ud83d " + frag, 1)
+            hits += 1
+    assert hits and "\\ud83d" in text
+    lever.write_text(text, encoding="utf-8")
+    code, lines, err = run("daily", fresh, "--date", DAY, offline=boards_fx, now="2026-11-06T13:30:00Z")
+    assert code == 0 and lines[-1].startswith("DAILY ok queue="), (lines[-4:], err[-1500:])
+    q = json.loads(jobfs.Folder(fresh).queue_json(DAY).read_text(encoding="utf-8"))
+    lever = [it for it in q["items"] if it["job_key"].startswith("lever:")]
+    assert lever, [it["job_key"] for it in q["items"]]
+    mds = [(fresh / it["folder"] / "posting.md").read_text(encoding="utf-8") for it in lever]
+    assert any(chr(0xFFFD) in md for md in mds) and not any("\ud83d" in md for md in mds)
+    assert status_of(fresh)["last_daily"]["ok"] is True
+    print("ok a lone surrogate in a board answer: pooled and queued as U+FFFD, the daily ends DAILY ok")
+
+
+def test_daily_error_recorded():
+    """V4-01: an error inside the daily that is not a config error (a
+    ValueError or UnicodeError from bad data) is logged with its traceback and
+    recorded as last_daily ok=false in status.json, so the card can say the
+    day failed; only a ConfigError is the one-line 'fix your config' exit."""
+    fresh = TMP / "daily_error" / "JobSearch"
+    shutil.copytree(FIXTURE, fresh)
+    jobrunner, _ = in_process(fresh, cmd="daily", offline=BOARDS, date=DAY)
+    import jobqueue
+    real_discover, real_build = jobrunner.discover, jobqueue.build
+    jobrunner.discover = lambda run_: (dict.fromkeys(jobrunner.GATE_COUNTS, 0), [], [])
+    jobqueue.build = lambda *a, **k: (_ for _ in ()).throw(UnicodeEncodeError("utf-8", "x", 0, 1, "surrogates"))
+    out = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(out):
+            code = jobrunner.main(["daily", "--root", str(fresh), "--offline", str(BOARDS), "--date", DAY])
+    finally:
+        jobrunner.discover, jobqueue.build = real_discover, real_build
+        os.environ.pop("JOB_SKILL_NOW", None)
+    assert code == 1 and "ERROR daily stopped: UnicodeEncodeError: " in out.getvalue(), out.getvalue()[-600:]
+    last = status_of(fresh)["last_daily"]
+    assert last["ok"] is False and last["error"].startswith("UnicodeEncodeError"), last
+    log = (fresh / "logs" / f"runner_{DAY}.log").read_text(encoding="utf-8")
+    assert "Traceback (most recent call last)" in log, log[-1500:]
+    print("ok an unexpected ValueError in the daily: traceback logged, last_daily ok=false")
+
+
+def test_request_marker_kept_while_pending():
+    """V4-03: a request stopped twice is answered REJECTED; when its file
+    cannot be moved then (OneDrive or a scanner holding it), the marker stays
+    while the file waits, and the next run moves the file without running the
+    handler: never a third start."""
+    root = copy_day("marker_pending")
+    jobrunner, r = in_process(root)
+    real = jobrunner.REQUEST_HANDLERS["more"]
+    calls = []
+    jobrunner.REQUEST_HANDLERS["more"] = lambda run_, args, lines: calls.append(1) or (True, {})
+    rid = "20261106T170000Z_0000aab1"
+    path = request_file(root, "more", {}, rid)
+    real_replace = os.replace
+
+    def held(src, dst):
+        if Path(src).name == path.name:
+            raise PermissionError(32, "The process cannot access the file because it is being used by another process")
+        return real_replace(src, dst)
+    try:
+        jobrunner.note_request_start(r, rid, "more", 2)  # two starts the tick's time limit stopped
+        os.replace = held
+        try:
+            jobrunner.handle_request(r, path, in_tick=True)
+            raise AssertionError("the held request file was moved")
+        except PermissionError:
+            pass
+        finally:
+            os.replace = real_replace
+        assert result_of(root, rid)["ok"] is False and path.exists()
+        assert jobrunner.prune_request_starts(r) == 0 and jobrunner.request_start_path(r, rid).exists(), \
+            "the marker of a request still waiting was pruned"
+        assert jobrunner.handle_request(r, path, in_tick=True)
+        assert calls == [] and not path.exists() and not jobrunner.request_start_path(r, rid).exists(), calls
+        assert result_of(root, rid)["lines"][0].startswith("REJECTED this request was started 2 times")
+        # answered and moved: now the marker would be pruned like any answered one
+        jobrunner.note_request_start(r, rid, "more", 1)
+        assert jobrunner.prune_request_starts(r) == 1
+        r.flush_log()
+    finally:
+        jobrunner.REQUEST_HANDLERS["more"] = real
+        os.replace = real_replace
+        os.environ.pop("JOB_SKILL_NOW", None)
+    print("ok a request whose file could not be moved keeps its marker and is never started a third time")
+
+
+def test_daily_time_budget():
+    """V4-05: a daily that has used its discovery time (stalled boards on a
+    slow network) reads no more boards and skips the aggregators and leads,
+    each with one WARN line, and still builds today's list from the pool."""
+    fresh = TMP / "time_budget" / "JobSearch"
+    shutil.copytree(FIXTURE, fresh)
+    jobrunner, r = in_process(fresh, cmd="daily", offline=BOARDS, date=DAY)
+    r.started = time.monotonic() - jobrunner.DISCOVERY_SECONDS - 60
+    try:
+        assert jobrunner.daily(r) == 0
+    finally:
+        os.environ.pop("JOB_SKILL_NOW", None)
+        r.flush_log()
+    warns = [ln for ln in r.log_lines if ln.startswith("WARN")]
+    assert any(ln.startswith("WARN boards skipped: the run's time for discovery is used; not read today: ")
+               for ln in warns), warns
+    assert "WARN aggregators skipped: the daily has run 76 minutes; today's list is built first" in warns, warns
+    assert "WARN leads skipped: the daily has run 76 minutes; today's list is built first" in warns, warns
+    assert not any(ln.startswith("BOARD ") for ln in r.log_lines), "a board was read past the budget"
+    assert jobfs.Folder(fresh).queue_json(DAY).exists() and r.log_lines[-1].startswith("DAILY ok queue="), \
+        r.log_lines[-3:]
+    print("ok a daily past its discovery time skips the boards, aggregators and leads and builds the list")
+
+
 def main():
     tests = [test_request_cli, test_selftest, test_installer_dry_run, test_cmd_hash_mismatch, test_cmd_planted_files,
              test_config_non_ascii, test_live_install, test_locked, test_killed_lock, test_idle_tick,
@@ -1427,7 +1559,8 @@ def main():
              test_session_before_queue, test_held_files, test_carried_folder_reapproval, test_relative_root_and_log,
              test_offline_morning, test_liveness_hosts, test_docs, test_request_attempts, test_request_hosts,
              test_fail_soft_units, test_diy_sheets_per_item, test_deep_files, test_tick_units, test_liveness_budget,
-             test_request_markers]
+             test_request_markers, test_lone_surrogate_board, test_daily_error_recorded,
+             test_request_marker_kept_while_pending, test_daily_time_budget]
     if sys.argv[1:]:  # python tests/test_runner.py test_locked test_missed_daily
         tests = [t for t in tests if t.__name__ in sys.argv[1:]]
     try:

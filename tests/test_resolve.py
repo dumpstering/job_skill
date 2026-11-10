@@ -25,6 +25,7 @@ os.environ["JOB_SKILL_NOW"] = "2026-11-12T15:00:00Z"
 import aggregators  # noqa: E402
 import boards  # noqa: E402
 import jobfs  # noqa: E402
+import jobkey  # noqa: E402
 import leads  # noqa: E402
 import netfetch  # noqa: E402
 import resolve  # noqa: E402
@@ -217,6 +218,53 @@ def test_probe_url():
         assert res.returncode == 7 and res.stdout.strip() == "DENY job-board linkedin.com", res.stdout
 
 
+PHENOM_FIX = HERE / "fixtures" / "resolve_phenom"
+
+
+def test_phenom_landing_page():
+    """L4-01: Sutter Health and Eli Lilly run Phenom career sites over Workday
+    tenants. Their landing pages (the '<company> careers' search result) name
+    no ATS, so probe_url said DETECT none and every lead went to the
+    do-yourself list. A Phenom page with no ATS link now leads to one more
+    same-host page, the site's own job search (from its JSON-LD SearchAction),
+    whose apply links name the tenant, and the company is remembered. A job
+    page names it at once (no second request). Fixtures: trimmed public pages."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = make_root(tmp)
+        for company, url, search, want, board, site, host in (
+                ("Sutter Health", "https://jobs.sutterhealth.org/us/en",
+                 "https://jobs.sutterhealth.org/us/en/search-results?keywords=",
+                 "DETECT workday:sutterhealth/SH@wd1.myworkdaysite.com", "sutterhealth", "SH", "wd1.myworkdaysite.com"),
+                ("Eli Lilly and Company", "https://careers.lilly.com/us/en",
+                 "https://careers.lilly.com/us/en/search-results?keywords=",
+                 "DETECT workday:lilly/LLY@lilly.wd115.myworkdayjobs.com", "lilly", "LLY",
+                 "lilly.wd115.myworkdayjobs.com")):
+            f, lines = netfetch.Fetcher(root=root, offline=PHENOM_FIX, cookies=True), []
+            r = resolve.probe_url(root, url, company, "Lab Associate II", "Livermore, CA", fetcher=f, today=D1,
+                                  emit=lines.append)
+            assert lines == [f"PHENOM {search}", want], lines
+            assert r["ok"] and probes(f) == [url, search], probes(f)
+            known = json.loads((root / "state" / "company_ats.json").read_text(encoding="utf-8"))
+            c = known[jobkey.norm_company(company)]
+            assert (c["ats"], c["board"], c["site"], c["host"], c["how"]) == ("workday", board, site, host,
+                                                                              "probe_url"), c
+            specs = resolve.Resolver(root, D1, f, emit=lambda s: None).known_specs(jobkey.norm_company(company))
+            assert [(s.ats, s.board, s.site, s.host) for s in specs] == [("workday", board, site, host)], specs
+        job = "https://jobs.sutterhealth.org/us/en/job/R-144891/Lab-Associate-III-Microbiology-Short-Hour"
+        f, lines = netfetch.Fetcher(root=root, offline=PHENOM_FIX, cookies=True), []
+        resolve.probe_url(root, job, "Sutter Health", fetcher=f, today=D1, emit=lines.append)
+        assert lines == ["DETECT workday:sutterhealth/SH@wd1.myworkdaysite.com"] and probes(f) == [job], lines
+    # only Phenom pages are followed, and only to their own host
+    home = (PHENOM_FIX / "sutter_home.html").read_text(encoding="ascii")
+    assert resolve.phenom_next(home.replace("cdn.phenompeople.com", "cdn.example.com"),
+                               "https://jobs.sutterhealth.org/us/en") is None
+    moved = home.replace("https://jobs.sutterhealth.org/us/en/", "https://jobs.other.example/us/en/")
+    assert resolve.phenom_next(moved, "https://jobs.sutterhealth.org/us/en") is None, "another host is never read"
+    assert resolve.phenom_next('<link href="https://cdn.phenompeople.com/x.css"><a href="/us/en/job/R-1/QC">QC</a>',
+                               "https://jobs.example-bio.com/us/en") == "https://jobs.example-bio.com/us/en/job/R-1/QC"
+    assert resolve.phenom_next("<p>Careers</p>", "https://www.example-bio.com/careers") is None
+
+
 def test_helpers():
     assert resolve.slug_candidates("Acme Biosciences, Inc.") == ["acmebiosciencesinc", "acmebiosciences",
                                                                   "acme-biosciences", "acme"]
@@ -306,8 +354,8 @@ def test_one_lead_fails_soft():
 
 
 def main():
-    for fn in (test_two_runs, test_expired_lead_not_dropped, test_probe_url, test_helpers, test_detect_linear,
-               test_detect_bounded, test_one_lead_fails_soft):
+    for fn in (test_two_runs, test_expired_lead_not_dropped, test_probe_url, test_phenom_landing_page, test_helpers,
+               test_detect_linear, test_detect_bounded, test_one_lead_fails_soft):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

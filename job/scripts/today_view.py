@@ -4,7 +4,7 @@ Usage:
     python today_view.py card     --root R [--date YYYY-MM-DD] [--short]
     python today_view.py next     --root R [--date YYYY-MM-DD] [--short]
     python today_view.py progress --root R [--date YYYY-MM-DD]
-    python today_view.py diy      --root R [--date YYYY-MM-DD]
+    python today_view.py diy      --root R [--date YYYY-MM-DD] [--all]
     python today_view.py drafts   --root R [--date YYYY-MM-DD] [--n N]
 
 The day's items are queue/<date>/queue.json, its addenda, and the jobs from
@@ -130,10 +130,14 @@ parked=<n> blocked=<n> left=<n> of <n>, then the closing line
 ("Today: 8 applications sent." plus people contacted when nonzero, or
 "Today: no applications sent yet.").
 
-diy prints the do-yourself list in the order the runner stages it (LinkedIn
-leads given up, then chat-apply pool items; at most easy_apply_list_max, no
-links), leaving out the ones a "By hand" tracker row already logs:
+diy prints the do-yourself list in the order the runner stages it and
+diy.md lists it (diy_all: LinkedIn leads given up that pass the title and
+place gates, the better family match first, then the newest; then
+chat-apply pool items by fit; at most easy_apply_list_max, every item with
+--all, no links), leaving out the ones a "By hand" tracker row already logs:
     DIY E1 | <company> | <title> | <location> | upload/E1_... (when staged)
+    DIY MORE <n> more waiting; say `diy all` to see them (today_view.py diy --all)
+    DIY SET-ASIDE <n> leads whose title or place the gates would not take (not listed)
 Stdlib only.
 
 Exit codes: 0 ok, 1 bad input (ERROR ...).
@@ -1703,43 +1707,86 @@ def norm(text):
     return re.sub(r"[^a-z0-9]+", " ", str(text or "").lower()).strip()
 
 
-def logged_by_hand(root):
-    """{(company, title)} of tracker rows with Source "By hand" (log e1 and /job log)."""
+def hand_logged(root):
+    """{(company, title): the day the row was added, 'YYYY-MM-DD' or ''} of
+    tracker rows with Source "By hand" (log e1 and /job log). The row's Date,
+    not its Applied date: a job applied yesterday and logged today is logged today."""
     store = open_store(root)
     if store is None:
-        return set()
-    return {(norm(r.get("Company")), norm(r.get("Role"))) for r in store.app_rows()
+        return {}
+    return {(norm(r.get("Company")), norm(r.get("Role"))): str(r.get("Date") or "")[:10] for r in store.app_rows()
             if str(r.get("Source") or "").strip().lower() == "by hand"}
 
 
-def diy_rows(root, day, limit=None):
-    """[(company, title, location)] of the day's do-yourself items, in the
-    runner's staging order (jobrunner.stage_diy numbers them E1, E2, ... the
-    same way): LinkedIn leads given up (resolve.diy_items), then chat-apply
-    pool items, at most easy_apply_list_max."""
-    if limit is None:
-        limit = int(jobfs.settings(root)["daily"].get("easy_apply_list_max", 5))
-    rows = []
+def logged_by_hand(root):
+    """{(company, title)} of tracker rows with Source "By hand" (log e1 and /job log)."""
+    return set(hand_logged(root))
+
+
+def diy_all(root, day):
+    """(rows, set_aside): every do-yourself item [(company, title, location)]
+    in the one order of the list (L4-02; jobrunner.stage_diy numbers the
+    first easy_apply_list_max E1, E2, ... the same way, and resolve.write_diy
+    writes the same rows to diy.md): LinkedIn leads given up that pass the
+    title and place gates (resolve.diy_leads: the better family match first,
+    then the newest), then chat-apply pool items by fit. A job logged by hand
+    on an earlier day leaves the list, so the next one moves up; one logged
+    today keeps its place, so the day's numbers hold. set_aside: the leads the
+    gates set aside (never listed)."""
+    rows, aside = [], []
     try:
         import resolve
-        rows += [(x.get("company", ""), x.get("title", ""), x.get("location", "")) for x in resolve.diy_items(root, day)]
+        listed, aside = resolve.diy_leads(root, day)
+        rows += [(x.get("company", ""), x.get("title", ""), x.get("location", "")) for x in listed]
     except Exception:  # no lead state yet
         pass
     try:
         import gates
-        rows += [(it.get("company", ""), it.get("title", ""), it.get("location", ""))
-                 for it in gates.load_pool(root).get("items", []) if it.get("diy")]
+        pool = [it for it in gates.load_pool(root).get("items", []) if isinstance(it, dict) and it.get("diy")]
+        pool.sort(key=lambda it: (-float(it.get("fit") or 0), str(it.get("job_key", ""))))
+        rows += [(it.get("company", ""), it.get("title", ""), it.get("location", "")) for it in pool]
     except Exception:  # no pool yet
         pass
-    return rows[:limit]
+    if rows:
+        when = hand_logged(root)
+        today = jobfs.iso_date(day) if day else ""
+
+        def earlier(r):  # logged by hand (its tracker row added) before today
+            d = when.get((norm(r[0]), norm(r[1])))
+            return bool(d and today and d < today)
+        rows = [r for r in rows if not earlier(r)]
+    return rows, aside
 
 
-def diy_list(root, day):
+def diy_rows(root, day, limit=None):
+    """[(company, title, location)] of the day's do-yourself items: the first
+    easy_apply_list_max of diy_all, in the runner's staging order."""
+    if limit is None:
+        limit = int(jobfs.settings(root)["daily"].get("easy_apply_list_max", 5))
+    return diy_all(root, day)[0][:limit]
+
+
+def diy_more_lines(more, aside):
+    """The lines under the list: how many more items wait past the cut, and
+    how many leads the title and place gates set aside."""
+    out = []
+    if more > 0:
+        out.append(f"DIY MORE {more} more waiting; say `diy all` to see them (today_view.py diy --all)")
+    if aside > 0:
+        out.append(f"DIY SET-ASIDE {aside} lead{'s' if aside != 1 else ''} whose title or place the gates "
+                   "would not take (not listed)")
+    return out
+
+
+def diy_list(root, day, show_all=False):
     """The list as staged, numbered as staged; a job already logged by hand
-    keeps its number but leaves the list."""
+    keeps its number but leaves the list. show_all: every item, past the cut
+    too (those have no upload staged). Then diy_more_lines."""
     f = jobfs.Folder(root)
     staged = {p.name.split("_", 1)[0]: p.name for p in f.upload.glob("E*_*.pdf")} if f.upload.exists() else {}
-    rows = diy_rows(root, day)
+    every, aside = diy_all(root, day)
+    limit = int(jobfs.settings(root)["daily"].get("easy_apply_list_max", 5))
+    rows = every if show_all else every[:limit]
     done = logged_by_hand(root) if rows else set()
     out = []
     for i, (company, title, loc) in enumerate(rows, 1):
@@ -1749,7 +1796,7 @@ def diy_list(root, day):
         if f"E{i}" in staged and path_ok(f"upload/{staged[f'E{i}']}"):
             line += f" | upload/{staged[f'E{i}']}"
         out.append(line)
-    return out or ["DIY none"]
+    return (out or ["DIY none"]) + diy_more_lines(len(every) - len(rows), len(aside))
 
 
 # ---------- CLI ----------
@@ -1774,6 +1821,9 @@ def build_parser():
                            help="the easy day's card: one line, the sensitive line for the quick items, the first one")
         if name == "drafts":
             p.add_argument("--n", type=int, help="only this item's draft")
+        if name == "diy":
+            p.add_argument("--all", action="store_true", dest="show_all",
+                           help="every item, past easy_apply_list_max too (the user said 'diy all')")
         p.set_defaults(cmd=name)
     return ap
 
@@ -1808,7 +1858,7 @@ def main(argv=None):
         elif args.cmd == "drafts":
             lines = drafts(root, day, args.n)
         else:
-            lines = diy_list(root, day)
+            lines = diy_list(root, day, show_all=args.show_all)
     except (jobfs.ConfigError, OSError) as e:
         print(f"ERROR {e}")
         return 1

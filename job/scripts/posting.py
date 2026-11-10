@@ -100,6 +100,8 @@ AI_SENTENCE_MAX = hidden.AI_SENTENCE_MAX
 AI_TEXT = hidden.AI_TEXT    # .search / .finditer read the folded text (hidden.fold)
 AI_NAMES = hidden.AI_NAMES
 HIDDEN_CLASSES = hidden.HIDDEN_CLASSES
+SCAN_WARN = ("WARN HIDDEN-SCAN incomplete: the page has more style rules than one read checks, so text a later "
+             "rule may hide was kept as posting text; read the posting in the browser before trusting every line")
 LOCALE = re.compile(r"^[a-z]{2}-[A-Z]{2}$")
 
 
@@ -114,6 +116,7 @@ class Report:
         self.stripped = 0
         self.hidden = []
         self._seen = set()
+        self.scan_incomplete = False  # hidden.py's match budget ran out: some style rules were not checked
 
     def add_hidden(self, text):
         text = re.sub(r"\s+", " ", text).strip()
@@ -285,6 +288,8 @@ class TextExtractor(HTMLParser):
     def result(self):
         if self.hidden_buf:
             self._flush_hidden()
+        if self.hider.incomplete:
+            self.report.scan_incomplete = True
         return tidy("".join(self.out))
 
 
@@ -966,7 +971,7 @@ def jsonld_from_page(page):
     for block in ld_blocks(page):
         raw = re.sub(r"^\s*(<!--|//?<!\[CDATA\[)|(-->|//?\]\]>)\s*$", "", block.strip())
         try:
-            data = json.loads(raw, strict=False)
+            data = jobfs.loads_json(raw, strict=False)
         except (ValueError, RecursionError):  # RecursionError: a block nested thousands deep
             continue
         jp = find_jobposting(data)
@@ -1133,7 +1138,7 @@ def resolve(url, json_file=None, source=None, html_file=None, getter=None, robot
             reasons.append(str(e))
     if c and c["api"]:
         try:
-            data = json.loads(getter(c["api"], "application/json")[0], strict=False)
+            data = jobfs.loads_json(getter(c["api"], "application/json")[0], strict=False)
             return parse_json_body(data, c["source"], c, report), report
         except (ClosedPosting, Denied):
             raise
@@ -1436,8 +1441,7 @@ def main(argv=None):
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    with open(out, "w", encoding="utf-8", newline="\n") as f:
-        f.write(render(p, args.url))
+    jobfs.atomic_write_text(out, render(p, args.url))
 
     print(f"SOURCE {p['source']}")
     print(f"COMPANY {p['company']}")
@@ -1458,6 +1462,8 @@ def main(argv=None):
         print(f"AI-TEXT {short(ln)}")
     for h in report.hidden:
         print(f"HIDDEN {short(h)}")
+    if report.scan_incomplete:
+        print(SCAN_WARN)
     if report.stripped:
         print(f"STRIPPED {report.stripped} invisible characters")
     return 0
@@ -1661,6 +1667,7 @@ class Reading:
     ai_text: list = field(default_factory=list)
     hidden: list = field(default_factory=list)
     stripped: int = 0
+    scan_incomplete: bool = False  # the hidden-text scan ran out of budget; its text was kept (SCAN_WARN)
 
 
 def fetcher_getter(fetcher):
@@ -1706,7 +1713,7 @@ def read_posting(url, offline=None, *, fetcher=None, root=None, lane="pasted", f
     if out:
         jobfs.atomic_write_text(out, md)
     return Reading(to_record(p, url, lane, first_seen, ats), md, p["source"], ai_lines(p, report),
-                   list(report.hidden), report.stripped)
+                   list(report.hidden), report.stripped, report.scan_incomplete)
 
 
 def read_saved(url, path):

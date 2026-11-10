@@ -661,6 +661,77 @@ def test_rebuild_all():
     print("ok rebuild: every family a correction broke, one combined diff, one PLAN, one yes; held jobs rebuilt")
 
 
+def test_rebuild_long_lines():
+    """V4-04: a 600-character letter paragraph changed at its end. Each "- "/"+ "
+    line used to be cut at 400 characters, so the pair printed the same and
+    one yes approved a clause the user never saw. The pair now prints the same
+    window around what changed, with "..." where unchanged text was left out;
+    the corrected entry and every "= " line print whole; a pair that would
+    still print the same is a PROBLEM, so no PLAN is printed."""
+    root = fresh_root()
+    v1 = root / "variants" / FAMILY / "v1"
+    lead = ("I would welcome the chance to talk about how this work fits your team and how I would learn your "
+            "methods, your documentation habits and your review cadence in the first months. I am glad to walk "
+            "through the testing I ran, the records I kept and the way I hand work over between shifts, so that "
+            "the people who pick it up next can see what was done and why. I read each protocol closely and ask "
+            "early when a step is unclear. I also enjoy training new colleagues "
+            "on careful sample handling, and I would bring the same patience and care to your lab, its partners "
+            "and its schedule, whatever the week holds for the team")
+    letter = json.loads((v1 / "letter.json").read_text(encoding="utf-8"))
+    letter["letter"]["paragraphs"][2] = lead + "."
+    (v1 / "letter.json").write_text(json.dumps(letter, indent=1), encoding="utf-8")
+    assert len(lead) > 580, len(lead)
+    approve(root)
+    lib = root / "achievement_library.md"
+    tail = " " + " ".join(["Logged every plate read in the shared lab notebook for the QC lead to review."] * 6)
+    lib.write_bytes(lib.read_bytes().replace(b"identification by MALDI-TOF.",
+                                             (f"identification by MALDI-TOF.{tail} ENDMARK.").encode("ascii"), 1))
+    code, out = cli("new", "--root", root, "--family", FAMILY, "--copy")
+    assert code == 0 and f"NEW {FAMILY} v2" in out, out
+    v2 = root / "variants" / FAMILY / "v2"
+    letter["letter"]["paragraphs"][2] = lead + ", in the same steady way I worked at Northwind Biologics."
+    (v2 / "letter.json").write_text(json.dumps(letter, indent=1), encoding="utf-8")
+    code, out = cli("rebuild", "--root", root)
+    lines = out.splitlines()
+    assert code == 0, out
+    changed = next(ln for ln in lines if ln.startswith("CHANGED L-0007"))
+    assert changed.endswith(' ENDMARK."') and len(changed) > variants.DIFF_TEXT_MAX + 20, changed
+    i = lines.index(f"REBUILD {FAMILY} v1 -> v2: 2 changed lines")
+    minus, plus = lines[i + 1], lines[i + 2]
+    assert minus.startswith("  - letter.json paragraph: ...") and plus.startswith("  + letter.json paragraph: ..."), lines
+    assert minus[4:] != plus[4:], "the two lines read differently"
+    assert plus.endswith("whatever the week holds for the team, in the same steady way I worked at Northwind "
+                         "Biologics."), plus
+    assert minus.endswith("whatever the week holds for the team."), minus
+    assert any(ln.startswith("PLAN ") for ln in lines), out
+    # In process: the window holds every changed character; whole lines below the cut; the guard.
+    old, new = "a" * 500 + "XYZ" + "b" * 500, "a" * 500 + "QRS" + "b" * 500
+    o, n = variants.shown_pair(old, new)
+    assert o == "..." + "a" * variants.DIFF_CONTEXT + "XYZ" + "b" * variants.DIFF_CONTEXT + "...", o
+    assert n == o.replace("XYZ", "QRS"), n
+    assert variants.shown_pair("short one", "short two") == ("short one", "short two")
+    o, n = variants.shown_pair("x" * 600, "x" * 600 + " and one more clause")
+    assert o == "..." + "x" * variants.DIFF_CONTEXT and n == o + " and one more clause", (o[-30:], n[-40:])
+    real = variants.shown_pair
+    variants.shown_pair = lambda a, b: (a[:variants.DIFF_TEXT_MAX], b[:variants.DIFF_TEXT_MAX])  # the old cut
+    try:
+        got = variants.changed_unit_lines(v1, v2)
+    finally:
+        variants.shown_pair = real
+    assert got[-1] == "PROBLEM a changed line in letter.json (paragraph) would print the same as the line it " \
+                      "replaces", got
+    code, out = cli("rebuild", "--root", root)
+    assert code == 0 and "PROBLEM" not in out, out
+    d = Path(tempfile.mkdtemp(prefix="job_skill_cite_"))
+    long_bullet = "Ran culture work " + "and kept records " * 40 + "TAILMARK"
+    (d / "resume.json").write_text(json.dumps({"sections": [{"heading": "Experience", "entries": [
+        {"title": "Scientist", "org": "Example", "bullets": [{"text": long_bullet, "ev": ["L-0001"]}]}]}]}),
+        encoding="utf-8")
+    cites = variants.citing_lines(d, ["L-0001"])
+    assert cites == [f"= resume.json: {long_bullet} (cites L-0001)"], cites
+    print("ok rebuild: a long changed line prints a window around the change; entries and = lines whole")
+
+
 def main():
     if sys.argv[1:]:  # tests that build their own root, by name: test_variants.py rebuild_all
         for name in sys.argv[1:]:
@@ -686,6 +757,7 @@ def main():
     test_split_items_and_swaps()
     test_agents()
     test_rebuild_all()
+    test_rebuild_long_lines()
     print("PASS")
 
 

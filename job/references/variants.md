@@ -132,10 +132,13 @@ a correction, or when the card's hold line sends the user here:
    "<the entry's new text>"` once per entry, then per family `REBUILD
    <family> v<N> again` with `= ` lines (each line citing a corrected entry)
    or `REBUILD <family> v<N> -> v<N+1>` with `- ` and `+ ` lines (only the
-   lines that changed), `BUILD ok` (the approval checks and a strict build of
-   the base resume, `base_resume.pdf` in that version's folder), `PLAN
-   <hash>` and `NEXT`. `REBUILD none` means no family cites a corrected
-   entry.
+   lines that changed; a long changed line shows the same stretch of both
+   lines around what changed, with `...` where the unchanged text was left
+   out, so every changed word is on screen), `BUILD ok` (the approval
+   checks and a strict build of the base resume, `base_resume.pdf` in that
+   version's folder), `PLAN <hash>` and `NEXT`. `REBUILD none` means no
+   family cites a corrected entry. Show those lines as printed; never
+   shorten one.
 2. Read every `= ` line against its `CHANGED` text. If one now says more
    than its entry (the library says "supported", the line "Led"), run
    `variants.py new --family <id> --copy`, fix that line in the new version

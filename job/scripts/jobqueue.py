@@ -963,19 +963,36 @@ def build(root, today=None, pool_path=None, emit=print, prep=None):
     picked = asm.run(cands)
     mark_tiers(picked, ctx, asm.tier_a)
     ordered, block = sequence(picked, int(ctx.daily.get("batch_size", 10)))
-    used, items = set(), []
+    used, items, skipped = set(), [], set()
     n = max(other_ns) if other_ns and not f.queue_json(today).exists() else 0
-    for it in ordered:
-        n += 1
-        while n in other_ns:
-            n += 1
-        rel = make_folder(ctx, it, used)
-        q = queue_item(ctx, it, n, rel)
-        if prep:
-            prep(q, root / rel)
-        items.append(q)
     after = block["after_n"]
-    block["after_n"] = items[after - 1]["n"] if 0 < after <= len(items) else (items[0]["n"] - 1 if items else 0)
+    built_before_block = 0
+    for i, it in enumerate(ordered):
+        k = n + 1
+        while k in other_ns:
+            k += 1
+        # One item whose folder or files fail (bad data, a held file) is one
+        # ERROR line: it stays in the pool for another day and the list is built.
+        try:
+            rel = make_folder(ctx, it, used)
+            q = queue_item(ctx, it, k, rel)
+        except Exception as e:  # noqa: BLE001  one item never stops the day's list
+            emit(f"ERROR queue item {it.get('job_key', '?')}: {type(e).__name__}: {str(e)[:160]}")
+            skipped.add(it["job_key"])
+            continue
+        if prep:
+            try:
+                prep(q, root / rel)
+            except Exception as e:  # noqa: BLE001  its Tier B files failed: it is listed, never sent as built
+                emit(f"ERROR prep #{k} {it.get('job_key', '?')}: {type(e).__name__}: {str(e)[:160]}")
+                if q["tier"] == "B":
+                    q["resume_status"] = "prep_failed"
+        n = k
+        items.append(q)
+        built_before_block += i < after
+    if skipped:
+        picked = [it for it in picked if it["job_key"] not in skipped]
+    block["after_n"] = items[built_before_block - 1]["n"] if built_before_block else (items[0]["n"] - 1 if items else 0)
     waiting = asm.waiting(cands)
     counts = dict(data.get("counts") or {})
     counts = {"seen": int(counts.get("seen", 0)), "passed": int(counts.get("passed", len(pool))),
@@ -1053,8 +1070,15 @@ def addendum(root, today=None, pool_path=None, limit=None, emit=print):
     picked = asm.run(cands, fill_held=False)  # `more` is for jobs it can send today
     mark_tiers(picked, ctx, 0)
     ordered, _ = sequence(picked, 0)
-    used = set()
-    items = [queue_item(ctx, it, top + i, make_folder(ctx, it, used)) for i, it in enumerate(ordered, 1)]
+    used, items, skipped = set(), [], set()
+    for it in ordered:
+        try:  # one item that fails is one ERROR line (as in build); it stays in the pool
+            items.append(queue_item(ctx, it, top + len(items) + 1, make_folder(ctx, it, used)))
+        except Exception as e:  # noqa: BLE001
+            emit(f"ERROR queue item {it.get('job_key', '?')}: {type(e).__name__}: {str(e)[:160]}")
+            skipped.add(it["job_key"])
+    if skipped:
+        picked = [it for it in picked if it["job_key"] not in skipped]
     # A job from a link may have taken a number meanwhile (an added event):
     # these items are not written yet, so they move up after it.
     top_now, keys_now = numbers_used(root, today)

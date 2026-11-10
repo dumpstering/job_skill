@@ -1078,8 +1078,36 @@ def test_city_state_codes():
         "Jersey City, NJ", "Millbrae, CA", "Boston, MA", "Austin, TX"]
 
 
+def test_xml_doctype_any_encoding():
+    """V4-09: boards.parse_xml (the sitemap and feed reader under posting
+    discovery) refuses a DOCTYPE or ENTITY in any encoding. A byte search
+    missed a UTF-16 body (expat read its BOM and expanded the entities) and a
+    DOCTYPE after 4 KB of comment; a plain UTF-16 sitemap still reads."""
+    import boards
+    ents = '<!ENTITY a0 "lol">' + "".join(f'<!ENTITY a{i} "' + f"&a{i - 1};" * 16 + '">' for i in range(1, 4))
+    doc = (f'<?xml version="1.0"?>\n<!DOCTYPE urlset [{ents}]>\n'
+           "<urlset><url><loc>https://jobs.example-bio.com/&a3;</loc></url></urlset>")
+    late = (b'<?xml version="1.0"?><!--' + b"x" * 5000 + b'--><!DOCTYPE urlset SYSTEM "http://10.0.0.1/x.dtd">'
+            b"<urlset><url><loc>https://jobs.example-bio.com/1</loc></url></urlset>")
+    for name, body in (("utf-8", doc.encode("utf-8")), ("utf-16", doc.encode("utf-16")),
+                       ("utf-16-le no BOM", doc.encode("utf-16-le")), ("utf-16-be", doc.encode("utf-16")[:0]
+                                                                           + b"\xfe\xff" + doc.encode("utf-16-be")),
+                       ("late doctype", late), ("str", doc)):
+        try:
+            got = boards.sitemap_entries(body)
+        except posting.FetchError as e:
+            assert "refused" in str(e) or "not XML" in str(e), (name, e)
+            assert name in ("utf-16-le no BOM",) or "refused" in str(e), (name, e)
+            continue
+        raise AssertionError(f"{name}: parsed {got[0]} with {len(got[1])} rows")
+    plain = '<urlset><url><loc>https://jobs.example-bio.com/job/2</loc></url></urlset>'
+    for body in (plain.encode("utf-16"), plain.encode("utf-8"), plain):
+        assert boards.sitemap_entries(body) == ("urlset", [("https://jobs.example-bio.com/job/2", "")]), body[:20]
+
+
 def main():
-    for t in (test_endpoints, test_html_to_text, test_parsers, test_html_sources, test_layout,
+    for t in (test_xml_doctype_any_encoding, test_endpoints, test_html_to_text, test_parsers, test_html_sources,
+              test_layout,
               test_cli_files, test_bad_arguments, test_network_paths, test_public_only,
               test_boards_and_text, test_v12_endpoints, test_v12_parsers, test_v12_posted_and_employer_site,
               test_v12_closed, test_v12_smartrecruiters_and_robots, test_v12_read_posting,

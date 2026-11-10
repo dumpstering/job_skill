@@ -473,6 +473,31 @@ def test_added_trust():
         assert out.startswith(why), (ascii(url), out)
 
 
+def test_broken_unicode():
+    """V4-02: an event holding half of a UTF-16 pair (a lone surrogate) is
+    refused by validate and never written by emit, since no UTF-8 writer (the
+    workbook) takes it; the same text arriving as a JSON escape in a dropped
+    file reads back as U+FFFD (jobfs.loads_json) and is a valid event."""
+    root = new_root()
+    lone = chr(0xD800)
+    ev = tracker_event(root, ["add", "--company", "Acme" + lone, "--role", "QC"])
+    assert events.validate(ev, root) == "holds a broken character (half of an emoji): not valid Unicode text", \
+        events.validate(ev, root)
+    ev2 = dict(tracker_event(root, ["add", "--company", "Acme", "--role", "QC"]), session="s" + lone)
+    assert events.validate(ev2, root).startswith("holds a broken character"), "any field, not only argv"
+    try:
+        events.emit(root, "tracker", {"argv": ["add", "--company", "Acme" + lone, "--role", "QC"]})
+        raise AssertionError("emit wrote an event with a lone surrogate")
+    except events.EventError as e:
+        assert str(e).startswith("holds a broken character"), e
+    assert not jobfs.Folder(root).events.exists() or not list(jobfs.Folder(root).events.glob("*.json"))
+    path = put_event(root, json.dumps(ev, ensure_ascii=True), name=events.file_name(ev))  # the escape on disk
+    read, err, _ = events.read_file(path)
+    assert err is None and events.validate(read, root, path.name) is None, (err, events.validate(read, root))
+    assert read["payload"]["argv"][2] == "Acme" + chr(0xFFFD), ascii(read["payload"]["argv"])
+    print("ok a lone surrogate: refused in an event made in memory, U+FFFD in one read from a file")
+
+
 def main():
     b = test_parity()
     print("ok parity")
@@ -480,7 +505,7 @@ def main():
     print("ok overlay_reads_done")
     for fn in (test_rejections, test_emit_and_overlay, test_json_file_confined, test_deep_event_file,
                test_printed_values,
-               test_add_from_link, test_added_trust):
+               test_add_from_link, test_added_trust, test_broken_unicode):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

@@ -22,8 +22,8 @@ lead group:
    is unknown, never a miss. Misses (404, gone redirects) are cached for 30
    days in state/probe_cache.csv. A hit joins state/watchlist_auto.csv.
 3. Still unknown, or a lead-only ATS (R3): listed in runner/out/needs_search.json
-   for one web search ("<company> careers") by Claude, whose result comes back
-   as a probe_url request.
+   for one web search ("<company> <title> careers") by Claude, whose job page
+   comes back as a probe_url request.
 4. Unresolved on 2 different days, and (for a lead step 3 lists) listed in
    needs_search.json on 2 different days, so at least one job-morning had it
    to search: LinkedIn leads go to the do-yourself list (queue/<date>/diy.md,
@@ -35,14 +35,17 @@ probe-url refuses job-board URLs unopened (DENY job-board <domain>, exit 7),
 reads a posting URL on an ATS host directly (an R3 host only where robots
 allows that exact path, else posting_status browser_read), and otherwise
 fetches the careers page once and runs the ATS detect patterns over its HTML
-and its first allowed iframe. A Workday site comes from the real URL.
+and its first allowed iframe. A Phenom career site page with no ATS link (a
+landing page: Sutter, Lilly) leads to one more same-host page, a job page or
+the site's own job search, whose apply links name the Workday tenant
+(PHENOM <url>). A Workday site comes from the real URL.
 
 Output lines:
     RESOLVED <lead_id> <how> <job_key>          (how: known, probe <ats>:<slug>, url)
     PROBE <ats>:<slug> HIT <n> | MISS <why> | UNKNOWN <why> | CACHED miss
     UNRESOLVED <lead_id> <company> day=<n> <why>   (why ends "expired" past 30 days)
     DIY <lead_id> | DISCARD <lead_id> unresolved
-    DETECT <ats>:<board>[/<site>][@<host>] | DETECT none <host> | BROWSER_READ <url>
+    DETECT <ats>:<board>[/<site>][@<host>] | DETECT none <host> | BROWSER_READ <url> | PHENOM <url>
     RESOLVE leads=<n> groups=<n> resolved=<n> unresolved=<n> needs_search=<n> diy=<n> discarded=<n>
 Stdlib only. Exit codes: 0 ok, 1 bad input, 7 DENY.
 """
@@ -550,21 +553,68 @@ class Resolver:
 
 # ---------- do-yourself list ----------
 
-def diy_items(root, today=None):
-    """Unresolved LinkedIn leads kept for the do-yourself list, newest first."""
+def diy_leads(root, today=None):
+    """(listed, set_aside): the unresolved LinkedIn leads kept for the
+    do-yourself list, in the one order every view of the list uses (L4-02:
+    today_view diy, the runner's staging and E numbers, queue/<date>/diy.md).
+    Each lead goes through the title and place gates a read posting would
+    (gates.title_place_gates: G3, G4, the G7 title knockouts), judged with
+    today's profile. Those that pass are listed: the higher-priority family
+    first, then a core title before an adjacent one, then the newest give-up.
+    Those that fail are set aside (never listed; their state stays diy, so a
+    profile change can list them)."""
+    today = today or jobfs.today(root)
     state = read_json(jobfs.Folder(root).state / "leads_state.json", {}).get("leads", {})
-    items = [v for v in state.values() if v.get("status") == "diy"]
-    return sorted(items, key=lambda v: (v.get("done_on", ""), v.get("lead_id", "")), reverse=True)
+    items = [v for v in state.values() if isinstance(v, dict) and v.get("status") == "diy"]
+    items.sort(key=lambda v: (str(v.get("done_on", "")), str(v.get("lead_id", ""))), reverse=True)
+    try:
+        rules = gates.Rules(root, today)
+    except Exception:  # noqa: BLE001  no readable profile: the leads are listed as they are (D2)
+        return items, []
+    if not rules.families:  # no family to judge a title by (a profile being set up): listed as they are
+        return items, []
+    prio = {f.get("id"): int(f.get("priority", 2) or 2) for f in rules.families}
+    listed, aside = [], []
+    for v in items:
+        company, title, loc = str(v.get("company", "")), str(v.get("title", "")), str(v.get("location", ""))
+        p = jobfs.Posting(company=company, company_norm=jobkey.norm_company(company), title=title,
+                          title_norm=jobkey.norm_title(title), location=loc, lane=lane_of(str(v.get("source", ""))))
+        p.city, p.state, p.country = posting.split_place(loc)
+        verdict = gates.title_place_gates(p, rules)
+        if verdict.ok:
+            listed.append((prio.get(verdict.info.get("family"), 2), -float(verdict.info.get("title_match") or 0), v))
+        else:
+            aside.append(dict(v, set_aside=f"{verdict.gate} {verdict.reason}"))
+    listed.sort(key=lambda t: t[:2])  # stable: the newest give-up first within a rank
+    return [v for _, _, v in listed], aside
+
+
+def diy_items(root, today=None):
+    """The do-yourself leads in list order (diy_leads, set-aside ones left out)."""
+    return diy_leads(root, today)[0]
 
 
 def write_diy(root, today, new_items):
-    """queue/<date>/diy.md: at most easy_apply_list_max entries, no links (R2)."""
+    """queue/<date>/diy.md: the do-yourself list as the session shows it
+    (today_view.diy_all: the same items, order and E numbers), at most
+    easy_apply_list_max entries, then one line for the rest and one for the
+    leads set aside, no links (R2). new_items (today's give-ups) are already
+    in the lead state."""
+    import today_view  # its list is the one the user works from
     limit = int(jobfs.settings(root)["daily"].get("easy_apply_list_max", 5))
-    items = (new_items + [i for i in diy_items(root, today) if i["lead_id"] not in {n["lead_id"] for n in new_items}])
+    rows, aside = today_view.diy_all(root, today)
     lines = ["# Do it yourself", "",
              "Apply on the job site in your own browser, then say `log e1` (and so on) when done.", ""]
-    for i, it in enumerate(items[:limit], 1):
-        lines.append(f"- E{i} | {it['company']} | {it['title']} | {it.get('location', '')}")
+    for i, (company, title, loc) in enumerate(rows[:limit], 1):
+        lines.append(f"- E{i} | {company} | {title} | {loc}")
+    more = len(rows) - min(limit, len(rows))
+    if more or aside:
+        lines.append("")
+    if more:
+        lines.append(f"And {more} more waiting: say `diy all` to see them.")
+    if aside:
+        lines.append(f"{len(aside)} more {'leads were' if len(aside) != 1 else 'lead was'} set aside: the gates "
+                     "would not take the title or place.")
     jobfs.atomic_write_text(jobfs.Folder(root).diy_md(today), "\n".join(lines) + "\n")
 
 
@@ -634,8 +684,39 @@ def probe_url(root, url, company="", title="", location="", fetcher=None, offlin
     return result
 
 
+PHENOM_MARK = re.compile(r"cdn\.phenompeople\.com|phenompeople\.com/CareerConnectResources", re.I)
+PHENOM_JOB = re.compile(r"href\s*=\s*[\"']([^\"'<>\s]{1,400}/job/[^\"'<>\s]{1,300})[\"']", re.I)
+PHENOM_SEARCH = re.compile(r"\"target\"\s*:\s*\"(https://[^\"<>\s]{1,300}/search-results\?keywords=)"
+                           r"\{search_term_string\}\"", re.I)
+PHENOM_BASE = re.compile(r"\"baseUrl\"\s*:\s*\"(https://[^\"<>\s]{1,300}/)\"", re.I)
+
+
+def phenom_next(html, page_url):
+    """The one same-host page worth reading after a Phenom career site page
+    with no ATS link (L4-01): Phenom fronts a Workday (or other) tenant, and
+    its job pages and its job search page link that tenant (each job's apply
+    URL), while its landing page does not. A job link on the page, else the
+    page's own search (its JSON-LD SearchAction, keywords empty: every job),
+    else '<baseUrl>search-results'. None for a page that is not Phenom's."""
+    if not PHENOM_MARK.search(html or ""):
+        return None
+    host = netfetch.host_of(page_url)
+    cands = [urljoin(page_url, m.group(1)) for m in PHENOM_JOB.finditer(html)][:5]
+    cands += [m.group(1) for m in PHENOM_SEARCH.finditer(html)][:2]
+    cands += [m.group(1) + "search-results" for m in PHENOM_BASE.finditer(html)][:10]
+    for c in cands:
+        try:
+            if c.startswith("https://") and netfetch.host_of(c) == host and c.split("#")[0] != page_url:
+                return c
+        except (Denied, ValueError):
+            continue
+    return None
+
+
 def page_detect(fetcher, url, emit):
-    """Fetch a careers page once; detect over its HTML, then its first iframe."""
+    """Fetch a careers page once; detect over its HTML; on a Phenom page with
+    no ATS link, detect over one more same-host page (phenom_next); then the
+    first iframe."""
     try:
         r = fetcher.get(url, accept="text/html")
         r.check()
@@ -649,6 +730,19 @@ def page_detect(fetcher, url, emit):
     found = detect(html)
     if found:
         return found
+    nxt = phenom_next(html, r.url or url)
+    if nxt:
+        emit(f"PHENOM {netfetch.shown(nxt, 160)}")
+        try:
+            nr = fetcher.get(nxt, accept="text/html")
+            nr.check()
+            found = detect(nr.text()[:HTML_SCAN_MAX])
+        except Denied as e:  # the site's own page, not the link Claude sent: a warning, never a DENY line
+            emit(f"WARN the site's job search was not read ({e.reason})")
+        except FetchError as e:
+            emit(f"WARN {str(e)[:160]}")
+        if found:
+            return found
     for src in IFRAME.findall(html)[:3]:
         frame = urljoin(r.url or url, src)
         if netfetch.hard_deny(frame) or fetcher.policy.reason(frame):

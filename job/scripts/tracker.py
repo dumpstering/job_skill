@@ -190,6 +190,11 @@ WIDTHS = {
 }
 PASSWORD_RE = re.compile(r"pass(word)?|pwd|passwd", re.I)
 TEXT_STRIP = chr(9) + chr(13)  # leading tab/CR are stripped from stored text
+# Characters an .xlsx (XML 1.0) cannot hold: openpyxl refuses a control
+# character when the cell is set and U+FFFE/U+FFFF when the book is saved,
+# which would stop apply-events for every event after it (V4-02).
+XML_BAD = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f" + chr(0xFFFE) + chr(0xFFFF) + "]")
+NONCHARS = (chr(0xFFFE), chr(0xFFFF))  # XML non-characters: kept as U+FFFD, not dropped
 DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 PID_RE = re.compile(r"P-[0-9a-f]{8}")
 WRITES = {"init", "add", "update", "account", "log-email", "inbox-done", "referral-add",
@@ -333,7 +338,9 @@ def url_host(url):
 
 def clean_value(name, val):
     """What a cell stores for val: None for blank, a date, or text without a
-    leading tab or CR (so untrusted text can never start a formula)."""
+    leading tab or CR (so untrusted text can never start a formula). Half of
+    a UTF-16 pair becomes U+FFFD and a character XML cannot hold is dropped
+    (U+FFFE/U+FFFF become U+FFFD), so the workbook always saves (V4-02)."""
     if val is None or val == "":
         return None
     if isinstance(val, datetime):
@@ -341,7 +348,10 @@ def clean_value(name, val):
     if isinstance(val, date):
         return val
     if isinstance(val, str) or name == "Message ID":
-        return str(val).lstrip(TEXT_STRIP)
+        s = jobfs.clean_text(str(val))
+        if XML_BAD.search(s):
+            s = XML_BAD.sub(lambda m: chr(0xFFFD) if m.group(0) in NONCHARS else "", s)
+        return s.lstrip(TEXT_STRIP)
     return val
 
 
@@ -1876,7 +1886,10 @@ def take_event(a, tr, path, applied_ids):
     if ev["id"] in applied_ids:
         return "dup", ev
     if ev["type"] == "tracker":
-        code, last = run_event(tr, ev, a.root)
+        try:
+            code, last = run_event(tr, ev, a.root)
+        except Exception as e:  # noqa: BLE001  one event's bug or odd value is that event's rejection
+            return ("rejected", f"ERROR {type(e).__name__}: {str(e)[:200]}"), ev
         if code == 4:
             return "locked", ev
         if code != 0:

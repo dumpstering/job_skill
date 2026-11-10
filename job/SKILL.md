@@ -153,7 +153,7 @@ first, printing one plain refusal line in its place (`SKIP #NN unsafe value
 command line.
 
 You run:
-- `today_view.py` - `card`, `next` (both `--short` on an easy day), `progress`, `diy`, `drafts`: the day as printed lines.
+- `today_view.py` - `card`, `next` (both `--short` on an easy day), `progress`, `diy` (`--all` past the first five), `drafts`: the day as printed lines.
 - `tracker.py` - every read and write of `applications.xlsx`, through the transport (below).
 - `events.py` - `emit` queue events (started, handed_over, applied, skipped, later, parked, unparked, blocked, answer_used, usage); `add` (a job from a link into today's list); `overlay`.
 - `caps.py check` - whether one more application to that company is allowed (`CAP ok`, `CAP DEFER ...`).
@@ -340,7 +340,8 @@ In the day's fill loop ([references/apply_batch.md](references/apply_batch.md)):
 - `reopen` (only after "did it go through?"): fill it again; its handover
   reuses the row (daily.md, Interruptions).
 - `sent 1 2` referral asks went out; `ref 7 <url>` a contact's referral link
-  for item 7; `log e1 e3` do-yourself items done.
+  for item 7; `log e1 e3` do-yourself items done; `diy all` the whole
+  do-yourself list (`today_view.py diy --all`), past the first five.
 - `approve <family>` approves a variant; `yes` to the base-resume changes
   you just showed after a correction approves every one of them, and
   nothing else (variants.md "One correction, every family").

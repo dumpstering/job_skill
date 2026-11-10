@@ -7,8 +7,9 @@ Every script that touches the JobSearch folder goes through this module:
   last-good fallback when a hand-edited file stops parsing;
 - read_json() and loads_json(), the only way a script reads a JSON file from
   runner/in/, claude/, state/, queue/, applications/ or upload/ (a size limit
-  per caller, nesting at most 64 deep, one plain BadJson error), and
-  read_json_or() for a reader that treats a bad file as missing;
+  per caller, nesting at most 64 deep, one plain BadJson error, a lone UTF-16
+  surrogate back as U+FFFD), and read_json_or() for a reader that treats a
+  bad file as missing;
 - atomic_write_json() (adds _rev and _sha256), read_json_verified(),
   atomic_write_text(), create_only(), append_jsonl(), read_jsonl();
 - RunLock, the runner's self-lock (an OS lock on an open file);
@@ -324,6 +325,63 @@ def _no_constant(name):
     raise ValueError(f"{name} is not a JSON number")
 
 
+# Half of a UTF-16 pair (a lone surrogate): valid in a JSON escape ("\ud83d",
+# a server that cut an emoji in two) but no UTF-8 writer takes it. JSON joins a
+# whole escaped pair into one character, so only halves are left after parsing.
+_SURROGATE = re.compile("[\ud800-\udfff]")
+_SURROGATE_HINT = re.compile(r"\\u[dD][89a-fA-F]|[\ud800-\udfff]")
+_SURROGATE_HINT_BYTES = re.compile(rb"\\u[dD][89a-fA-F]")
+
+
+def surrogate_hint(text):
+    """True when JSON text may hold a lone surrogate (an escape like "\\ud83d"
+    or the code point itself), so the parsed value needs clean_value."""
+    return bool(_SURROGATE_HINT.search(text)) if isinstance(text, str) else \
+        bool(_SURROGATE_HINT_BYTES.search(text))
+
+
+def clean_text(s):
+    """s with every lone UTF-16 surrogate as U+FFFD (a whole pair held as two
+    code points becomes its one character). Text with none is returned as is."""
+    if not isinstance(s, str) or not _SURROGATE.search(s):
+        return s
+    return s.encode("utf-16-le", "surrogatepass").decode("utf-16-le", "replace")
+
+
+def clean_value(value):
+    """value (a JSON value: dict, list, str, ...) with clean_text applied to
+    every string, dict keys included, in place for dicts and lists (iterative:
+    no depth limit of its own). Returns the cleaned value."""
+    if isinstance(value, str):
+        return clean_text(value)
+    if not isinstance(value, (dict, list)):
+        return value
+    stack = [value]
+    while stack:
+        obj = stack.pop()
+        if isinstance(obj, dict):
+            items = list(obj.items())
+            if any(isinstance(k, str) and _SURROGATE.search(k) for k, _ in items):
+                obj.clear()
+                for k, v in items:
+                    obj[clean_text(k)] = v
+                items = list(obj.items())
+            for k, v in items:
+                if isinstance(v, str):
+                    if _SURROGATE.search(v):
+                        obj[k] = clean_text(v)
+                elif isinstance(v, (dict, list)):
+                    stack.append(v)
+        else:
+            for i, v in enumerate(obj):
+                if isinstance(v, str):
+                    if _SURROGATE.search(v):
+                        obj[i] = clean_text(v)
+                elif isinstance(v, (dict, list)):
+                    stack.append(v)
+    return value
+
+
 def json_depth_ok(text, limit=JSON_DEPTH_MAX):
     """True when no array or object in text nests deeper than limit. Linear in
     the text; brackets inside strings do not count."""
@@ -342,11 +400,22 @@ def json_depth_ok(text, limit=JSON_DEPTH_MAX):
     return True
 
 
-def loads_json(text, allow_nan=True, max_depth=JSON_DEPTH_MAX, strict=True):
+def loads_json(text, allow_nan=True, max_depth=JSON_DEPTH_MAX, strict=True, clean=True):
     """The JSON value in text (str, or bytes read as UTF-8 with or without a
     BOM). Nesting deeper than max_depth is refused before parsing; a decode,
     parse or recursion error is one BadJson (a ValueError). strict=False lets
-    a string hold control characters (some job-site APIs send them)."""
+    a string hold control characters (some job-site APIs send them). Every
+    lone UTF-16 surrogate in a string or key ("\\ud83d", half an emoji) comes
+    back as U+FFFD (clean_value), so no writer later fails on it; clean=False
+    keeps the value as parsed (a hash check over the bytes as written)."""
+    value, text = _parse_json(text, allow_nan, max_depth, strict)
+    if clean and surrogate_hint(text):
+        value = clean_value(value)
+    return value
+
+
+def _parse_json(text, allow_nan, max_depth, strict):
+    """(value, the text as str) for loads_json."""
     if isinstance(text, (bytes, bytearray)):
         try:
             text = bytes(text).decode("utf-8-sig")
@@ -360,8 +429,8 @@ def loads_json(text, allow_nan=True, max_depth=JSON_DEPTH_MAX, strict=True):
         raise BadJson(f"nested deeper than {max_depth}", "depth")
     try:
         if allow_nan:
-            return json.loads(text, strict=strict)
-        return json.loads(text, parse_constant=_no_constant, strict=strict)
+            return json.loads(text, strict=strict), text
+        return json.loads(text, parse_constant=_no_constant, strict=strict), text
     except RecursionError:
         raise BadJson("nested too deep to read", "depth")
     except MemoryError:
@@ -370,11 +439,16 @@ def loads_json(text, allow_nan=True, max_depth=JSON_DEPTH_MAX, strict=True):
         raise BadJson(f"not JSON ({str(e)[:120]})", "json")
 
 
-def read_json(path, max_bytes, allow_nan=True, strict=True):
+def read_json(path, max_bytes, allow_nan=True, strict=True, clean=True):
     """The JSON value in the file at path, through loads_json, read only up to
     max_bytes (more is BadJson "size"). A missing or unreadable file raises
     OSError (FileNotFoundError when it is not there): that case is the
     caller's, since a missing file is often normal."""
+    return loads_json(_read_capped(path, max_bytes), allow_nan=allow_nan, strict=strict, clean=clean)
+
+
+def _read_capped(path, max_bytes):
+    """The bytes of the file at path; BadJson "size" past max_bytes."""
     too_big = BadJson(f"over {max_bytes // 1024} KB", "size")
     with open(path, "rb") as f:
         try:
@@ -395,7 +469,7 @@ def read_json(path, max_bytes, allow_nan=True, strict=True):
             if total > max_bytes:
                 raise too_big
             want = 1 << 20
-    return loads_json(b"".join(chunks), allow_nan=allow_nan, strict=strict)
+    return b"".join(chunks)
 
 
 _BAD_SEEN = set()
@@ -481,10 +555,11 @@ def _write_temp(path, data):
 
 
 def atomic_write_text(path, text):
-    """Write text (UTF-8, LF) to a temp file beside path, then rename over it."""
+    """Write text (UTF-8, LF) to a temp file beside path, then rename over it.
+    A lone surrogate is written as U+FFFD (clean_text), never an error."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = _write_temp(path, text.encode("utf-8"))
+    tmp = _write_temp(path, clean_text(text).encode("utf-8"))
     try:
         _rename(tmp, path)
     finally:
@@ -523,7 +598,10 @@ def atomic_write_json(path, obj, rev=None):
 
 def _read_verified_once(path):
     try:
-        data = read_json(path, MAX_STATE)
+        raw = _read_capped(path, MAX_STATE)
+        # The hash covers the value as written: checked before lone surrogates
+        # (a file written before they were cleaned) become U+FFFD.
+        data = loads_json(raw, clean=False)
     except FileNotFoundError:
         raise NotReady(f"{path}: missing", missing=True)
     except (OSError, ValueError) as e:  # BadJson too: too big, too deep, not UTF-8, not JSON
@@ -536,7 +614,7 @@ def _read_verified_once(path):
         ok = False
     if not ok:
         raise NotReady(f"{path}: hash mismatch")
-    return data
+    return clean_value(data) if surrogate_hint(raw) else data
 
 
 def read_json_verified(path, retries=1, wait=5.0, fallback=True, sleep=time.sleep):
@@ -571,7 +649,7 @@ def create_only(path, data):
     if isinstance(data, dict):
         data = json.dumps(data, ensure_ascii=True, indent=1) + "\n"
     if isinstance(data, str):
-        data = data.encode("utf-8")
+        data = clean_text(data).encode("utf-8")  # a lone surrogate as U+FFFD, never an error
     if path.exists():
         raise FileExistsError(str(path))
     tmp = _write_temp(path, data)

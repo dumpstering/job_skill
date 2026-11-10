@@ -112,6 +112,8 @@ SELECTMINDS_ROWS = 50     # rows read from one SelectMinds landing page
 ROW_CHUNK = 30_000        # characters of one result row that are read (bounded parsing)
 DESC_MAX = 400_000        # characters of a job page's description block that are read
 RETRY_GAP = 30.0          # seconds between a board's failed list call and its one retry at the end of the poll
+RETRY_MAX = 20            # more boards than this failed: the network is the problem, the retry pass is skipped
+SHOWN_BOARDS = 30         # boards named in one WARN line (then "and N more")
 RETRY_STATUSES = (502, 504)  # HTTP answers that mean the site's gateway timed out or lost its upstream
 
 # R3: these ATSs are lead-only. No list call ever, whatever the row says (3.3).
@@ -345,18 +347,43 @@ def balanced_json(text, marker):
     if not m:
         return None
     try:
-        return json.JSONDecoder().raw_decode(text, m.end())[0]
+        value = json.JSONDecoder().raw_decode(text, m.end())[0]
     except (ValueError, RecursionError):  # RecursionError: a value nested thousands deep
         return None
+    # V4-01: half of a UTF-16 pair in the page's JSON becomes U+FFFD (as in Response.json)
+    return jobfs.clean_value(value) if jobfs.surrogate_hint(text) else value
 
 
 def parse_xml(body, what):
     """ElementTree over untrusted XML. A DOCTYPE or ENTITY is refused outright,
     so no entity expansion (billion laughs) or external entity can happen;
-    job feeds and sitemaps never need one."""
+    job feeds and sitemaps never need one. The refusal holds in any encoding
+    (V4-09: a byte search missed UTF-16): a first expat pass whose DOCTYPE and
+    ENTITY handlers raise reads the prolog as expat decodes it and stops at
+    the root element (a DOCTYPE can only come before it), before ElementTree
+    builds anything."""
+    from xml.parsers import expat
     raw = body.encode("utf-8") if isinstance(body, str) else (body or b"")
     if re.search(rb"<!\s*(DOCTYPE|ENTITY)", raw[:4096], re.I) or b"<!ENTITY" in raw:
         raise FetchError(f"{what}: XML with a DOCTYPE or ENTITY is refused")
+
+    class Root(Exception):
+        pass
+
+    def refuse(*_):
+        raise FetchError(f"{what}: XML with a DOCTYPE or ENTITY is refused")
+
+    def root(*_):
+        raise Root
+    first = expat.ParserCreate()
+    first.StartDoctypeDeclHandler = first.EntityDeclHandler = refuse
+    first.StartElementHandler = root
+    try:
+        first.Parse(raw, True)
+    except Root:
+        pass
+    except expat.ExpatError:
+        raise FetchError(f"{what}: not XML")
     try:
         return ET.fromstring(raw)
     except ET.ParseError:
@@ -1735,7 +1762,7 @@ def to_reading(it, spec, first_seen):
     if it.data.get("closed"):
         rec.closed = True
     return posting.Reading(rec, "", p.get("source", ""), posting.ai_lines(p, it.report),
-                           list(it.report.hidden), it.report.stripped)
+                           list(it.report.hidden), it.report.stripped, getattr(it.report, "scan_incomplete", False))
 
 
 # ---------- one board ----------
@@ -2039,21 +2066,46 @@ def poll_skip(spec, health, settings, today, root):
     return ""
 
 
-def retry_failed(results, failed, read, fetcher, emit, gap=RETRY_GAP, clock=time.monotonic):
+def board_names(specs):
+    """'a, b, c and N more': the boards a WARN line names."""
+    labels = [s.label for s in specs]
+    shown = ", ".join(labels[:SHOWN_BOARDS])
+    return shown + (f" and {len(labels) - SHOWN_BOARDS} more" if len(labels) > SHOWN_BOARDS else "")
+
+
+def retry_failed(results, failed, read, fetcher, emit, gap=RETRY_GAP, clock=None, deadline=None,
+                 max_boards=RETRY_MAX, size=None):
     """L3-01: each board whose list call failed on a timeout or a connection
-    error is read once more, in the order they failed, at least `gap` seconds
-    after its failure (the wait is skipped with an offline fixture), and its
-    result replaces the first one: an answer now takes no strike, a second
-    failure counts as that day's one strike. A robots.txt that did not answer
-    (DENY robots-unreachable) is asked again: the fetcher keeps that outcome
-    in memory only, never on disk, and it is dropped here once. Prints RETRY
-    <the board line>."""
+    error is read once more, at least `gap` seconds after its failure (the
+    wait is skipped with an offline fixture), and its result replaces the
+    first one: an answer now takes no strike, a second failure counts as that
+    day's one strike. A robots.txt that did not answer (DENY
+    robots-unreachable) is asked again: the fetcher keeps that outcome in
+    memory only, never on disk, and it is dropped here once. Prints RETRY
+    <the board line>.
+
+    V4-05, a budget: more than max_boards failures (a network problem, not a
+    board's) skip the pass, and no retry starts once clock() reaches
+    deadline; either way one WARN line names the boards not retried. The
+    largest boards (size(spec): postings at the last good read) go first,
+    then the order they failed in."""
+    clock = clock or time.monotonic
+    if len(failed) > max_boards:
+        emit(f"WARN retry skipped: {len(failed)} boards failed (more than {max_boards}: the network, not the "
+             f"boards); not retried today: {board_names(results[i].spec for i, _ in failed)}")
+        return
+    if size is not None:
+        failed = sorted(failed, key=lambda f: -size(results[f[0]].spec))  # stable: ties keep their order
     sleep = getattr(fetcher, "sleep", time.sleep)
     mem = getattr(getattr(fetcher, "robots", None), "mem", None)
     if isinstance(mem, dict):
         for host in [h for h, e in mem.items() if isinstance(e, dict) and e.get("status") == "unreachable"]:
             mem.pop(host, None)
-    for index, failed_at in failed:
+    for k, (index, failed_at) in enumerate(failed):
+        if deadline is not None and clock() >= deadline:
+            left = [results[i].spec for i, _ in failed[k:]]
+            emit(f"WARN retry stopped: the run's time for retries is used; not retried today: {board_names(left)}")
+            return
         spec = results[index].spec
         wait = gap - (clock() - failed_at)
         if wait > 0 and not getattr(fetcher, "offline", None):
@@ -2066,13 +2118,18 @@ def retry_failed(results, failed, read, fetcher, emit, gap=RETRY_GAP, clock=time
         results[index] = res
 
 
-def poll(root, fetcher=None, offline=None, keep=None, details=True, max_pages=MAX_PAGES, emit=print):
+def poll(root, fetcher=None, offline=None, keep=None, details=True, max_pages=MAX_PAGES, emit=print,
+         deadline=None, retry_deadline=None, clock=None):
     """Poll every active watch-list board. Returns the BoardResults and writes
     state/board_health.csv. The runner passes keep (the list gates). Fail
     soft: a failure inside one board is that board's ERROR line, and a
     board_health.csv that cannot be read or written (Excel holding it) is a
-    WARN line; the poll always returns."""
+    WARN line; the poll always returns. deadline and retry_deadline are
+    clock() times (time.monotonic) after which no board read, and no retry,
+    starts: the boards left are SKIP 'time budget' (no strike), named in one
+    WARN line."""
     root = Path(root)
+    clock = clock or time.monotonic
     settings = jobfs.settings(root)
     profile = jobfs.search_profile(root)
     today = jobfs.today(root)
@@ -2096,16 +2153,24 @@ def poll(root, fetcher=None, offline=None, keep=None, details=True, max_pages=MA
         except Exception as e:  # noqa: BLE001  never let one board stop the daily
             return BoardResult(spec, "ERROR", f"reader failed ({type(e).__name__}: {netfetch.shown(e, 120)})")
 
+    late = []
     for spec in watchlist_rows(root):
+        if deadline is not None and clock() >= deadline:
+            late.append(spec)
+            results.append(BoardResult(spec, "SKIP", "time budget"))
+            continue
         res = read(spec, skip=True)
         emit(res.line())
         for err in res.detail_errors[:3]:
             emit(f"WARN detail {err}")
         if res.status in ("ERROR", "DENY") and res.retry:
-            failed.append((len(results), time.monotonic()))
+            failed.append((len(results), clock()))
         results.append(res)
+    if late:
+        emit(f"WARN boards skipped: the run's time for discovery is used; not read today: {board_names(late)}")
     if failed and not no_network(results):  # with no network at all the tick's offline retry takes over
-        retry_failed(results, failed, read, fetcher, emit)
+        retry_failed(results, failed, read, fetcher, emit, clock=clock, deadline=retry_deadline,
+                     size=lambda spec: whole((health.get(spec.key) or {}).get("last_count")))
     counted = not no_network(results)
     if not counted:
         emit(f"WARN offline: no board answered ({sum(1 for r in results if r.status != 'SKIP')} tried); "

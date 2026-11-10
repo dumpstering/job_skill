@@ -735,13 +735,72 @@ def test_borderline_seniority_last():
         assert not ctx.borderline({"job_key": "k3", "title": "Principal Scientist", "seniority": ""})
 
 
+def test_one_item_never_stops_build():
+    """V4-01: a pool item holding half of a UTF-16 pair (a lone surrogate, as
+    a board that cut an emoji sends it) is queued with U+FFFD in its files; an
+    item whose folder cannot be written is one ERROR line, is left out of the
+    list (numbers stay 1..n) and stays in the pool for another day; an item
+    whose prep raises is listed as prep_failed with one ERROR line. The day's
+    list is always built."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp) / "a"
+        root.mkdir()
+        data = json.loads((POOL / "pool_12.json").read_text(encoding="utf-8"))
+        for it in data["items"]:
+            it["title"] = it["title"] + " " + chr(0xD83D)
+            it["text"] = chr(0xDE00) + " " + (it.get("text") or "")
+            it.pop("markdown", None)
+        pool = Path(tmp) / "pool_lone.json"
+        pool.write_text(json.dumps(data, ensure_ascii=True), encoding="ascii")  # the escapes, as stored
+        code, lines = cli("build", "--root", str(root), "--date", DAY.isoformat(), "--pool", str(pool))
+        assert code == 0 and lines[-1].startswith("WROTE "), lines[-5:]
+        items = queue(root)["items"]
+        assert items and all(it["role"].endswith(" " + chr(0xFFFD)) for it in items), ascii(items[0]["role"])
+        md = (root / items[0]["folder"] / "posting.md").read_text(encoding="utf-8")
+        assert chr(0xFFFD) in md and "\\ud83d" not in md.lower(), ascii(md[:200])
+        # one folder that cannot be written, one prep that raises
+        root = Path(tmp) / "b"
+        root.mkdir()
+        real_write = jobqueue.runner_write
+        first = {}
+
+        def runner_write(folder, name, text):
+            if name == "posting.md" and not first:
+                first["folder"] = folder
+                raise OSError(13, "Access is denied")
+            return real_write(folder, name, text)
+        seen, lines = [], []
+
+        def prep(q, folder):
+            seen.append(q["job_key"])
+            if len(seen) == 2:
+                raise ValueError("odd resume value")
+        jobqueue.runner_write = runner_write
+        try:
+            jobqueue.build(root, DAY, pool_path=POOL / "pool_12.json", emit=lines.append, prep=prep)
+        finally:
+            jobqueue.runner_write = real_write
+        errs = [ln for ln in lines if ln.startswith("ERROR")]
+        assert len(errs) == 2 and errs[0].startswith("ERROR queue item ") and errs[0].endswith("Access is denied"), errs
+        assert errs[1].startswith("ERROR prep #2 ") and errs[1].endswith("ValueError: odd resume value"), errs
+        skipped = errs[0].split()[3].rstrip(":")
+        q = queue(root)
+        assert [it["n"] for it in q["items"]] == list(range(1, len(q["items"]) + 1)) and q["items"], q["items"]
+        assert skipped not in {it["job_key"] for it in q["items"]}, skipped
+        second = next(it for it in q["items"] if it["job_key"] == seen[1])
+        assert second["resume_status"] == ("prep_failed" if second["tier"] == "B" else "tier_a_pending"), second
+        left = {it["job_key"]: it for it in gates.load_pool(root)["items"]}
+        assert not left[skipped].get("queued_on"), "a skipped item stays in the pool for another day"
+        assert lines[-1].startswith("WROTE "), lines[-3:]
+
+
 def main():
     for fn in (test_build_71, test_small_pool_widens, test_frozen_and_wait, test_addendum_during_session,
                test_fold_events_idempotent, test_upload_staging, test_referral, test_variant_rule, test_not_sent,
                test_user_addendum, test_do_yourself_files_local_date, test_outcomes_next_day, test_user_skip_week,
                test_handover_carry, test_numbers_around_addendum, test_reservation_release,
                test_fold_old_pending_event, test_referral_link_in_queue, test_widen_on_usable_supply,
-               test_account_block_best_only, test_borderline_seniority_last):
+               test_account_block_best_only, test_borderline_seniority_last, test_one_item_never_stops_build):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

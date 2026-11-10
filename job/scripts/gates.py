@@ -47,7 +47,9 @@ The gates (list stage G1-G5 decide whether a detail call is made at all):
     G12 apply     no apply URL, or one G1 would refuse: discard; chat apply:
                   do-yourself; an http link from a board is opened as https
 G13 (caps) belongs to the queue builder (jobqueue.py), which defers, never discards.
-A posting that fails to gate is skipped with one ERROR line (D2).
+A posting that fails to gate is skipped with one ERROR line (D2). A posting
+still without a title after its detail read (a closed Phenom job's list
+record) is never pooled: one SKIP line, nothing recorded, read again next run.
 
 fit (the queue's order): 0.5 x overlap + 0.2 x title match + 0.15 x level +
 0.075, where overlap counts the user's terms the posting names (each
@@ -812,6 +814,16 @@ def g7_knockouts(p, v, rules):
     return None
 
 
+def title_place_gates(p, rules):
+    """G3 (place), G4 (title family) and the G7 title knockouts on a record
+    that has only a company, title and place: a do-yourself lead (L4-02),
+    which the user would apply for unread. Returns the Verdict: ok when all
+    three pass, with info family and title_match; else the gate that stopped it."""
+    v = Verdict()
+    _ = g3_location(p, v, rules) or g4_title(p, v, rules) or g7_knockouts(p, v, rules)
+    return v
+
+
 def g8_other(p, v, rules):
     needs = rules.me["sponsorship"].startswith("y")
     m = NO_SPONSOR.search(p.text or "")
@@ -1468,9 +1480,21 @@ class GateRun:
         if not v.ok or v.info.get("detail_done"):
             return v
         v.info["detail_done"] = True
+        if getattr(reading, "scan_incomplete", False):  # hidden.py ran out of budget and kept the text
+            v.lines.append("WARN HIDDEN-SCAN incomplete")
+            self.emit(f"WARN hidden-scan incomplete {p.job_key}: the page had more style rules than one read "
+                      "checks; its text was kept")
         v.info["posting_status"] = "browser_read" if (status == "browser_read" or
                                                       (v.info.get("lead_only") and not p.text)) else "read"
         unread = v.info["posting_status"] == "browser_read"
+        if not p.closed and not (p.title or "").strip():
+            # L4-06: a list record with no title whose detail gave none (a closed Phenom job's page
+            # answers 404) is never pooled, so it can never be queued as '<company> - Role'. Nothing
+            # is recorded: the next run reads its detail again.
+            v.stop("G4", "skip", "no_title", "the detail gave no title")
+            self.emit(f"SKIP {p.job_key} no title: the detail read gave none; judged again next run")
+            self.finish(p, v, reading)
+            return v
         if not p.closed and self.rejudge(p, v):
             self.finish(p, v, reading)
             return v
@@ -1613,7 +1637,10 @@ class GateRun:
                                            sort_keys=True) + "\n")
         self.mark_dormant()
         pool = load_pool(self.root)
-        items = {it["job_key"]: it for it in pool.get("items", [])}
+        items = {it["job_key"]: it for it in pool.get("items", []) if str(it.get("title") or "").strip()}
+        blank = sum(1 for it in pool.get("items", []) if not str(it.get("title") or "").strip())
+        if blank:  # L4-06: pooled before the no-title rule; never queued as '<company> - Role'
+            self.emit(f"SKIP {blank} pool item{'s' if blank != 1 else ''} with no title dropped from the pool")
         for it in self.pooled:
             items.setdefault(it["job_key"], it)
         needs = {n["job_key"]: n for n in pool.get("needs_you", [])}

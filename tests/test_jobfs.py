@@ -426,9 +426,36 @@ def test_safe_json():
         assert jobfs.atomic_write_json(p, {"k": 1})["_rev"] == 1
 
 
+def test_lone_surrogates():
+    """V4-01 / V4-02: half of a UTF-16 pair in JSON ("\\ud83d", an emoji a
+    server cut in two) comes back from loads_json and read_json as U+FFFD, in
+    values and keys at any depth, while a whole escaped pair stays its one
+    character; a verified file written before the fix (its hash over the
+    surrogate) still verifies and reads back cleaned; atomic_write_text and
+    create_only write U+FFFD instead of raising UnicodeEncodeError."""
+    bs, lone, fffd = "\\", chr(0xD83D), chr(0xFFFD)
+    text = ('{"t": "a' + bs + 'ud83d b", "k' + bs + 'uDC00": [{"x": "' + bs + 'ud83d' + bs + 'ude00"}, "'
+            + bs + 'udfff"]}')
+    want = {"t": "a" + fffd + " b", "k" + fffd: [{"x": chr(0x1F600)}, fffd]}
+    assert jobfs.loads_json(text) == want, ascii(jobfs.loads_json(text))
+    assert jobfs.loads_json(text.encode("ascii")) == want
+    assert jobfs.loads_json(text, clean=False)["t"] == "a" + lone + " b", "clean=False keeps the value as parsed"
+    assert jobfs.loads_json('["a' + lone + '"]') == ["a" + fffd], "a raw surrogate in a str too"
+    assert jobfs.clean_text("x" + lone + chr(0xDE00) + "y") == "x" + chr(0x1F600) + "y", "a raw pair is joined"
+    with tempfile.TemporaryDirectory(prefix="jobfs_") as tmp:
+        p = Path(tmp) / "pool.json"
+        jobfs.atomic_write_json(p, {"items": [{"title": "QC " + lone}]})  # as a pre-fix runner wrote it
+        assert jobfs.read_json(p, jobfs.MAX_STATE)["items"][0]["title"] == "QC " + fffd
+        assert jobfs.read_json_verified(p, retries=0)["items"][0]["title"] == "QC " + fffd, "hash checked on the raw value"
+        jobfs.atomic_write_text(Path(tmp) / "posting.md", "Role: QC " + lone + "\n")
+        assert (Path(tmp) / "posting.md").read_bytes() == ("Role: QC " + fffd + "\n").encode("utf-8")
+        jobfs.create_only(Path(tmp) / "c.md", "x" + lone)
+        assert (Path(tmp) / "c.md").read_bytes() == ("x" + fffd).encode("utf-8")
+
+
 def main():
     for t in (test_time, test_settings, test_atomic_json, test_create_only_and_jsonl, test_run_lock,
-              test_posting_record, test_names_and_folder, test_ascii, test_safe_json):
+              test_posting_record, test_names_and_folder, test_ascii, test_safe_json, test_lone_surrogates):
         t()
         print("ok", t.__name__)
     print("PASS")

@@ -36,9 +36,11 @@ current one when Claude made one (new --copy, the lines that now say more
 fixed), else the same files again; it runs the approval checks and a strict
 build of the base resume (base_resume.pdf in that version's folder), and
 prints one combined diff with only the changed lines: CHANGED <id> (the
-entry's new text, once), then per family "- "/"+ " lines (a new version
-against the current one) or "= " lines (the same files: the lines citing a
-changed entry), then PLAN <12 hex> (a hash of every file and entry that one
+entry's new text, once, whole), then per family "- "/"+ " lines (a new
+version against the current one; a pair over DIFF_TEXT_MAX shows the same
+window of both around what changed, and a pair that would print the same
+is a PROBLEM) or "= " lines (the same files: the lines citing a changed
+entry, whole), then PLAN <12 hex> (a hash of every file and entry that one
 yes approves) and NEXT. rebuild --approve PLAN approves them all when
 nothing changed since that plan (else REFUSED): a new version with the old
 version's mode and caps, the same files as APPROVED ... again; then it
@@ -88,7 +90,8 @@ import library  # noqa: E402
 
 FAMILY_RE = re.compile(r"^[a-z0-9][a-z0-9_]{0,39}\Z")  # \Z: a trailing newline never passes
 PLAN_RE = re.compile(r"[0-9a-f]{12}")
-DIFF_TEXT_MAX = 400
+DIFF_TEXT_MAX = 400  # a changed line longer than this prints a window around what changed (shown_pair)
+DIFF_CONTEXT = 120  # characters kept either side of that window
 VARIANT_FILES = ("resume.json", "pool.json", "letter.json")
 POOL_KEYS = {"summaries", "bullets", "skills", "aliases", "publications"}
 LETTER_SLOTS = {"{company}", "{role}", "{focus}", "{date}"}
@@ -547,7 +550,8 @@ def cmd_approve(root, family, version, mode, max_pages, pub_max, emit=print, sho
 
 
 def changed_lines(root, vdir, changed):
-    """CHANGED lines: each changed entry's new text and the variant units citing it."""
+    """CHANGED lines: each changed entry's new text and the variant units
+    citing it, whole: the user re-approves the same files on reading them."""
     lib = library.load(jobfs.Folder(root).library).by_id
     units = []
     for name in ("resume.json", "pool.json"):
@@ -570,10 +574,10 @@ def changed_lines(root, vdir, changed):
             out.append(f"CHANGED {why}")
             continue
         now = lib[eid].text if eid in lib else "(gone)"
-        out.append(f'CHANGED {why}; now: "{checks.norm(now)[:120]}"')
+        out.append(f'CHANGED {why}; now: "{checks.norm(now)}"')
         for name, text, ev in units:
             if eid in ev:
-                out.append(f'  cited in {name}: "{checks.norm(text)[:120]}"')
+                out.append(f'  cited in {name}: "{checks.norm(text)}"')
     return out
 
 
@@ -690,22 +694,64 @@ def unit_lines(vdir):
     return out
 
 
+def shown_pair(old, new):
+    """The texts a "- "/"+ " pair prints (R8: the user reads every changed
+    word before the one yes). Both whole when both fit DIFF_TEXT_MAX; else the
+    same window of each, from DIFF_CONTEXT characters before the first
+    character that differs to DIFF_CONTEXT after the last, with "..." where
+    text was left out. Everything outside the window is the same in both, so
+    nothing the user approves is unseen."""
+    if (len(old) <= DIFF_TEXT_MAX and len(new) <= DIFF_TEXT_MAX) or old == new:
+        return old, new
+    p = 0
+    while p < min(len(old), len(new)) and old[p] == new[p]:
+        p += 1
+    s = 0
+    while s < min(len(old), len(new)) - p and old[-1 - s] == new[-1 - s]:
+        s += 1
+    start = max(0, p - DIFF_CONTEXT)
+
+    def window(x):
+        end = min(len(x), len(x) - s + DIFF_CONTEXT)
+        return ("..." if start else "") + x[start:end] + ("..." if end < len(x) else "")
+    return window(old), window(new)
+
+
 def changed_unit_lines(old_dir, new_dir):
-    """The "- " and "+ " lines between two versions: the changed lines only."""
+    """The "- " and "+ " lines between two versions: the changed lines only.
+    A changed line is paired with the one it replaced and both print the
+    window shown_pair gives; an added or removed line prints whole. A pair
+    that would still print the same is a PROBLEM line, which keeps the family
+    out of the plan."""
     import difflib
-    a = [f"{f} {label}: {text}" for f, label, text in unit_lines(old_dir)]
-    b = [f"{f} {label}: {text}" for f, label, text in unit_lines(new_dir)]
-    out = []
-    for op, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
-        if op in ("replace", "delete"):
-            out += [f"- {x[:DIFF_TEXT_MAX]}" for x in a[i1:i2]]
-        if op in ("replace", "insert"):
-            out += [f"+ {x[:DIFF_TEXT_MAX]}" for x in b[j1:j2]]
-    return out
+    a, b = unit_lines(old_dir), unit_lines(new_dir)
+
+    def line(unit, text):
+        return f"{unit[0]} {unit[1]}: {text}"
+    out, problems = [], []
+    for op, i1, i2, j1, j2 in difflib.SequenceMatcher(None, [line(x, x[2]) for x in a], [line(x, x[2]) for x in b],
+                                                      autojunk=False).get_opcodes():
+        if op == "equal":
+            continue
+        old, new = a[i1:i2], b[j1:j2]
+        pairs = min(len(old), len(new))
+        minus, plus = [], []
+        for k in range(pairs):
+            o, n = shown_pair(old[k][2], new[k][2])
+            minus.append(f"- {line(old[k], o)}")
+            plus.append(f"+ {line(new[k], n)}")
+            if minus[-1][2:] == plus[-1][2:]:
+                problems.append(f"PROBLEM a changed line in {new[k][0]} ({new[k][1]}) would print the same as the "
+                                "line it replaces")
+        minus += [f"- {line(x, x[2])}" for x in old[pairs:]]
+        plus += [f"+ {line(x, x[2])}" for x in new[pairs:]]
+        out += minus + plus
+    return out + problems
 
 
 def citing_lines(vdir, ids):
-    """The "= " lines: each line of the version citing one of ids, with the ids it cites."""
+    """The "= " lines: each line of the version citing one of ids, whole (the
+    user re-approves every word of it), with the ids it cites."""
     out = []
     for name in ("resume.json", "pool.json"):
         try:
@@ -719,7 +765,7 @@ def citing_lines(vdir, ids):
                 ev = x.get("ev")
                 if isinstance(ev, list) and isinstance(x.get("text"), str) and set(ev) & set(ids):
                     hit = ", ".join(i for i in ev if i in ids)
-                    out.append(f"= {name}: {checks.norm(x['text'])[:DIFF_TEXT_MAX]} (cites {hit})")
+                    out.append(f"= {name}: {checks.norm(x['text'])} (cites {hit})")
                 stack += list(x.values())
             elif isinstance(x, list):
                 stack += reversed(x)
@@ -841,7 +887,7 @@ def cmd_rebuild(root, plan=None):
                 continue
             shown.add(eid)
             now = lib[eid].text if eid in lib else ""
-            print(f'CHANGED {eid}: "{checks.norm(now)[:DIFF_TEXT_MAX]}"' if now else f"CHANGED {why}")
+            print(f'CHANGED {eid}: "{checks.norm(now)}"' if now else f"CHANGED {why}")  # whole: read against it
     clean, problems = [], []
     for fam, cur, target, old, changed in targets:
         vdir = f.variant(fam, target)

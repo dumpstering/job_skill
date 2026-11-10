@@ -861,6 +861,67 @@ def test_retry_waits_and_reads_the_cause():
     assert not boards.transient(netfetch.Denied("robots-unreachable example.com: timed out"))
 
 
+def test_retry_budget():
+    """V4-05: the end-of-poll retry has a budget. More than RETRY_MAX failures
+    (the network, not the boards) skip the pass; the largest boards (postings
+    at the last good read) are retried first; no retry starts once the
+    deadline is reached; either way one WARN line names the boards not
+    retried. poll's own deadline: boards not read by then are SKIP 'time
+    budget' with one WARN line and no strike."""
+    def failures(n):
+        return [boards.BoardResult(boards.parse_spec(f"lever:b{i:02d}"), "ERROR", "api.lever.co: timed out",
+                                   retry=True) for i in range(n)]
+
+    class Offline:
+        offline = True
+    calls, lines = [], []
+    n = max(boards.RETRY_MAX, boards.SHOWN_BOARDS) + 5
+    many = failures(n)
+    boards.retry_failed(many, [(i, 0.0) for i in range(n)], lambda s: calls.append(s) or boards.BoardResult(s),
+                        Offline(), lines.append, clock=lambda: 1.0)
+    assert calls == [] and len(lines) == 1 and lines[0].startswith(
+        f"WARN retry skipped: {n} boards failed (more than {boards.RETRY_MAX}"), lines
+    assert "lever:b00, lever:b01" in lines[0] and lines[0].count("lever:b") == boards.SHOWN_BOARDS, lines[0]
+    assert lines[0].endswith(f"and {n - boards.SHOWN_BOARDS} more"), lines[0]
+    # largest first, and the deadline stops the pass after the first retry
+    few = failures(3)
+    sizes = {"b00": 5, "b01": 80, "b02": 20}
+    clock = [100.0]
+
+    def read(spec):
+        calls.append(spec.board)
+        clock[0] += 50.0
+        return boards.BoardResult(spec, "EMPTY")
+    lines.clear()
+    boards.retry_failed(few, [(i, 0.0) for i in range(3)], read, Offline(), lines.append, clock=lambda: clock[0],
+                        deadline=120.0, size=lambda spec: sizes[spec.board])
+    assert calls == ["b01"] and few[1].status == "EMPTY" and few[0].status == "ERROR", (calls, few)
+    assert [ln for ln in lines if ln.startswith("WARN")] == [
+        "WARN retry stopped: the run's time for retries is used; not retried today: lever:b02, lever:b00"], lines
+    # poll: a deadline already passed reads no board, takes no strike
+    tmp = Path(tempfile.mkdtemp())
+    try:
+        root = poll_root(tmp, ["Vaxcyte,greenhouse,vaxcyte,,active", "Slow Bio,lever,slowbio,,active"])
+        f, lines = fetcher(), []
+        results = boards.poll(root, fetcher=f, details=False, emit=lines.append, deadline=0.0)
+        assert [r.status for r in results] == ["SKIP", "SKIP"] and not f.offline.requests, results
+        assert lines == ["WARN boards skipped: the run's time for discovery is used; not read today: "
+                         "greenhouse:vaxcyte, lever:slowbio"], lines
+        assert not boards.load_health(root), boards.load_health(root)
+    finally:
+        shutil.rmtree(tmp)
+
+
+def test_page_json_lone_surrogate():
+    """V4-01: JSON read from a page script (balanced_json, the Phenom-style
+    readers) gets the cleaning Response.json gives: half of a UTF-16 pair
+    becomes U+FFFD, a whole pair stays its one character."""
+    bs = "\\"
+    page = '<script>phApp.ddo = {"t": "QC ' + bs + 'ud83d", "e": "' + bs + 'ud83d' + bs + 'ude00"};</script>'
+    assert boards.balanced_json(page, "phApp.ddo") == {"t": "QC " + chr(0xFFFD), "e": chr(0x1F600)}, \
+        ascii(boards.balanced_json(page, "phApp.ddo"))
+
+
 def test_career_site_readers():
     """R7: SuccessFactors (table and tile layouts, paging by startrow up to
     the site's own total, one search per location= place, the job page's
@@ -1008,7 +1069,9 @@ def main():
               test_jazzhr_page_without_jsonld, test_odd_answers_stay_on_their_board,
               test_fuzz_bodies_stay_on_their_board, test_crawl_delay_skip_noted, test_list_titles_unescaped,
               test_facet_city_state_without_comma, test_place_lines_bounded, test_retry_once_at_end_of_poll,
-              test_retry_waits_and_reads_the_cause, test_career_site_readers, test_career_site_parsing_bounded):
+              test_retry_waits_and_reads_the_cause, test_retry_budget, test_page_json_lone_surrogate,
+              test_career_site_readers,
+              test_career_site_parsing_bounded):
         t()
         print("ok", t.__name__)
     if os.environ.get("JOB_SKILL_LIVE") == "1":
