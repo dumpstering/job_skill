@@ -33,7 +33,6 @@ Needs pypdf (or pdfplumber) only for PARSE and the CITE read-back; both are
 imported lazily.
 """
 import difflib
-import json
 import re
 from decimal import Decimal
 from pathlib import Path
@@ -208,9 +207,10 @@ def term_found(text, term, aliases=(), stems=False):
 
 
 def load_terms(path):
+    import jobfs  # the safe JSON loader (shared decision R3); build_resume puts its folder on sys.path
     try:
-        raw = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as e:
+        raw = jobfs.read_json(path, jobfs.MAX_FILE)
+    except (OSError, ValueError) as e:  # BadJson: too big, nested deeper than 64, not JSON
         raise ValueError(f"cannot read {path}: {e}")
     if not isinstance(raw, list):
         raise ValueError(f"{path} must be a JSON list")

@@ -105,28 +105,59 @@ log prints `WAIT_VARIANT <family> <n> jobs`.
   handover. `next` prints `HOLD #4: its base resume cites something you
   corrected today. Say skip, or make the new version with /job variants
   first.` in place of `OPEN` and `UPLOAD`, held jobs come after every other
-  job, and the card counts them in one line. On the user's ok to the same
-  files (`APPROVED <family> v<N> again`) they are ready at once; a new
-  version builds them at the next daily run. A Tier A build whose
-  `final.json` cites the corrected entry no longer counts either: that job
-  goes back to its Tier B file (held as above when that one is affected
-  too) until its Tier A resume is built again.
+  job, and the card counts them in one line. Recover every family at once
+  (below, "One correction, every family"). A Tier A build whose
+  `final.json` cites the corrected entry no longer counts either: `next`
+  prints `REBUILD #<n>` for that job and rebuilds come first
+  ([apply_batch.md](apply_batch.md) step 1); it is never swapped for its
+  Tier B file without a word.
 - `approve` never re-approves a changed file: put the change in a new
   version (`new --copy`), and approve that. Earlier versions stay.
-- After a cited entry changed, `check` prints each `CHANGED` entry with its
-  new text and every variant bullet citing it, then a `NEXT` line. Read each
-  bullet against the new text. If one now says more than its entry (the
-  library says "supported", the bullet "Led"), make `v<N+1>` with `new
-  --copy`, fix the bullet, audit, and ask for approval. If every bullet still
-  holds, ask the user for the one-line re-approval; on their `approve
-  <family>`, `approve` re-approves the same files (`APPROVED <family> v<N>
-  again`). Either way, tell the user in one line which family waits.
 - After merging a "Replaces:" entry (writing_rules.md, Block C), run
-  `variants.py check` at once, so a family that cites it is caught before
-  the next daily run and its jobs built today are held, not handed over.
+  `variants.py rebuild` at once (below), so every family that cites it is
+  caught before the next daily run, and its jobs built today are held, not
+  handed over, until the user's one yes.
 - An approval written before per-entry hashes holds while
   `achievement_library.md` is byte-identical to `library_rev`; any library
   edit then needs the re-approval above.
+
+## One correction, every family (`rebuild`)
+
+A correction to an entry that every family cites holds every job built from
+those families, so recover them all in one reply. On `/job variants` after
+a correction, or when the card's hold line sends the user here:
+
+1. `variants.py rebuild` takes every family whose current approval a
+   corrected entry broke (its files unchanged). It prints `CHANGED <id>:
+   "<the entry's new text>"` once per entry, then per family `REBUILD
+   <family> v<N> again` with `= ` lines (each line citing a corrected entry)
+   or `REBUILD <family> v<N> -> v<N+1>` with `- ` and `+ ` lines (only the
+   lines that changed), `BUILD ok` (the approval checks and a strict build of
+   the base resume, `base_resume.pdf` in that version's folder), `PLAN
+   <hash>` and `NEXT`. `REBUILD none` means no family cites a corrected
+   entry.
+2. Read every `= ` line against its `CHANGED` text. If one now says more
+   than its entry (the library says "supported", the line "Led"), run
+   `variants.py new --family <id> --copy`, fix that line in the new version
+   (nothing else), and run `rebuild` again: that family now shows its `- `
+   and `+ ` lines. `PROBLEM` lines (exit 6) keep a family out of the plan:
+   fix them the same way and run `rebuild` again, so one yes covers every
+   family.
+3. Show the user every `CHANGED`, `- `, `+ ` and `= ` line in one message,
+   then: "These base resumes change because of your correction. Reply yes
+   to use them all." Never ask per family.
+4. On their `yes`, run `variants.py rebuild --approve <hash>` with the
+   `PLAN` hash. It approves every family in the plan (`APPROVED <family> v<N>
+   again`, or the new version with the old one's mode and page cap), then
+   rebuilds today's Tier B files built from a version it replaced, and ends
+   `DONE approved=<n> rebuilt=<n> prep_failed=<n>`. The held jobs are ready
+   at once; run `today_view.py next`. `REFUSED the base resumes or the
+   library changed since that plan`: something moved after the user saw the
+   lines; run `rebuild` again and show its lines again.
+
+`approve --family <id>` still re-approves one family's same files
+(`APPROVED <family> v<N> again`), and `check` still prints `CHANGED` lines
+and a `NEXT` line per family; `rebuild` does both for every family at once.
 
 ## What tuning may do (`tune`; spec 4.3), and nothing else
 

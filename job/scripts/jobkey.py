@@ -5,6 +5,7 @@ Imported by tracker.py, posting.py and the v1.2 runner; stdlib only.
 import hashlib
 import math
 import re
+import unicodedata
 from urllib.parse import parse_qs, parse_qsl, urlencode, urlparse
 
 # v1.1 words, dropped wherever they appear (tracker matching depends on this).
@@ -51,8 +52,70 @@ def parse_url(url):
     return host, parts, query
 
 
+# R2: every job key holds only these characters and is at most KEY_MAX long, so
+# a key a script prints is inert inline in a command (no quoting needed).
+SAFE_KEY = re.compile(r"[A-Za-z0-9._:/-]{1,200}")
+KEY_MAX = 200
+KEY_OTHER = re.compile(r"[^A-Za-z0-9._:/-]+")
+# A folder or file path a script prints always goes in double quotes, so it may
+# also hold spaces and the punctuation bash and PowerShell leave alone inside
+# them (never $ ` " \ or a control character): the same rule as
+# today_view.path_ok, so every printer agrees.
+PATH_PUNCT = frozenset(" ._-/'&(),;!#%+=@[]{}~^")
+PATH_MAX = 260
+
+
+def safe_key(key):
+    """The R2 form of a key: unchanged when it already holds only A-Z a-z 0-9
+    . _ : / - and is at most 200 characters; otherwise every run of other
+    characters becomes '_', the text is cut to fit, and '-' plus a 12-hex
+    BLAKE2b hash of the original key is appended, so distinct keys stay
+    distinct. Idempotent: a key stored by an earlier version maps to the key
+    this version computes for the same link, so dedupe compares both sides
+    through safe_key (same_key)."""
+    k = "" if key is None else str(key)
+    if not k or SAFE_KEY.fullmatch(k):
+        return k
+    digest = hashlib.blake2b(k.encode("utf-8", "surrogatepass"), digest_size=6).hexdigest()
+    return KEY_OTHER.sub("_", k)[:KEY_MAX - len(digest) - 1] + "-" + digest
+
+
+def same_key(a, b):
+    """True when two keys name the same posting, either one stored by an
+    earlier version (its raw form) or by this one."""
+    return bool(a) and bool(b) and safe_key(a) == safe_key(b)
+
+
+def path_ok(path):
+    """True for a folder or file path under the folder that a script may
+    print for double quotes (R2): relative, '/'-separated, no empty, '.' or
+    '..' part, not starting with '-', at most 260 characters, and every
+    character a letter, a digit or PATH_PUNCT."""
+    if not isinstance(path, str) or not path or len(path) > PATH_MAX or path.startswith(("-", "/")):
+        return False
+    if any(part in ("", ".", "..") for part in path.split("/")):
+        return False
+    return all(ch in PATH_PUNCT or (unicodedata.category(ch)[0] in "LN" and ch.isprintable()) for ch in path)
+
+
+def inline_ok(value, path=False):
+    """True when a printed value may go inline in a command (R2): a job key,
+    n, a date or a family id holds only the key characters (at most 200, no
+    leading '-'); a folder or file path (path=True) passes path_ok."""
+    if path:
+        return path_ok(value)
+    s = value if isinstance(value, str) else ("" if value is None else str(value))
+    return bool(SAFE_KEY.fullmatch(s)) and not s.startswith("-")
+
+
 def job_key(url, ats=None):
-    """A stable key for one posting, the same whichever link to it was pasted.
+    """A stable key for one posting, the same whichever link to it was pasted,
+    always in the R2 form (safe_key of raw_key)."""
+    return safe_key(raw_key(url, ats))
+
+
+def raw_key(url, ats=None):
+    """The key as v1.2 rounds 1-3 built it (safe_key maps it to R2's form).
 
     Greenhouse, Lever and Ashby IDs are unique across companies, so their keys
     carry no company; Workday, iCIMS and SmartRecruiters IDs are per tenant.
@@ -177,6 +240,16 @@ def v12_key(host, parts, query, ats=""):
         jid = seg_after(parts, "job")
         if jid:
             return f"phenom:{host}:{jid.upper()}"
+    # Career sites on an employer's own host (boards.py, round 4): the job's
+    # number, never its title slug, so a retitled job keeps its key.
+    if ats == "successfactors" and len(parts) >= 2 and parts[0].lower() == "job" and parts[-1].isdigit():
+        return f"successfactors:{host}:{parts[-1]}"  # /job/<slug>/<id>/
+    if ats == "taleo" and len(parts) == 5 and parts[0].lower() == "job" and parts[-1].isdigit():
+        return f"taleo:{host}:{parts[-1]}"  # TalentBrew: /job/<city>/<title>/<org>/<id>
+    if ats == "taleo" and len(parts) == 2 and parts[0].lower() == "jobs":
+        m = re.search(r"-(\d{1,12})$", parts[1])
+        if m:
+            return f"taleo:{host}:{m.group(1)}"  # SelectMinds: /jobs/<title>-<id>
     return ""
 
 

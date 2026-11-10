@@ -163,8 +163,11 @@ def test_rejections():
         assert bad.exists()
     out = lines(run(TRACKER, "apply-events", "--root", root))
     assert out[-1] == "APPLIED 0 PENDING 0 REJECTED 1" and "unreadable after 3 tries" in out[0], out
+    assert out[0].startswith(f"ERROR bad event file {bad.name}: ") and out[0].endswith("moved to runner/in/bad/"), out
+    aside = jobfs.Folder(root).runner_in / "bad"
+    assert (aside / bad.name).exists() and "not JSON" in (aside / (bad.name + ".reason.txt")).read_text(
+        encoding="utf-8")
     rej = jobfs.Folder(root).events_rejected
-    assert (rej / bad.name).exists() and "not JSON" in (rej / (bad.name + ".reason.txt")).read_text(encoding="utf-8")
     # a file still arriving (young) is pending without counting a try
     young = put_event(root, "{", name="20261112T171504Z_00000002_tracker.json", old=False)
     assert run(TRACKER, "apply-events", "--root", root).strip() == "APPLIED 0 PENDING 1 REJECTED 0"
@@ -194,9 +197,9 @@ def test_rejections():
         put_event(root, ev, name=f"{ev['id']}_tracker.json")
         out = run(TRACKER, "apply-events", "--root", root)
         assert why in out and "REJECTED 1" in out, (why, out)
-    assert len(list(rej.glob("*.reason.txt"))) == 9
+    assert len(list(rej.glob("*.reason.txt"))) == 8
     snap = json.loads((root / "runner" / "out" / "tracker.json").read_text(encoding="utf-8"))
-    assert len(snap["pending_rejected"]) == 9 and snap["applications"] == []
+    assert len(snap["pending_rejected"]) == 9 and snap["applications"] == [], "the file set aside counts too"
 
 
 def test_emit_and_overlay():
@@ -242,10 +245,89 @@ def test_emit_and_overlay():
                       (["--type", "usage", "--json", '{"minutes": "31"}'], "ERROR payload.minutes must be a number")):
         out = run(EVENTS, "emit", "--root", root, *args, code=1)
         assert out.startswith(why), (args, out)
-    big = root / "big.json"
-    big.write_text(json.dumps({"notes": "x" * 70000}), encoding="utf-8")
-    out = run(EVENTS, "emit", "--root", root, "--type", "started", "--json-file", big, code=1)
+    big = root / "claude" / "big.json"
+    big.parent.mkdir(parents=True, exist_ok=True)
+    big.write_text(json.dumps({"notes": "x" * 65400}), encoding="utf-8")  # under the file cap, over the event cap
+    out = run(EVENTS, "emit", "--root", root, "--type", "started", "--json-file", "claude/big.json", code=1)
     assert out.strip() == "ERROR event over 64 KB", out
+    assert not big.exists(), "--json-file is read once and removed, like --args-file"
+
+
+def test_json_file_confined():
+    """G3-05 / R4: events.py emit --json-file reads only a file under
+    <root>/claude/ (at most 64 KB, nested at most 64 deep) and removes it once read."""
+    root = new_root()
+    (root / "claude").mkdir()
+    outside = Path(tempfile.mkdtemp(prefix="job_events_outside_")) / "payload.json"
+    outside.write_text('{"reason": "user"}', encoding="utf-8")
+    loose = root / "loose.json"
+    loose.write_text('{"reason": "user"}', encoding="utf-8")
+    for path in (outside, loose, "claude/../loose.json"):
+        out = run(EVENTS, "emit", "--root", root, "--type", "skipped", "--json-file", path, code=1)
+        assert out.startswith("ERROR --json-file ") and "outside claude/" in out, (path, out)
+    assert outside.exists() and loose.exists(), "a refused file outside claude/ is left alone"
+    assert not jobfs.Folder(root).events.exists() or not list(jobfs.Folder(root).events.glob("*.json"))
+    deep = root / "claude" / "deep.json"
+    deep.write_bytes(b'{"payload": ' + b"[" * 20000 + b"]" * 20000 + b"}")
+    out = run(EVENTS, "emit", "--root", root, "--type", "skipped", "--json-file", "claude/deep.json", code=1)
+    assert out.startswith("ERROR --json-file ") and "nested deeper than 64" in out and not deep.exists(), out
+    (root / "claude" / "ok.json").write_text('{"payload": {"reason": "user"}, "n": 3}', encoding="utf-8")
+    out = run(EVENTS, "emit", "--root", root, "--type", "skipped", "--json-file", "claude/ok.json")
+    assert out.startswith("EVENT ") and not (root / "claude" / "ok.json").exists(), out
+    print("ok emit --json-file: only under claude/, at most 64 KB and 64 deep, read once and removed")
+
+
+def test_printed_values():
+    """R2: a job key events.py or tracker.py prints for Claude to put inline
+    holds only A-Z a-z 0-9 . _ : / - (an unsafe stored key is never printed),
+    and a posted value is a YYYY-MM-DD date or "undated"."""
+    import jobkey
+    root = new_root()
+    run(TRACKER, "init", "--root", root, "--transport", "direct")
+    bad_key = "url:example.com/j?a=1&b=$(x)`y`"
+    put_event(root, {"v": 1, "id": "20261112T171505Z_0000abcf", "type": "started", "at": "2026-11-12T09:15:05-08:00",
+                     "session": "", "job_key": bad_key, "n": 5, "date": TODAY, "payload": {}})
+    out = lines(run(EVENTS, "overlay", "--root", root))
+    assert out[1] == f"ITEM #5 {events.KEY_REFUSED} started" and not any("$(" in ln for ln in out), out
+    out = lines(run(TRACKER, "check", "--root", root, "--job-key", bad_key, "--company", "Acme", "--title", "R"))
+    key = out[0].split(" ", 2)[2]
+    assert out[0].startswith("JOB KEY ") and jobkey.inline_ok(key) and key == jobkey.safe_key(bad_key), out
+    for value, want in (("2026-10-01", "2026-10-01"), ("2026-10-01T08:00:00Z", "2026-10-01"), ("Nov 3", "undated"),
+                        ("2026-02-30", "undated"), (None, "undated"), ("$(x)", "undated")):
+        assert events.posted_value(value) == want, (value, events.posted_value(value))
+    ev = {"v": 1, "id": "20261112T171506Z_0000abd0", "type": "added", "at": "2026-11-12T09:15:06-08:00",
+          "session": "", "job_key": "greenhouse:9", "n": 9, "date": TODAY,
+          "payload": {"via": "add", "item": {"folder": "applications/x", "posted": "last week"}}}
+    assert events.validate(ev, root) == "payload.item.posted must be a YYYY-MM-DD date or \"undated\"", \
+        events.validate(ev, root)
+    print("ok printed values: an unsafe stored key is refused in print, tracker check prints the safe key, "
+          "posted is a date or undated")
+
+
+def test_deep_event_file():
+    """SV-02: a dropped event file nested 20,000 deep (40 KB, under every size
+    cap) never stops a reader: the overlay skips it, and apply-events moves it
+    to runner/in/bad/ with one ERROR line."""
+    root = new_root()
+    run(TRACKER, "init", "--root", root, "--transport", "direct")
+    deep = b'{"v": 1, "x": ' + b"[" * 20000 + b"]" * 20000 + b"}"
+    path = jobfs.Folder(root).events / "20261112T171503Z_0000abcd_started.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(deep)
+    ok = put_event(root, {"v": 1, "id": "20261112T171504Z_0000abce", "type": "started",
+                          "at": "2026-11-12T09:15:04-08:00", "session": "", "job_key": "greenhouse:7", "n": 7,
+                          "date": TODAY, "payload": {}})
+    out = lines(run(EVENTS, "overlay", "--root", root))
+    assert out[:2] == [f"OVERLAY {TODAY}", "ITEM #7 greenhouse:7 started"], out
+    assert [ev["id"] for ev in events.recent(root)] == ["20261112T171504Z_0000abce"]
+    assert events.read_file(path)[2] is True, "nested too deep is permanent"
+    out = lines(run(TRACKER, "apply-events", "--root", root))
+    assert out == [f"ERROR bad event file {path.name}: not JSON: nested deeper than 64; moved to runner/in/bad/",
+                   "APPLIED 1 PENDING 0 REJECTED 1"], out
+    assert (jobfs.Folder(root).runner_in / "bad" / path.name).exists() and not path.exists() and not ok.exists()
+    out = lines(run(EVENTS, "overlay", "--root", root))
+    assert "TRACKER REJECTED 1" in out, out
+    print("ok a deeply nested event file: the overlay skips it, apply-events sets it aside in runner/in/bad/")
 
 
 POSTING_MD = """URL: https://job-boards.greenhouse.io/acme/jobs/1234567
@@ -396,7 +478,9 @@ def main():
     print("ok parity")
     test_overlay_reads_done(b)
     print("ok overlay_reads_done")
-    for fn in (test_rejections, test_emit_and_overlay, test_add_from_link, test_added_trust):
+    for fn in (test_rejections, test_emit_and_overlay, test_json_file_confined, test_deep_event_file,
+               test_printed_values,
+               test_add_from_link, test_added_trust):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

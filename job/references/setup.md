@@ -8,7 +8,8 @@ once its base resume is approved. Say these times when setup starts. The
 card sends the user here with `/job setup` when no job finder
 runs: with sitting 1 done, start at Sitting 2 step 1 (no
 `runner/out/status.json`: install it) or step 2 (it is installed but mode
-is still M: switch it on). Commands are shortened (SKILL.md "Scripts"); each takes `--root
+is still M: switch it on), and with `/job alerts` from its alert line (do
+only "Alerts", below). Commands are shortened (SKILL.md "Scripts"); each takes `--root
 "<folder>"`. If a Python package is missing, `pip install` it and carry on.
 
 ## Sitting 1 (day 1, about 30-45 minutes)
@@ -106,6 +107,10 @@ Create `config/` and write, backing up anything already there:
 1. `config/settings.toml` from [../templates/settings.toml](../templates/settings.toml),
    with **`[runner] mode = "M"`**: the runner is not installed yet, and in
    mode L every tracker write would wait for a runner that is not there.
+   Fill `[experience] years` and `industry_years` from the master resume's
+   roles (whole years after the degree, postdocs included, student roles
+   not; industry is outside universities, institutes and hospitals). No
+   question for the user: the gates judge seniority against these.
 2. **The search profile, from a preset when one fits.** Presets live in
    `templates/presets/`; `lifesci_bayarea` holds life-science title
    families, license knockouts and San Francisco Bay Area places, plus a
@@ -164,9 +169,13 @@ caught up by the first `/job`. Free plans have no scheduled tasks; then
    anyway).
    It installs Python for this user, checks the download's SHA-256, sets up
    the two Windows tasks and a desktop shortcut "Run job finder now", and
-   asks for optional API keys (Adzuna, USAJOBS) in its own window. **Keys
-   are typed only there, never in chat**; if one is pasted into chat, do not
-   store or repeat it, and suggest making a new key. It ends with
+   asks for two free keys (Adzuna, USAJOBS) in its own window. After the
+   first week those keys and the alert emails fill most of each day's list,
+   so ask for both: developer.adzuna.com and developer.usajobs.gov, about 5
+   minutes each. A key skipped now: double-click `install_runner.cmd`
+   again later; it asks only for a key not entered yet. **Keys are typed
+   only there, never in chat**; if one is pasted into chat, do not store or
+   repeat it, and suggest making a new key. It ends with
    `SELFTEST PASS` or `FAIL` lines; `WARN` lines (a job site that did not
    answer, Recruitee) are fine.
 2. **Switch to mode L** after `SELFTEST PASS` (`runner/out/status.json`
@@ -210,6 +219,28 @@ caught up by the first `/job`. Free plans have no scheduled tasks; then
    `network\raw\` ([referrals.md](referrals.md)).
 9. **The usage check** on days 1-2 ([usage.md](usage.md)).
 10. Then the first `/job`.
+
+## Alerts (`/job alerts`, from the card's alert line)
+
+The card said no job-alert email has come in for 3 days. Alerts fill most
+of each day's list after the first week, so get them coming again in one
+short exchange:
+1. One read-only Gmail search, `newer_than:7d` from LinkedIn's three alert
+   senders (discovery.md "Alert intake") and the `[alerts] senders`. If
+   Gmail is not connected (no Gmail tool, or it refuses), say only:
+   "Connect Gmail under Connectors in Claude's settings, then type /job
+   alerts again." and stop.
+2. Alert emails found: run the alert intake now (discovery.md); the line
+   goes once a lead arrives.
+3. None found: "On LinkedIn, create 5 job alerts now, daily, by email, one
+   per broad title: <5 titles across the families>. Reply done." (Sitting 1,
+   message 2). Claude never opens LinkedIn.
+4. The user wants no alert emails: back up `config/settings.toml`, set
+   `[alerts] read_linkedin = false` and `senders = []`, and say the line
+   will not come back.
+5. With a free key missing (`[sources] adzuna` or `usajobs` false), also
+   offer it in one line (Sitting 2 step 1: double-click
+   `install_runner.cmd` again; it asks only for a key not entered yet).
 
 ## Without the runner
 

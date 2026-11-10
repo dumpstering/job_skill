@@ -25,9 +25,12 @@ resume_status prep_failed (the card's re-approval line), and counts.variant_wait
 holds {family: jobs waiting}. The order: an item handed over on an earlier
 day with no `s` first (flag `unsubmitted`: ask whether it went through), then
 batch 1 (no-account Tier B items by fit, best first), the account block
-(new-account tenants grouped by tenant), the rest by fit, and the prep_failed items
-last; never the same employer twice in a row and at most 3 in a row on one
-ATS host. Job folders get posting.md, posting.json and .runner_files. Folders
+(new-account tenants grouped by tenant, only a tenant whose best job is at or
+above the day's median fit; another tenant's jobs take their places by fit),
+the rest by fit, the jobs whose seniority asks more than the user has
+(the gates' borderline mark, R6), and the prep_failed items last; never the
+same employer twice in a row and at most 3 in a row on one ATS host.
+Borderline jobs are also taken last for the day's slots. Job folders get posting.md, posting.json and .runner_files. Folders
 of jobs that got no tracker row within 30 days move to
 applications/_not_sent/<YYYY-MM>/ (never deleted). When fewer than target
 pool items pass the caps with a resume to send (an approved variant, or one
@@ -88,6 +91,7 @@ import math
 import os
 import re
 import shutil
+import statistics
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -179,11 +183,8 @@ def profile_of(ats):
 
 
 def read_json(path, default):
-    try:
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
-        return data if isinstance(data, type(default)) else default
-    except (OSError, ValueError):
-        return default
+    """The safe loader (R3): missing is default; a bad file is default with one ERROR line."""
+    return jobfs.read_json_or(path, jobfs.MAX_STATE, default)
 
 
 def session_active(root, now=None):
@@ -280,6 +281,24 @@ class Context:
         self.variants_on = self.folder.variants.exists()
         self._approved = {}
         self.last = last_name(root)
+        self._experience = False  # read on first use (a pool item pooled before the seniority mark)
+
+    def borderline(self, it):
+        """True for an item whose seniority asks more than the user has (R6):
+        the gates' mark, or for an item pooled before the mark existed, the
+        same judgment now. Such items are queued after the rest."""
+        if "seniority" in it:
+            return it.get("seniority") == "borderline"
+        try:
+            if self._experience is False:
+                self._experience = gates.experience(self.root, self.today)
+            fam = self.families.get(it.get("family")) or {}
+            verdict, _ = gates.seniority(str(it.get("title") or ""), str(it.get("text") or ""), fam,
+                                         self._experience)
+        except Exception:  # noqa: BLE001  never stops the build (D2): judged as not borderline
+            self._experience, verdict = None, "ok"
+        it["seniority"] = "borderline" if verdict != "ok" else ""
+        return verdict != "ok"
 
     def state(self, key):
         """(state, reason, date) of a job's last queue event, or (None, '', None)."""
@@ -554,7 +573,8 @@ def mark_tiers(picked, ctx, tier_a):
             return 2, "fresh_fit"
         return 3, "fit"
     ranked = sorted((it for it in picked if not it.get("_held")),
-                    key=lambda it: (reason(it)[0], -float(it.get("fit") or 0), -it["_score"], it["job_key"]))
+                    key=lambda it: (reason(it)[0], borderline(it), -float(it.get("fit") or 0), -it["_score"],
+                                    it["job_key"]))
     chosen = {it["job_key"] for it in ranked[:tier_a]}
     for it in picked:
         it["_tier"] = "A" if it["job_key"] in chosen or it.get("_force_a") else "B"
@@ -580,22 +600,46 @@ def take(out, primary, fillers):
     out.append(primary.pop(0))
 
 
+def borderline(it):
+    """The gates' seniority mark (R6): the posting asks more than the user has."""
+    return it.get("seniority") == "borderline"
+
+
 def sequence(picked, batch_size):
     """Jobs handed over on an earlier day with no `s` (to ask about), batch 1
-    (no-account Tier B by fit, then score), the account block (new-account
-    tenants grouped by tenant), the rest by fit, and last the items waiting
-    for a variant approval (prep_failed)."""
+    (no-account Tier B by fit, then score), the account block, the rest by
+    fit, the items whose seniority is borderline (R6), and last the items
+    waiting for a variant approval (prep_failed). A new-account tenant's
+    items come forward as the account block (grouped, one account for
+    several jobs) only when its best item is among the day's best by fit: at
+    or above the median fit of the day's other items. Any other tenant's
+    items take their places by fit, so no account is made early for the
+    day's weakest jobs. account_block names the block's tenants only (their
+    accounts are made together at the block); a later tenant's account is
+    made at its own job (apply.md, Accounts)."""
     for it in picked:
         it["_cn"] = caps.group({}, jobkey.norm_company(it.get("company", "")))
         it["_host"] = netfetch.host_or_blank(it.get("apply_url") or it.get("url") or "")
-    # best first (D6): the score picked them; fit (the TERMS overlap) orders them
-    by_score = sorted(picked, key=lambda it: (-float(it.get("fit") or 0), -it["_score"], it["job_key"]))
-    first = [it for it in by_score if it.get("_carried")]
-    last = [it for it in by_score if it.get("_held") and not it.get("_carried")]
-    by_score = [it for it in by_score if it not in first and it not in last]
-    batch1 = [it for it in by_score if it["_account"] == "none" and it["_tier"] == "B"]
-    block_items = [it for it in by_score if it["_account"] == "new"]
-    rest = [it for it in by_score if it not in batch1 and it not in block_items]
+
+    def by_fit(items):  # best first (D6): the score picked them; fit (the TERMS overlap) orders them
+        return sorted(items, key=lambda it: (-float(it.get("fit") or 0), -it["_score"], it["job_key"]))
+    ordered = by_fit(picked)
+    first = [it for it in ordered if it.get("_carried")]
+    last = [it for it in ordered if it.get("_held") and not it.get("_carried")]
+    late = [it for it in ordered if borderline(it) and it not in first and it not in last]
+    ordered = [it for it in ordered if it not in first and it not in last and it not in late]
+    new_items = [it for it in ordered if it["_account"] == "new"]
+    tenants = list(dict.fromkeys(tenant_of(it) for it in new_items))
+    forward = []
+    for t in tenants:
+        mine = [float(it.get("fit") or 0) for it in new_items if tenant_of(it) == t]
+        others = [float(it.get("fit") or 0) for it in ordered if tenant_of(it) != t or it["_account"] != "new"]
+        if not others or max(mine) >= statistics.median(others):
+            forward.append(t)
+    block_items = [it for it in new_items if tenant_of(it) in forward]
+    later_new = [it for it in new_items if tenant_of(it) not in forward]  # never a filler in batch 1
+    batch1 = [it for it in ordered if it["_account"] == "none" and it["_tier"] == "B"]
+    rest = [it for it in ordered if it not in batch1 and it["_account"] != "new"]
     out = []
     while first:
         take(out, first, [])
@@ -603,22 +647,24 @@ def sequence(picked, batch_size):
         take(out, batch1, rest)
     while len(out) < batch_size and rest:  # fewer than batch_size no-account items
         take(out, rest, [])
-    rest = sorted(batch1 + rest, key=lambda it: (-float(it.get("fit") or 0), -it["_score"], it["job_key"]))
+    rest = by_fit(batch1 + rest + later_new)
     after = len(out)
-    tenants = list(dict.fromkeys(tenant_of(it) for it in block_items))
-    groups = {t: [it for it in block_items if tenant_of(it) == t] for t in tenants}
+    groups = {t: [it for it in block_items if tenant_of(it) == t] for t in forward}
     block = []
     while any(groups.values()):
-        for t in tenants:
+        for t in forward:
             if groups[t]:
                 block.append(groups[t].pop(0))
     while block:
         take(out, block, rest)  # a filler from the rest only when no tenant item fits
     while rest:
         take(out, rest, [])
+    while late:
+        take(out, late, [])
     while last:
         take(out, last, [])
-    return out, {"after_n": after, "tenants": tenants}
+    # account_block.tenants are the accounts made at the block; a later tenant's account is made at its own turn
+    return out, {"after_n": after, "tenants": forward}
 
 
 # ---------- job folders ----------
@@ -650,7 +696,7 @@ def render_posting(it, today):
     head = [("URL", it.get("url")), ("Retrieved", it.get("first_seen") or today.isoformat()),
             ("Company", it.get("company")), ("Role", it.get("title")), ("Location", it.get("location")),
             ("Job key", it.get("job_key")), ("Requisition", ", ".join(it.get("req_ids") or [])),
-            ("Posted", it.get("posted") or ""), ("Source", "runner")]
+            ("Posted", it.get("posted") or "undated"), ("Source", "runner")]  # R2: a date or 'undated'
     if it.get("employer_site"):
         head.append(("Employer site", it["employer_site"]))
     lines = [(k + ": " + " ".join(str(v or "").split())).rstrip() for k, v in head]
@@ -742,7 +788,7 @@ def queue_item(ctx, it, n, folder_rel):
         "referral_url": it.get("referral_url") or ctx.referral_urls.get(it["job_key"], ""),
         "folder": folder_rel, "family": it.get("family", ""), "mode": it.get("mode") or "industry",
         "tier": it["_tier"], "tier_reason": it["_tier_reason"], "variant": it.get("_variant", ""),
-        "posted": it.get("posted"), "age_days": it.get("age_days"), "band": it.get("band") or "",
+        "posted": gates.posted_value(it.get("posted")), "age_days": it.get("age_days"), "band": it.get("band") or "",
         "repost_of": it.get("repost_of"), "score": it["_score"], "score_parts": it["_parts"],
         "account": account, "attach": prof["attach"], "captcha_risk": prof["captcha_risk"],
         "est_user_min": NEW_TENANT_MIN if account == "new" else prof["est_user_min"],
@@ -911,7 +957,8 @@ def build(root, today=None, pool_path=None, emit=print, prep=None):
     ctx.load_referrals(cands)
     for it in cands:
         score(it, ctx)
-    cands.sort(key=lambda it: (-it["_score"], it["job_key"]))
+    # borderline seniority (R6) is taken only after the rest, so it never holds a cap slot a better job could
+    cands.sort(key=lambda it: (ctx.borderline(it), -it["_score"], it["job_key"]))
     asm = Assembly(ctx, size)
     picked = asm.run(cands)
     mark_tiers(picked, ctx, asm.tier_a)
@@ -1000,7 +1047,7 @@ def addendum(root, today=None, pool_path=None, limit=None, emit=print):
     ctx.load_referrals(cands)
     for it in cands:
         score(it, ctx)
-    cands.sort(key=lambda it: (-it["_score"], it["job_key"]))
+    cands.sort(key=lambda it: (ctx.borderline(it), -it["_score"], it["job_key"]))
     asm = Assembly(ctx, limit)
     asm.tier_a = 0  # Tier A prep happens in the morning; late items are Tier B only
     picked = asm.run(cands, fill_held=False)  # `more` is for jobs it can send today
@@ -1089,8 +1136,14 @@ def sensitive_kind(field):
 def user_resume(folder):
     """The tailored resume a job from a link will send: the one final.json
     names (a strict build), else the single-job flow's "<Name> Resume.pdf"
-    (the newest); None before one is built."""
+    (the newest); None before one is built, and None when final.json's
+    build cites a library entry the user corrected since (D5): the newest
+    tailored PDF is then that same stale build, so it is never sent."""
+    import library
     folder = Path(folder)
+    data = read_json(folder / "final.json", {})
+    if data.get("v") == 1 and str(data.get("verdict", "")).lower() == "ok" and library.final_stale(folder, data):
+        return None
     final = final_files(folder)[0]
     if final:
         return final
@@ -1154,7 +1207,8 @@ def user_item(root, n, job_key, folder_rel, via, family="", store=None):
     it = {"n": n, "job_key": job_key, "company": company, "role": head.get("Role", ""),
           "location": head.get("Location", ""), "ats": ats, "host": netfetch.host_or_blank(url) if url else "",
           "apply_url": url, "referral_url": "", "folder": folder_rel, "family": family or "", "mode": "industry",
-          "tier": "A", "tier_reason": "user", "variant": "", "posted": head.get("Posted") or None,
+          "tier": "A", "tier_reason": "user", "variant": "",  # R2: posted is a YYYY-MM-DD date or None (undated)
+          "posted": head.get("Posted") if re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", head.get("Posted") or "") else None,
           "age_days": None, "band": "", "repost_of": None, "score": 0, "score_parts": {k: 0 for k in SCORE_PARTS},
           "account": account, "attach": prof["attach"], "captcha_risk": prof["captcha_risk"],
           "est_user_min": NEW_TENANT_MIN if account == "new" else prof["est_user_min"],

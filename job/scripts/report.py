@@ -308,8 +308,10 @@ def widen_steps(root, end):
     import json
     for p in (jobfs.Folder(root).queue_json(end), jobfs.Folder(root).status_json):
         try:
-            data = json.loads(Path(p).read_text(encoding="utf-8"))
+            data = jobfs.read_json(p, jobfs.MAX_STATE)  # R3: the safe loader (BadJson is a ValueError)
         except (OSError, ValueError):
+            continue
+        if not isinstance(data, dict):
             continue
         steps = data.get("widen") or data.get("widen_steps")
         if isinstance(steps, list) and steps:
@@ -335,7 +337,7 @@ def pairs(s):
     s = (s or "").strip()
     if s.startswith("{"):
         try:
-            return {str(k): float(v) for k, v in json.loads(s).items()}
+            return {str(k): float(v) for k, v in jobfs.loads_json(s).items()}
         except (ValueError, TypeError, AttributeError):
             return {}
     out = {}
@@ -379,7 +381,7 @@ def one_question(rows, day, labels, gate_counts, gate_total, lanes):
 def weights_log(root, start, end):
     import json
     try:
-        data = json.loads(jobfs.Folder(root).weights_json.read_text(encoding="utf-8"))
+        data = jobfs.read_json(jobfs.Folder(root).weights_json, jobfs.MAX_STATE)  # R3: the safe loader
     except (OSError, ValueError):
         return []
     out = []

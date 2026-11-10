@@ -38,6 +38,7 @@ Exit codes: 0 ok, 1 bad input (ERROR ...), 2 openpyxl missing.
 """
 import argparse
 import csv
+import functools
 import io
 import sys
 import tomllib
@@ -49,6 +50,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import argfile  # noqa: E402
 import jobfs  # noqa: E402
 import jobkey  # noqa: E402
+import netfetch  # noqa: E402  (employer_site: never a job board, social or reference page)
 
 COLUMNS = ["week_start", "week_end", "activity_date", "activity_type", "contact_type", "employer_name",
            "employer_location", "job_title", "job_req_id", "method", "job_site", "posting_url",
@@ -182,9 +184,19 @@ def job_site(row):
     return host
 
 
+def posting_link(url):
+    """The posting link a log row shows (R1): the tracker's URL when
+    netfetch.web_refusal passes it, else blank. A job board's link is never
+    echoed (linkedin.md); the row's job site still names the board."""
+    u = text(url)
+    return u if u and netfetch.web_refusal(u) is None else ""
+
+
 def employer_fields(emp, row=None):
     e = emp or {}
-    site = text(e.get("Main website")) or (text(row.get("Employer site")) if row else "")
+    # SV-09: the first of the two that is a plain web link on the employer's own host (netfetch.employer_site
+    # skips a job board such as LinkedIn and a social or reference page), else blank
+    site = netfetch.employer_site(text(e.get("Main website")), text(row.get("Employer site")) if row else "")
     return {"employer_main_website": site, "employer_street": text(e.get("Street")),
             "employer_city": text(e.get("City")), "employer_state": text(e.get("State")),
             "employer_zip": text(e.get("ZIP")), "employer_phone": text(e.get("Phone")),
@@ -201,11 +213,11 @@ def app_activity(row, emps, labels):
     rec = {"activity_date": d.isoformat(), "activity_type": "Applied", "employer_name": company,
            "employer_location": text(row.get("Location")), "job_title": text(row.get("Role")),
            "job_req_id": text(row.get("Req ID")), "method": "Online", "job_site": job_site(row),
-           "posting_url": text(row.get("URL")), "contact_person": "online application",
+           "posting_url": posting_link(row.get("URL")), "contact_person": "online application",
            "type_of_work_sought": labels.get(fam) or text(row.get("Role")),
            "result": RESULTS.get(status, "Application filed"), "proof_ref": text(row.get("Proof")),
            "_norm": jobkey.norm_company(company), "_id": text(row.get("ID")), "_kind": "application",
-           "_key": text(row.get("Job key")) or jobkey.job_key(text(row.get("URL"))),
+           "_key": jobkey.safe_key(text(row.get("Job key"))) or jobkey.job_key(text(row.get("URL"))),
            "_source": text(row.get("Source"))}
     rec.update(employer_fields(emps.get(rec["_norm"]), row))
     return rec
@@ -217,7 +229,7 @@ def referral_activity(row, emps, roles):
     if d is None or status not in SENT:
         return None
     company = text(row.get("Company"))
-    key = text(row.get("Job key"))
+    key = jobkey.safe_key(text(row.get("Job key")))  # R2: an earlier version's key compares in today's form
     rec = {"activity_date": d.isoformat(), "activity_type": "Referral contact", "employer_name": company,
            "employer_location": "", "job_title": roles.get(key, ""), "job_req_id": "",
            "method": CHANNEL_METHOD.get(text(row.get("Channel")).lower(), "Online"), "job_site": "",
@@ -248,7 +260,7 @@ def all_activities(root, store):
         return []
     emps, labels = employers_index(store), family_labels(root)
     apps = store.app_rows() + store.archived_rows()
-    roles = {text(r.get("Job key")): text(r.get("Role")) for r in apps if text(r.get("Job key"))}
+    roles = {jobkey.safe_key(text(r.get("Job key"))): text(r.get("Role")) for r in apps if text(r.get("Job key"))}
     out = [a for a in (app_activity(r, emps, labels) for r in apps) if a]
     if store.referrals is not None:
         out += [a for a in (referral_activity(r, emps, roles) for r in store.referrals.rows()) if a]
@@ -642,6 +654,7 @@ def cmd_states(a):
 def build_parser():
     ap = Parser(prog="worksearch.py", description="Work-search record export and checks.", allow_abbrev=False)
     sub = ap.add_subparsers(dest="cmd", required=True, metavar="command")
+    sub.add_parser = functools.partial(sub.add_parser, allow_abbrev=False)  # R4: exact option names everywhere
     p = sub.add_parser("export", help="Write worksearch/<ST>_<from>_<to>.csv, .xlsx and .md (create-only).")
     p.add_argument("--root", required=True)
     p.add_argument("--state")

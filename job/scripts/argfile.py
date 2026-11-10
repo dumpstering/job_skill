@@ -12,12 +12,16 @@ writes with its file tool under <folder>/claude/ and passes as
      "from": "recruiting@example.com", "subject": "Interview: Scientist II",
      "class": "Interview", "quote": "Can you talk on Tuesday?", "kind": "reply"}
 
-Each key is an option name without its dashes ("job-key" or "job_key"). A
-string or a number gives --key=<value>, true gives the flag --key (false or
-null leaves it out), and a list gives --key v1 v2 ... (an option that takes
-several values). The key "_" holds the positional arguments, a string or a
-list (tracker.py update's ID and field=value pairs, posting.py's link).
-Nothing in a value is ever read as another option.
+Each key is an option name without its dashes ("job-key" or "job_key"),
+spelled out in full: "--<key>" (with '_' read as '-') must be exactly one of
+the long options of the command that reads it (the subcommand's own parser),
+so no abbreviation or unknown name gets through, and every parser expanded
+here parses with allow_abbrev=False. A string or a number gives
+--key=<value>, true gives the flag --key (false or null leaves it out), and a
+list gives --key v1 v2 ... (an option that takes several values). The key
+"_" holds the positional arguments, a string or a list (tracker.py update's
+ID and field=value pairs, posting.py's link). Nothing in a value is ever
+read as another option.
 
 The file lies inside <root>/claude/, where <root> is the --root given on the
 command line (a relative --args-file path is read from the root), ends in
@@ -27,21 +31,24 @@ takes free text calls expand() (or parse()) at the top of main(); with no
 --args-file the command line comes back as it was. jobrunner.py request
 --json-file reads its request arguments through load(), with the same rules.
 
-A refusal prints `ERROR --args-file ...` and exits 1. Stdlib only.
+A refusal prints `ERROR --args-file ...` and exits 1. Stdlib (and jobfs) only.
 """
-import json
+import argparse
 import math
 import os
 import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import jobfs  # noqa: E402  the safe JSON loader (shared decision R3)
+
 OPTION = "--args-file"
 MAX_BYTES = 64 * 1024
 FOLDER = "claude"
 KEY_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
 # Keys a file may not set: the root confines the file, and a file never names another.
-REFUSED_KEYS = ("root", "args-file", "help", "h")
+REFUSED_KEYS = ("root", "args-file", "json-file", "help", "h")
 
 
 class ArgfileError(Exception):
@@ -96,10 +103,6 @@ def checked_path(path, root):
     return real
 
 
-def _no_constants(name):
-    raise ValueError(f"{name} is not a JSON number")
-
-
 def load(path, root):
     """The JSON object in path, after the checks above; the file is removed once read."""
     real = checked_path(path, root)
@@ -115,8 +118,8 @@ def load(path, root):
     if len(raw) > MAX_BYTES:
         raise ArgfileError(f"{path} is over 64 KB (refused)")
     try:
-        obj = json.loads(raw.decode("utf-8-sig"), parse_constant=_no_constants)
-    except (UnicodeDecodeError, ValueError) as e:
+        obj = jobfs.loads_json(raw, allow_nan=False)
+    except jobfs.BadJson as e:  # not UTF-8, not JSON, NaN, or nested deeper than 64
         raise ArgfileError(f"{path} is not valid UTF-8 JSON ({e}); write it again")
     if not isinstance(obj, dict):
         raise ArgfileError(f"{path} must hold one JSON object")
@@ -141,8 +144,63 @@ def _bare(key, s):
     return s
 
 
-def options(obj):
-    """The command-line tokens for one args object: positionals first, then options."""
+def _subparsers(parser):
+    return [a for a in getattr(parser, "_actions", []) if isinstance(a, argparse._SubParsersAction)]
+
+
+def no_abbrev(parser):
+    """allow_abbrev=False on the parser and every subcommand parser under it,
+    so '--roo' never stands for '--root' (argparse reads the flag at parse time)."""
+    seen, todo = set(), [parser]
+    while todo:
+        p = todo.pop()
+        if p is None or id(p) in seen:
+            continue
+        seen.add(id(p))
+        p.allow_abbrev = False
+        for sub in _subparsers(p):
+            todo += list(sub.choices.values())
+
+
+def _takes_value(parser, tok):
+    """True when tok is one of parser's options that reads the next token as its value."""
+    if "=" in tok:
+        return False
+    act = getattr(parser, "_option_string_actions", {}).get(tok)
+    return act is not None and act.nargs != 0
+
+
+def target_parser(parser, argv):
+    """The parser that will read the options a file adds at the end of argv:
+    the (nested) subcommand argv names, else the parser itself."""
+    p = parser
+    tokens = list(argv)
+    while True:
+        subs = _subparsers(p)
+        if not subs:
+            return p
+        i, pick = 0, None
+        while i < len(tokens):
+            tok = tokens[i]
+            if tok.startswith("-"):
+                i += 2 if _takes_value(p, tok) else 1
+                continue
+            pick = i
+            break
+        if pick is None or tokens[pick] not in subs[0].choices:
+            raise ArgfileError("needs the command name before --args-file")
+        p, tokens = subs[0].choices[tokens[pick]], tokens[pick + 1:]
+
+
+def long_options(parser):
+    """Every long option string of one parser ('--job-key', '--root', ...)."""
+    return {s for a in getattr(parser, "_actions", []) for s in a.option_strings if s.startswith("--")}
+
+
+def options(obj, allowed=None):
+    """The command-line tokens for one args object: positionals first, then
+    options. allowed is the target parser's long options: a key is taken only
+    when '--<key>' is exactly one of them (shared decision R4)."""
     positional, opts = [], []
     for key, v in obj.items():
         if key == "_":
@@ -156,6 +214,8 @@ def options(obj):
         if name in REFUSED_KEYS:
             raise ArgfileError(f"key {key!r} cannot come from the file (refused)")
         flag = "--" + name
+        if allowed is None or flag not in allowed:
+            raise ArgfileError(f"key {key!r} is not an option of this command (spell the option out in full)")
         if v is None or v is False:
             continue
         if v is True:
@@ -180,9 +240,12 @@ def add_option(parser):
 
 
 def expand(argv=None, parser=None):
-    """argv with --args-file <path> replaced by the options in that file."""
+    """argv with --args-file <path> replaced by the options in that file.
+    parser is the script's parser: it names the options a file may set, and
+    it (with every subcommand parser) is set to allow_abbrev=False."""
     argv = list(sys.argv[1:] if argv is None else argv)
     add_option(parser)
+    no_abbrev(parser)
     at = [i for i, tok in enumerate(argv) if tok == OPTION or tok.startswith(OPTION + "=")]
     if not at:
         return argv
@@ -196,7 +259,10 @@ def expand(argv=None, parser=None):
             path, rest = argv[i + 1], argv[:i] + argv[i + 2:]
         else:
             path, rest = argv[i].split("=", 1)[1], argv[:i] + argv[i + 1:]
-        positional, opts = options(load(path, root_of(rest)))
+        obj = load(path, root_of(rest))  # read once and removed, even when a key is refused below
+        if parser is None:
+            raise ArgfileError("needs the script's parser (argfile.parse(parser) or expand(argv, parser))")
+        positional, opts = options(obj, long_options(target_parser(parser, rest)))
         inline = {tok.split("=", 1)[0] for tok in rest if tok.startswith("--")}
         twice = sorted({t.split("=", 1)[0] for t in opts if t.startswith("--")} & inline)
         if twice:

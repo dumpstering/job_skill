@@ -48,7 +48,12 @@ or approve again, with how many wait), one line for every family with no
 base resume yet ("180 more jobs need a base resume you don't have yet (most:
 Clinical research 66, Research associate 50). Say /job variants to make
 one."), a refused tracker change, follow-ups ready, a posting set aside for
-text addressed to an AI. Held jobs are not in Ready. Without this morning's prep (no morning.json, one with
+text addressed to an AI, Tier A jobs whose own tailored build cites a
+library entry corrected since ("2 tailored resumes (#3, #7) cite something
+you corrected today; I'm rebuilding them before they go out."; next prints a
+REBUILD line for each), and, on the day's first card, one line when no
+job-alert lead has arrived for 3 days (alert_line). Held and rebuilding
+jobs are not in Ready. Without this morning's prep (no morning.json, one with
 "prepared": false, or one older than queue.json) the card takes its
 questions from the fill plans and says the prep did not run, until the
 tier_a.done marker exists. The "while you were away", weekly and catch-up
@@ -72,14 +77,28 @@ tune_log.json names the version; a cited library entry corrected since, or
 an approved file changed) comes after every other item and gets NEXT,
 COMPANY, ROLE, FOLDER and
     HOLD #4: its base resume cites something you corrected today. Say skip, or make the new version with /job variants first.
-instead of OPEN, UPLOAD and HANDOVER. OPEN is only ever a plain http(s) web
-address (the referral link, else the apply URL); an item with none gets
-"SKIP #NN bad link (...)" and is never opened.
+instead of OPEN, UPLOAD and HANDOVER. An item whose job folder holds a
+strict Tier A build (final.json) citing a library entry corrected since is
+never handed over and never swapped for its Tier B file without a word: it
+gets, before the item served,
+    REBUILD #03: its tailored resume cites something you corrected today; rerun the tailor for it (FOLDER <path>)
+and comes back in its turn once a new build passes; with nothing else to
+serve the last line is "NEXT wait: ...". OPEN is only a link
+netfetch.web_refusal passes (the referral link, else the apply URL); an
+item with none gets "SKIP #NN bad link (...)" and is never opened. A job key
+or code next prints for a command line holds only A-Z, a-z, 0-9 and
+. _ : / - (at most 200 characters), and a folder or file path only letters,
+digits, spaces and punctuation inert inside double quotes, relative to the
+folder with no '..' (shared decision 2); an item failing that gets
+"SKIP #NN unsafe value (...)" and is never filled.
     NEXT #02 <job key>
     COMPANY / ROLE / ATS <ats> (attach first|last) / OPEN <url> / FOLDER <path>
     UPLOAD <path> (<what>; sha256 ok, else the job-folder file)
     LETTER <path> (<what>)                     when a cover letter is built
-    RESUME <status> / ANSWERS <status> [needs ...] [sensitive ...]
+    RESUME <status> / ANSWERS <status> [needs <open ids>] [sensitive ...]
+                                               (needs lists only ids still open: an id a morning
+                                               draft fills, the bank answers, or an unparked event
+                                               today settled is left out; none left: "answered")
     SENSITIVE enter ... | leave blank ...      when the job has sensitive fields
     DRAFT <label>                              when a morning draft fills a field
     ATTACH <the attach-first prompt>           attach-first sites
@@ -125,14 +144,13 @@ import hashlib
 import json
 import re
 import sys
-import unicodedata
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import events  # noqa: E402
 import jobfs  # noqa: E402
+import jobkey  # noqa: E402
 
 FINAL = {"applied", "skipped", "later", "blocked"}
 IN_PROGRESS = {"started", "handed_over"}
@@ -175,13 +193,17 @@ HOLD_WHY = {"corrected": "cites something you corrected today", "changed": "chan
 HOLD_ASK = "Say skip, or make the new version with /job variants first."
 # Shared decision 7: the families with no base resume yet share one card line of about this many characters.
 LINE_MAX = 140
-# SEC-11: the OPEN line names only a plain http(s) web address (shared decision 1's host form).
-LINK_MAX = 2048
-HOST_RE = re.compile(r"[a-z0-9.-]+")
-# Never automated, whatever the top-level domain (shared decision 1; ats/linkedin.md).
-BOARD_LABELS = {"linkedin", "indeed", "glassdoor", "simplyhired", "ziprecruiter", "remotive"}
-BOARD_DOMAINS = ("lnkd.in", "licdn.com")
-LOCAL_SUFFIXES = (".localhost", ".local", ".internal", ".lan", ".home.arpa")   # as netfetch.check_public
+# R8: a Tier A item whose own strict build cites an entry corrected since is rebuilt, not swapped silently.
+REBUILD_WHY = "its tailored resume cites something you corrected today; rerun the tailor for it"
+# R9: no job-alert lead for this many days (today included) gives the card's alert line.
+ALERT_DAYS = 3
+ALERT_LINE = ("No job-alert email has come in for 3 days, and alerts bring most new jobs. "
+              "Type /job alerts and I'll fix it with you (about 2 minutes).")
+# Shared decision 2: a job key or code next prints for a command line, and a path it prints
+# for double quotes (letters of any script, digits, spaces, and punctuation that bash and
+# PowerShell leave alone inside double quotes; never $ ` " \ or a control character).
+# One definition for every printer: jobkey.inline_ok and jobkey.path_ok.
+UNSAFE = "unsafe value (a job key or path holds characters a command line must not see; never filled)"
 
 
 class Parser(argparse.ArgumentParser):
@@ -192,12 +214,50 @@ class Parser(argparse.ArgumentParser):
 
 # ---------- reading ----------
 
-def read_json(path, default):
+def bad_file(path, why):
+    """One ERROR line on stderr for a file that cannot be read safely; the card
+    and next treat it as missing and go on (shared decision R3)."""
+    report = getattr(jobfs, "report_bad", None)
+    line_out = (lambda s: print(s, file=sys.stderr))
+    if report is not None:
+        report(path, why, emit=line_out)
+    else:
+        line_out(f"ERROR bad file {Path(path).name}: {why} (treated as missing)")
+
+
+def read_json(path, default, max_bytes=None):
+    """A JSON file through jobfs.read_json (a size limit, nesting at most 64
+    deep, one plain error); default when it is missing, unreadable or not of
+    default's type."""
+    limit = max_bytes or getattr(jobfs, "MAX_FILE", 8 << 20)
     try:
-        data = json.loads(Path(path).read_text(encoding="utf-8-sig"))
-        return data if isinstance(data, type(default)) else default
-    except (OSError, ValueError):
+        reader = getattr(jobfs, "read_json", None)
+        if reader is not None:
+            data = reader(path, limit)
+        else:
+            data = json.loads(Path(path).read_text(encoding="utf-8-sig"))
+    except FileNotFoundError:
         return default
+    except OSError:
+        return default
+    except (ValueError, RecursionError, UnicodeDecodeError) as e:  # jobfs.BadJson is a ValueError
+        bad_file(path, str(e)[:120] or type(e).__name__)
+        return default
+    return data if isinstance(data, type(default)) else default
+
+
+def inline_ok(value):
+    """True for a value next may print for a command line (shared decision 2):
+    jobkey.inline_ok, the rule every printer shares."""
+    return isinstance(value, str) and jobkey.inline_ok(value)
+
+
+def path_ok(path):
+    """True for a folder or file path under the folder that next may print for
+    double quotes: jobkey.path_ok (relative, '/'-separated, no '.' or '..'
+    part, not starting with '-', every character a letter, a digit or the
+    punctuation inert inside double quotes)."""
+    return jobkey.path_ok(path)
 
 
 def verified(path, default):
@@ -416,6 +476,33 @@ def tier_a_ready(root, it):
     return final_files(root / str(it.get("folder", "")))[0] is not None
 
 
+def tier_a_stale(root, it):
+    """True when the item's job folder holds a strict Tier A build that passed
+    (final.json v 1, verdict ok) and cites a library entry the user corrected
+    since (library.final_stale). Such an item is rebuilt (next's REBUILD
+    line), never handed over and never swapped for its Tier B file without a
+    word (R8)."""
+    folder = root / str(it.get("folder", ""))
+    if not (folder / "final.json").is_file():
+        return False
+    data = read_json(folder / "final.json", {})
+    if data.get("v") != 1 or str(data.get("verdict", "")).lower() != "ok":
+        return False
+    import library
+    return bool(library.final_stale(folder, data))
+
+
+def rebuild_line(rebuild):
+    """The card's one line for the Tier A jobs being rebuilt [(item, state)]; None when none."""
+    if not rebuild:
+        return None
+    ns = {int(it.get("n") or 0) for it, _ in rebuild}
+    k = len(ns)
+    where = f" ({numbers(ns)})" if k <= MAX_LISTED else ""
+    return (f"{plural(k, 'tailored resume')}{where} {'cites' if k == 1 else 'cite'} something you corrected "
+            f"today; I'm rebuilding {'it' if k == 1 else 'them'} before {'it goes' if k == 1 else 'they go'} out.")
+
+
 # ---------- a base resume corrected after its build (shared decision 5) ----------
 
 class Holds:
@@ -506,46 +593,16 @@ def hold_line(held):
 # ---------- the link next opens (SEC-11) ----------
 
 def web_link(url):
-    """url when it is a plain http(s) web address that a browser opens as
-    written, else "". Refused: any other scheme (file:, javascript:, data:,
-    ...), user info or a percent sign in the host part, a backslash (a browser
-    reads it as a slash, so the host it opens differs), a space or control or
-    format character, a host outside a-z, 0-9, '.' and '-' (one trailing dot
-    dropped), an empty label or one over 63 characters, an address or a name
-    for this PC or its network (an IP address, localhost, .local, one
-    label), and a job board."""
-    if not isinstance(url, str):
+    """url when netfetch.web_refusal passes it, else "" (shared decision 1:
+    the one refusal every check that decides whether a link may be stored,
+    shown, opened or fetched uses; today_view keeps no link rule of its own)."""
+    if not isinstance(url, str) or not url:
         return ""
-    s = url.strip()
-    if not s or len(s) > LINK_MAX or "\\" in s:
-        return ""
-    if any(unicodedata.category(ch)[0] in "CZ" for ch in s):
-        return ""
+    import netfetch
     try:
-        u = urlsplit(s)
-        u.port  # a port that is not a number raises ValueError
-    except ValueError:
+        return "" if netfetch.web_refusal(url) else url
+    except Exception:  # a link the refusal cannot judge is not opened
         return ""
-    if u.scheme.lower() not in ("http", "https") or not u.netloc or not u.netloc.isascii() \
-            or any(ch in u.netloc for ch in "@%"):
-        return ""
-    import netfetch  # the one canonical host every allow and deny decision uses (shared decision 1)
-    try:
-        host = netfetch.host_of(s)
-    except netfetch.Denied:
-        return ""
-    labels = host.split(".")
-    if not host or not HOST_RE.fullmatch(host) or any(not lb or len(lb) > 63 for lb in labels):
-        return ""
-    # A public name: two labels or more, the last one starting with a letter (a browser reads
-    # 10.0.0.1, 0x7f.1 or 2130706433 as an address), and not a name for this PC or its network.
-    if len(labels) < 2 or not labels[-1][0].isalpha() or host == "localhost" \
-            or host.endswith(LOCAL_SUFFIXES):
-        return ""
-    if netfetch.job_board(host) or BOARD_LABELS & set(labels) \
-            or any(host == d or host.endswith("." + d) for d in BOARD_DOMAINS):
-        return ""
-    return s
 
 
 def open_link(it, refs):
@@ -725,18 +782,23 @@ def draft_for(m, n):
 # ---------- the order items are served in ----------
 
 def serving(root, day, items, by_n, by_key, m, short=False, holds=None):
-    """(order, waiting): [(item, state)] in the order next serves them (the card's
-    "Starting #N" is the first), and the items that wait for a resume.
+    """(order, waiting, rebuild): [(item, state)] in the order next serves them
+    (the card's "Starting #N" is the first), the items that wait for a resume,
+    and [(item, state)] of the items whose Tier A build cites an entry
+    corrected since (tier_a_stale: rebuilt first, never served as they are).
     In progress first, then unparked, then number order; without this
     morning's prep, Tier A items with no Tier A build yet come after the rest.
     Items held for a corrected base resume (Holds) come after every other
     item, so a user who stops early has done the ones that are ready."""
     holds = holds or Holds(root)
     prepped = tier_a_prepped(root, day, m)
-    order, waiting = [], []
+    order, waiting, rebuild = [], [], []
     for it in items:
         st = state_of(it, by_n, by_key)
         if st in FINAL or st == "parked":
+            continue
+        if tier_a_stale(root, it):
+            rebuild.append((it, st))
             continue
         if not has_resume(root, it, st):
             waiting.append(it)
@@ -748,7 +810,7 @@ def serving(root, day, items, by_n, by_key, m, short=False, holds=None):
     order = [(it, st) for _, it, st in sorted(order, key=lambda x: x[0])]
     if short:
         order = short_order(root, order, sensitive_ok(root, day), holds)
-    return order, waiting
+    return order, waiting, rebuild
 
 
 def short_order(root, cands, confirmed, holds=None):
@@ -820,10 +882,12 @@ def needs_line(m):
     return f"Needs you: {'; '.join(urgent)}." if urgent else None
 
 
-def ready_line(items, block, by_n, by_key, root=None, holds=None):
+def ready_line(items, block, by_n, by_key, root=None, holds=None, rebuilding=()):
     """Ready counts the jobs not done that can be served now: a resume to
-    attach, and none held for a correction (the hold line counts those)."""
+    attach, none held for a correction (the hold line counts those) and none
+    being rebuilt (rebuilding: their (n, job_key); the rebuild line counts those)."""
     left = [it for it in items if state_of(it, by_n, by_key) not in FINAL
+            and (it.get("n"), it.get("job_key")) not in rebuilding
             and (root is None or has_resume(root, it, state_of(it, by_n, by_key)))
             and not (holds and holds.reason(it))]
     if not left:
@@ -1064,6 +1128,73 @@ def config_lines(root, settings):
     return out
 
 
+LEAD_FILE_RE = re.compile(r"(\d{4}-\d{2}-\d{2})_")
+QUEUE_DAY_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def alert_dates(root, since):
+    """(newest seen date of a job-alert lead, the folder's first day): alert
+    leads are lead lines whose source ends in _alert (leads.py validate:
+    linkedin_alert, <board>_alert), from runner/in/leads files named on or
+    after since and from state/leads_state.json; the first day is the oldest
+    queue/<date> folder or lead file name (no file is read for it)."""
+    f = jobfs.Folder(root)
+    newest, first = None, None
+
+    def seen(d):
+        nonlocal newest
+        if d and (newest is None or d > newest):
+            newest = d
+    for p in sorted(f.leads.glob("*.jsonl")) if f.leads.is_dir() else []:
+        m = LEAD_FILE_RE.match(p.name)
+        d = to_date(m.group(1)) if m else None
+        if d is None:
+            continue
+        first = d if first is None or d < first else first
+        if d < since:
+            continue
+        try:
+            rows = jobfs.read_jsonl(p)
+        except Exception:  # a locked or odd lead file says nothing here
+            continue
+        for ld in rows:
+            if isinstance(ld, dict) and str(ld.get("source", "")).endswith("_alert"):
+                seen(to_date(ld.get("seen")) or d)
+    state = read_json(f.state / "leads_state.json", {}, getattr(jobfs, "MAX_STATE", None))
+    leads = state.get("leads")
+    for ld in leads.values() if isinstance(leads, dict) else []:
+        if isinstance(ld, dict) and str(ld.get("source", "")).endswith("_alert"):
+            seen(to_date(ld.get("seen")))
+    qroot = f.root / "queue"
+    for p in qroot.iterdir() if qroot.is_dir() else []:
+        d = to_date(p.name) if QUEUE_DAY_RE.fullmatch(p.name) and p.is_dir() else None
+        if d is not None and (first is None or d < first):
+            first = d
+    return newest, first
+
+
+def alert_line(root, day, settings):
+    """The card's line when no job-alert lead has arrived for ALERT_DAYS days
+    (today and the days before), R9: alert emails (LinkedIn job alerts in
+    Gmail) bring most new jobs once the watch list's first week is done. None
+    while alert reading is off ([alerts] read_linkedin false and no senders),
+    or while the folder has existed for fewer days than that (nothing to
+    judge yet)."""
+    try:
+        alerts = settings["alerts"]
+    except (KeyError, TypeError):
+        alerts = {}
+    if not (alerts.get("read_linkedin", True) or alerts.get("senders")):
+        return None
+    since = day - timedelta(days=ALERT_DAYS - 1)
+    newest, first = alert_dates(root, since)
+    if newest is not None and newest >= since:
+        return None
+    if first is None or first > day - timedelta(days=ALERT_DAYS):
+        return None
+    return ALERT_LINE
+
+
 def family_label(root, fam):
     try:
         for f in jobfs.search_profile(root).get("family") or []:
@@ -1206,8 +1337,8 @@ def approved_now(root, fam):
         return False
 
 
-def note_lines(root, day, items, view, store, waiting, held=()):
-    out = [line for line in [hold_line(held)] if line]
+def note_lines(root, day, items, view, store, waiting, held=(), rebuild=()):
+    out = [line for line in [hold_line(held), rebuild_line(rebuild)] if line]
     out += approval_lines(root, waiting, variant_wait(root, day))
     rejected = view.get("rejected") or []
     if rejected:
@@ -1245,16 +1376,24 @@ def catch_up_line(root, day, m, items):
     return CATCH_UP_NOTE
 
 
-def first_open(order, closed, refs=None):
-    """The first item next would serve: not found closed, and with a link it may open."""
-    return next((it for it, _ in order if it.get("job_key") not in closed
-                 and (refs is None or open_link(it, refs))), None)
+def servable(root, it, refs):
+    """True when next would print the item (no SKIP line): a link it may open
+    and every value it prints for a command line safe there."""
+    if not open_link(it, refs):
+        return False
+    upload, letter = upload_line(root, it)[0], letter_line(root, it)[0]
+    return safe_item(it, upload, letter)
 
 
-def held_items(order, closed, refs, holds):
+def first_open(root, order, closed, refs):
+    """The first item next would serve: not found closed, and servable."""
+    return next((it for it, _ in order if it.get("job_key") not in closed and servable(root, it, refs)), None)
+
+
+def held_items(root, order, closed, refs, holds):
     """[(n, why)] of the items next prints HOLD for, in serving order."""
     return [(int(it.get("n") or 0), holds.reason(it)) for it, _ in order
-            if it.get("job_key") not in closed and open_link(it, refs) and holds.reason(it)]
+            if it.get("job_key") not in closed and holds.reason(it) and servable(root, it, refs)]
 
 
 def day_started(by_n, by_key):
@@ -1271,8 +1410,8 @@ def card(root, day, short=False):
     closed, _ = closed_keys(root)
     holds = Holds(root)
     refs = lazy(lambda: referral_links(root))
-    order, waiting = serving(root, day, items, by_n, by_key, m, short=short, holds=holds)
-    nxt = first_open(order, closed, refs)
+    order, waiting, rebuild = serving(root, day, items, by_n, by_key, m, short=short, holds=holds)
+    nxt = first_open(root, order, closed, refs)
     lines = [f"{day:%A}, {day:%B} {day.day}"]
     if short:
         lines = [SHORT_HEAD]
@@ -1293,7 +1432,8 @@ def card(root, day, short=False):
     cap = int(settings["daily"].get("questions_per_day", 6))
     done = {int(n) for n, st in by_n.items() if st in FINAL and str(n).isdigit()}
     head = [yesterday_line(store, day)] + (away_lines(m) if first else []) + [needs_line(m)]
-    for line in head + [ready_line(items, block, by_n, by_key, root, holds)]:
+    rebuilding = {(it.get("n"), it.get("job_key")) for it, _ in rebuild}
+    for line in head + [ready_line(items, block, by_n, by_key, root, holds, rebuilding)]:
         if line:
             lines.append(line)
     lines += question_lines(root, day, m, cap, by_n, by_key)
@@ -1307,15 +1447,15 @@ def card(root, day, short=False):
         lines += [w for w in weekly if w]
     lines += runner_lines(root, day, status, settings)
     lines += config_lines(root, settings)
-    held = held_items(order, closed, refs, holds)
-    lines += note_lines(root, day, items, view, store, waiting, held)
+    held = held_items(root, order, closed, refs, holds)
+    lines += note_lines(root, day, items, view, store, waiting, held, rebuild)
     if first:
-        line = catch_up_line(root, day, m, items)
-        if line:
-            lines.append(line)
+        for line in (catch_up_line(root, day, m, items), alert_line(root, day, settings)):
+            if line:
+                lines.append(line)
     if nxt and not holds.reason(nxt):
         lines.append(f"Starting #{int(nxt['n'])} now. Say \"short\" any time for an easy day.")
-    elif waiting or held:
+    elif waiting or held or rebuild:
         lines.append("Nothing else is ready until then.")
     elif items:
         lines.append("Today's list is done. Say \"more\" for up to 10 more from the pool.")
@@ -1367,6 +1507,59 @@ def handover(it, upload, settings, check="", letter=""):
     return lines[:5]
 
 
+def histories(view):
+    """{n: [event types today]} and {job_key: [...]} from the events overlay."""
+    by_n, by_key = {}, {}
+    for it in (view.get("items") or {}).values():
+        hist = [str(h) for h in it.get("history") or []]
+        if it.get("n") is not None:
+            by_n.setdefault(it["n"], []).extend(hist)
+        if it.get("job_key"):
+            by_key.setdefault(it["job_key"], []).extend(hist)
+    return by_n, by_key
+
+
+def plan_needs(root, it):
+    """{question id: label} of the needs_you fields in the item's fill plan."""
+    path = root / str(it.get("folder", "")) / "fill_plan.json"
+    plan = verified(path, {}) if path.exists() else {}
+    out = {}
+    for f in plan.get("fields") or []:
+        if isinstance(f, dict) and f.get("status") == "needs_you" and f.get("qid"):
+            out[str(f["qid"])] = str(f.get("label") or "")
+    return out
+
+
+def open_needs(root, it, st, history, m, answered):
+    """The item's needs ids that are still open (G3-03): none once it was
+    unparked today (answers.py unpark: its plan has no question left) or is
+    done, and never an id a morning draft fills for it or the answer bank
+    answers now."""
+    needs = [str(x) for x in it.get("needs") or [] if str(x)]
+    if not needs:
+        return []
+    by_n, by_key = history
+    hist = by_n.get(it.get("n"), []) + by_key.get(it.get("job_key"), [])
+    if st in ANSWERED or "unparked" in hist:
+        return []
+    n = int(it.get("n") or 0)
+    skip = drafted(m)
+    labels = plan_needs(root, it)
+    return [q for q in needs if (n, q) not in skip and not (labels.get(q) and answered(labels[q]))]
+
+
+def safe_item(it, upload, letter):
+    """True when every value next prints for a command line is safe there
+    (shared decision 2): the job key, the ATS and account codes, and the
+    folder, upload and letter paths."""
+    if not inline_ok(it.get("job_key")) or not path_ok(it.get("folder")):
+        return False
+    for code in [it.get("ats"), it.get("account")] + list(it.get("needs") or []):
+        if code not in (None, "") and not inline_ok(str(code)):
+            return False
+    return all(not p or path_ok(p) for p in (upload, letter))
+
+
 def referral_links(root):
     """job_key -> the referral link the user stored with `ref <n> <url>` after
     the list was built (tracker.referral_urls)."""
@@ -1380,13 +1573,14 @@ def referral_links(root):
 def next_item(root, day, short=False):
     settings = jobfs.settings(root)
     items, _ = queue(root, day)
-    by_n, by_key, _ = states(root, day)
+    by_n, by_key, view = states(root, day)
     m = morning(root, day)
     closed, live = closed_keys(root)
     holds = Holds(root)
     refs = lazy(lambda: referral_links(root))
-    order, waiting = serving(root, day, items, by_n, by_key, m, short=short, holds=holds)
+    order, waiting, rebuild = serving(root, day, items, by_n, by_key, m, short=short, holds=holds)
     confirmed = sensitive_ok(root, day)
+    history = histories(view)
     out, wait = [], []
     if waiting:
         fams = {}
@@ -1394,7 +1588,16 @@ def next_item(root, day, short=False):
             fam = str(it.get("family") or "no family")
             fams[fam] = fams.get(fam, 0) + 1
         wait = [f"WAIT {plural(len(waiting), 'item')} with no resume yet: "
-                + ", ".join(f"{k} {v}" for k, v in sorted(fams.items()))]
+                + ", ".join(f"{k} {v}" for k, v in sorted(fams.items()) if inline_ok(k) or k == "no family")]
+    rebuilding = []
+    for it, st in rebuild:  # R8: rebuilt first, never handed over as they are
+        n = int(it.get("n") or 0)
+        if not path_ok(it.get("folder")):
+            out.append(f"SKIP #{n:02d} {UNSAFE}")
+            continue
+        out.append(f"REBUILD #{n:02d}: {REBUILD_WHY} (FOLDER {it.get('folder')})")
+        rebuilding.append(n)
+    answered = None
     for it, st in order:
         n = int(it.get("n") or 0)
         if it.get("job_key") in closed:
@@ -1402,8 +1605,13 @@ def next_item(root, day, short=False):
             out.append(f"SKIP #{n:02d} closed (checked {rec.get('checked', '?')})")
             continue
         link = open_link(it, refs)
-        if not link:  # SEC-11: never an OPEN line that is not a plain http(s) web address
+        if not link:  # SEC-11: never an OPEN line that netfetch.web_refusal refuses
             out.append(f"SKIP #{n:02d} bad link (not a plain http(s) web address; never opened)")
+            continue
+        upload, note = upload_line(root, it)
+        letter, lnote = letter_line(root, it)
+        if not safe_item(it, upload, letter):  # shared decision 2: nothing unsafe for a command line
+            out.append(f"SKIP #{n:02d} {UNSAFE}")
             continue
         why = holds.reason(it)
         if why:  # shared decision 5: no OPEN, UPLOAD or HANDOVER for a resume built before a correction
@@ -1414,8 +1622,6 @@ def next_item(root, day, short=False):
                 out.append(f"STATE {st}")
             out.append(hold_text(n, why))
             return out + wait
-        upload, note = upload_line(root, it)
-        letter, lnote = letter_line(root, it)
         attach = "attach last" if it.get("attach") in LAST_ATTACH else "attach first"
         out += [f"NEXT #{n:02d} {it.get('job_key', '')}",
                 f"COMPANY {it.get('company', '')}", f"ROLE {it.get('role', '')}",
@@ -1426,9 +1632,15 @@ def next_item(root, day, short=False):
         if letter:
             out.append(f"LETTER {letter} ({lnote})")
         out.append(f"RESUME {it.get('resume_status', '')} tier {it.get('tier', '')}")
-        ans = f"ANSWERS {it.get('answers_status', '')}"
-        if it.get("needs"):
-            ans += " needs " + ",".join(it["needs"])
+        if answered is None:
+            answered = bank_answers(root)
+        needs = open_needs(root, it, st, history, m, answered)
+        status = str(it.get("answers_status", ""))
+        if it.get("needs") and not needs and status == "needs_you":
+            status = "answered"  # every question it waited on is settled today
+        ans = f"ANSWERS {status}"
+        if needs:
+            ans += " needs " + ",".join(needs)
         if it.get("sensitive"):
             ans += " sensitive " + ",".join(it["sensitive"])
         out.append(ans)
@@ -1454,7 +1666,11 @@ def next_item(root, day, short=False):
                 out.append(f"ATTACH {text}, then type ok.")
         out += ["HANDOVER " + ln for ln in handover(it, upload, settings, "; ".join(checks), letter)]
         return out + wait
-    out.append("NEXT none")
+    if rebuilding:
+        out.append(f"NEXT wait: the rebuilds above are what is left ({numbers(rebuilding)}); "
+                   "run next again once each new build passes")
+    else:
+        out.append("NEXT none")
     return out + wait
 
 
@@ -1530,7 +1746,7 @@ def diy_list(root, day):
         if (norm(company), norm(title)) in done:
             continue
         line = f"DIY E{i} | {clean(company, 80)} | {clean(title, 120)} | {clean(loc, 80)}"
-        if f"E{i}" in staged:
+        if f"E{i}" in staged and path_ok(f"upload/{staged[f'E{i}']}"):
             line += f" | upload/{staged[f'E{i}']}"
         out.append(line)
     return out or ["DIY none"]
@@ -1595,6 +1811,9 @@ def main(argv=None):
             lines = diy_list(root, day)
     except (jobfs.ConfigError, OSError) as e:
         print(f"ERROR {e}")
+        return 1
+    except (ValueError, RecursionError) as e:  # a file no reader caught: one plain line, never a traceback
+        print(f"ERROR {args.cmd} could not read a file in the folder ({type(e).__name__})")
         return 1
     for line in lines:
         print(line)

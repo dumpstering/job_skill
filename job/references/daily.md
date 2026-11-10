@@ -34,7 +34,12 @@ Commands below are shortened (SKILL.md "Scripts"); each takes
    ok on the <family> base resume (type /job variants)`), one line for the
    families with no base resume yet (`180 more jobs need a base resume you
    don't have yet ...`), a line for jobs on hold after a correction
-   (`2 jobs on hold (#4, #9): ...`), and it ends
+   (`2 jobs on hold (#4, #9): ...`; the user's `/job variants` then follows
+   variants.md "One correction, every family"), a line for tailored
+   resumes being rebuilt after one (`1 tailored resume (#3) cites something
+   you corrected today; ...`; apply_batch.md step 1), on the day's first
+   card a line when no job-alert email has come in for 3 days (`... Type
+   /job alerts ...`: setup.md "Alerts"), and it ends
    `Starting #<n> now.`, the same item `next` gives. With no job finder
    installed (mode M, or no `runner/out/status.json`) its one line says to
    type `/job setup` (setup.md sitting 2). With no list today its last line
@@ -201,8 +206,9 @@ in its turn like the runner's items.
   runner reads it within about 20 minutes (the next tick hands it to the
   daily, never running it itself), gates what it finds and appends an
   addendum (`runner/out/results/<id>.json`; `DENY job-board ...` is a job
-  board link, ats/linkedin.md; `gates.py explain --job-key <key>` names the
-  gate that stopped one).
+  board link, ats/linkedin.md; any `DENY` link is never opened by any tool,
+  the browser included; `gates.py explain --job-key <key>` names the gate
+  that stopped one).
 
 ## /job status
 

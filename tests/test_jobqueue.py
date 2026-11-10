@@ -667,12 +667,81 @@ def test_widen_on_usable_supply():
         assert jobqueue.usable_supply(ctx, cands, 4) == min(4, want), "no approved variant: only the Tier A places"
 
 
+def test_account_block_best_only():
+    """L3-05: a new-account tenant's jobs come forward right after batch 1
+    (grouped, one account for several jobs) only when its best job is at or
+    above the day's median fit. A tenant whose jobs are the day's weakest
+    takes its places by fit, so the user makes no account early for them:
+    account_block names only the block's tenants (their accounts are made
+    together), and the weak tenant's account is made at its own job."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        data = json.loads((POOL / "pool_71.json").read_text(encoding="utf-8"))
+        tenants = sorted({jobqueue.tenant_of(it) for it in data["items"] if it["ats"] == "workday"})
+        weak = tenants[0]
+        # a smaller pool (3 Workday tenants, 2 jobs each: within the day's account limits), so every
+        # job fits in the day's list and only the order is judged
+        data["items"] = [it for it in data["items"] if it["ats"] == "workday" and
+                         jobqueue.tenant_of(it) in tenants[:3]] + \
+            [it for it in data["items"] if it["ats"] in ("greenhouse", "lever")][:16]
+        for it in data["items"]:
+            if jobqueue.tenant_of(it) == weak:
+                it["fit"] = 0.05
+        (root / "p.json").write_text(json.dumps(data), encoding="utf-8")
+        build(root, str(root / "p.json"))
+        q = queue(root)
+        items = q["items"]
+        weak_ns = [it["n"] for it in items if it["host"] == weak]
+        others = [it["n"] for it in items if it["host"] != weak]
+        assert weak_ns and min(weak_ns) > max(others), (weak_ns, others)
+        new = [it for it in items if it["account"] == "new" and it["host"] != weak]
+        assert new and min(it["n"] for it in new) == 11 and q["account_block"]["after_n"] == 10, \
+            [(it["n"], it["account"]) for it in items]
+        assert weak not in q["account_block"]["tenants"] and len(q["account_block"]["tenants"]) == 2, \
+            q["account_block"]
+
+
+def test_borderline_seniority_last():
+    """R6: a job whose seniority asks more than the user has (the gates'
+    borderline mark) is listed after the rest and takes a slot only when the
+    others run out, however high its fit. A pool item from before the mark
+    is judged against the user's library on the first build."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        data = json.loads((POOL / "pool_71.json").read_text(encoding="utf-8"))
+        gh = [it for it in data["items"] if it["ats"] == "greenhouse"]
+        marked = {it["job_key"] for it in gh[:2]}
+        for it in data["items"]:
+            it["seniority"] = "borderline" if it["job_key"] in marked else ""
+            if it["job_key"] in marked:
+                it["fit"] = 0.99
+        (root / "p.json").write_text(json.dumps(data), encoding="utf-8")
+        build(root, str(root / "p.json"))
+        items = queue(root)["items"]
+        late = [it["n"] for it in items if it["job_key"] in marked]
+        rest = [it["n"] for it in items if it["job_key"] not in marked]
+        assert not late or min(late) > max(rest), (late, rest)
+        assert len(items) == 30 and not late, "41 others fill the 30 slots first"
+        # an item pooled before the mark existed: judged now, against the synthetic person's library
+        for name in ("achievement_library.md", "techniques.md"):
+            (root / name).write_bytes((HERE / "fixtures" / "folder" / name).read_bytes())
+        ctx = jobqueue.Context(root, DAY)
+        old = {"job_key": "k1", "title": "Principal Scientist", "family": "assay_dev",
+               "text": "Requirements\n- PhD with 10+ years of industry experience\n"}
+        plain = {"job_key": "k2", "title": "Scientist II", "family": "assay_dev",
+                 "text": "Requirements\n- PhD and 2+ years of industry experience; qPCR\n"}
+        assert ctx.borderline(old) and old["seniority"] == "borderline"
+        assert not ctx.borderline(plain) and plain["seniority"] == ""
+        assert not ctx.borderline({"job_key": "k3", "title": "Principal Scientist", "seniority": ""})
+
+
 def main():
     for fn in (test_build_71, test_small_pool_widens, test_frozen_and_wait, test_addendum_during_session,
                test_fold_events_idempotent, test_upload_staging, test_referral, test_variant_rule, test_not_sent,
                test_user_addendum, test_do_yourself_files_local_date, test_outcomes_next_day, test_user_skip_week,
                test_handover_carry, test_numbers_around_addendum, test_reservation_release,
-               test_fold_old_pending_event, test_referral_link_in_queue, test_widen_on_usable_supply):
+               test_fold_old_pending_event, test_referral_link_in_queue, test_widen_on_usable_supply,
+               test_account_block_best_only, test_borderline_seniority_last):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

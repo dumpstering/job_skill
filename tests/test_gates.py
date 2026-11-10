@@ -421,6 +421,291 @@ def test_labeled_pool_d6():
           f"queue yes {q_yes} of 19, no {q_no} of 11")
 
 
+LABELED_DAY3 = FIX / "labeled_day3_2026-11-06.json"
+PERSON = HERE / "fixtures" / "folder"  # the synthetic person of both live days (14 years, 11 in industry)
+
+
+def person_root(tmp, widen=None, settings=None):
+    """preset_root plus the synthetic person's achievement library and
+    techniques (their years and title levels: the seniority rule's input)."""
+    rules = preset_root(tmp, widen)
+    for name in ("achievement_library.md", "techniques.md"):
+        shutil.copyfile(PERSON / name, Path(tmp) / name)
+    if settings:
+        (Path(tmp) / "config" / "settings.toml").write_text(settings, encoding="utf-8")
+    return gates.Rules(Path(tmp), DAY, widen=widen or [])
+
+
+def labeled_verdict(rules, it, i):
+    """G3, G4 and the seniority rule on one labeled posting: the requirement
+    lines that ask for years stand in for its text."""
+    ok, v = list_verdict(rules, it["company"], it["title"], it["location"], i)
+    if not ok:
+        return v
+    fam = next(f for f in rules.families if f.get("id") == v.info.get("family"))
+    p = jobfs.Posting(job_key=f"k{i}", title=it["title"], company=it["company"],
+                      text="Requirements\n" + "\n".join(it.get("years") or []) + "\n")
+    gates.g9_seniority(p, v, fam, rules)
+    return v
+
+
+def test_labeled_pools_r6():
+    """R6 on both live days' labeled pools, for the synthetic person whose
+    pools they were (14 years after the PhD, 11 in industry, titles up to
+    Scientist II, so judged at senior level). Title, place and the seniority
+    rule (the requirement lines that ask for years stand in for the texts)
+    keep every yes. Day 2 (title and place only kept 50 no of 121): the
+    principal titles beyond the person drop 5 more (Cytokinetics, Denali x2,
+    Genentech, Merck). Day 3 (all 177 had passed every round-3 gate, 52 no):
+    those 5 and Fortrea's 4 regional field CRA jobs drop. In day 3's queue
+    the gates keep all 30 but mark Nurix #10 (5+ years of drug discovery the
+    library never names) and Stanford Health Care #13 (a senior staff
+    title) borderline, so the queue lists them after the rest."""
+    with tempfile.TemporaryDirectory() as tmp:
+        rules = person_root(tmp)
+        me = rules.experience
+        assert (me.level, me.effective, me.doctorate, me.source) == (2, 3, True, "library"), me
+        assert 14 <= me.years < 15 and 10 <= me.industry_years < 11, me
+        counts = {}
+        for name, path in (("day2", LABELED), ("day3", LABELED_DAY3)):
+            items = json.loads(path.read_text(encoding="ascii"))["items"]
+            verdicts = [labeled_verdict(rules, it, i) for i, it in enumerate(items)]
+            lost = [it["title"] for it, v in zip(items, verdicts) if it["label"] == "yes" and not v.ok]
+            assert not lost, (name, lost)
+            counts[name] = sum(1 for it, v in zip(items, verdicts) if it["label"] == "no" and v.ok)
+            if name == "day3":
+                q = {it["queue"]: (it, v) for it, v in zip(items, verdicts) if "queue" in it}
+                counts["queue_yes"] = sum(1 for it, v in q.values() if it["label"] == "yes" and v.ok)
+                counts["queue_no"] = sum(1 for it, v in q.values() if it["label"] == "no" and v.ok)
+                counts["borderline"] = sorted(n for n, (it, v) in q.items() if v.info.get("seniority"))
+                dropped = sorted(it["company"] for it, v in zip(items, verdicts) if not v.ok)
+                assert dropped == ["Cytokinetics", "Denali Therapeutics", "Denali Therapeutics", "Fortrea",
+                                   "Fortrea", "Fortrea", "Fortrea", "Genentech", "Merck (MSD)"], dropped
+    assert counts == {"day2": 45, "day3": 43, "queue_yes": 22, "queue_no": 8, "borderline": [10, 13]}, counts
+    print(f"   R6: day 2 no kept {counts['day2']} of 121 by title, place and seniority (yes 150 of 150); day 3 no "
+          f"kept {counts['day3']} of 52 (yes 125 of 125); queue yes 22 of 22, no 8 of 8, borderline "
+          f"#{', #'.join(str(n) for n in counts['borderline'])}")
+
+
+def test_seniority_rules():
+    """R6: seniority is judged against the user. Title levels, the years a
+    posting asks (a PhD's path in a degree ladder, 'up to', a fixed term),
+    the user's years from the library headings or settings, and the verdicts
+    for a senior person and a junior one. A cv-mode family is never judged."""
+    lv = gates.title_level
+    assert [lv(t) for t in ("Scientist II", "Scientist 3 - Translational Medicine", "Senior Scientist",
+                            "Scientist / Senior Scientist, Library Prep", "Staff / Senior Scientist, Assay",
+                            "Senior Scientist / Principal Scientist, Induced Proximity", "Genomics Sr Staff Scientist",
+                            "Associate Principal Scientist", "Senior Principal Scientist", "Senior Research Associate",
+                            "Senior Associate Scientist", "Senior/Staff Research Associate",
+                            "Senior Scientist I/II, In Vitro Pharmacology")] == \
+        [0, 0, 3, 0, 3, 3, 5, 5, 6, 2, 2, 2, 3]
+
+    def bar(*lines, doctorate=True):
+        return gates.years_bar("Requirements\n" + "\n".join(lines) + "\n", doctorate)
+    assert bar("- PhD in biology with 4+ years of relevant experience") == (4, False)
+    assert bar("- PhD and 5+ years of industry experience") == (5, True)
+    assert bar("- BS/MS/PhD with 10+/8+/6+ years of experience (for Staff Scientist)") == (6, False)
+    assert bar("- Ph.D. or Master's plus 10 years of relevant experience") == (None, False)
+    assert bar("- Bachelor's degree with 5+ years of experience") == (None, False)
+    assert bar("- Bachelor's degree with 5+ years of experience", doctorate=False) == (5, False)
+    assert bar("- PhD with up to 2 years of industry research experience") == (0, True)
+    assert bar("- PhD with 0-3 years of relevant industry experience") == (0, True)
+    assert bar("This is a two year, fixed term position.", "- 3+ years of experience preferred") == (None, False)
+    assert bar("- 4 or more years of post-graduate industry or academic research experience") == (4, False)
+    assert bar("- Four (4) or more years of work experience in genetics",
+               "- One (1) year or more of work experience in a CLIA laboratory") == (4, False)
+    import time
+    start = time.perf_counter()  # bounded work (D3): long runs of spaces never make the scan slow
+    gates.years_bar("Requirements\n" + ("1" + " " * 590 + "experience\n") * 300)
+    assert time.perf_counter() - start < 2, time.perf_counter() - start
+    with tempfile.TemporaryDirectory() as tmp:
+        senior = person_root(tmp).experience
+    with tempfile.TemporaryDirectory() as tmp:
+        override = '[experience]\nyears = 2\nindustry_years = 0\n'
+        junior = person_root(tmp, settings=override).experience
+    assert junior.source == "settings" and (junior.years, junior.industry_years, junior.effective) == (2.0, 0.0, 2)
+    fam = {"mode": "industry"}
+
+    def verdict(title, me, *lines):
+        return gates.seniority(title, "Requirements\n" + "\n".join(lines) + "\n", fam, me)[0]
+    cases = [("Principal Scientist", "- PhD with 10+ years of industry experience", "beyond", "beyond"),
+             ("Senior Principal Scientist", "- PhD and 3 years of relevant experience", "borderline", "beyond"),
+             ("Senior Scientist", "- PhD and 2+ years of industry experience", "ok", "borderline"),
+             ("Staff Scientist", "- PhD with 8 years of industry experience", "borderline", "beyond"),
+             ("Scientist II", "- PhD with 5+ years of industry experience", "ok", "beyond"),
+             ("Scientist", "- PhD; cell culture and qPCR", "ok", "ok"),
+             ("Scientist", "- 5+ years of drug discovery experience", "borderline", "borderline"),
+             ("Scientist", "- 5+ years of microbiology experience", "ok", "borderline"),
+             ("Scientist", "- 8+ years of microbiology experience", "ok", "beyond")]
+    for title, line, want_senior, want_junior in cases:
+        assert verdict(title, senior, line) == want_senior, (title, line, verdict(title, senior, line))
+        assert verdict(title, junior, line) == want_junior, (title, line, verdict(title, junior, line))
+    assert gates.seniority("Principal Scientist", "", {"mode": "cv"}, junior) == ("ok", "")
+    assert gates.seniority("Principal Scientist", "", fam, None) == ("ok", "")  # no library, no years: not judged
+    # the gate: beyond is a filter discard (judged again when the person's years change); borderline is marked
+    with tempfile.TemporaryDirectory() as tmp:
+        rules = person_root(tmp)
+        p = jobfs.Posting(job_key="k", title="Principal Scientist", text="Requirements\n- PhD with 10+ years\n")
+        v = gates.Verdict()
+        assert gates.g9_seniority(p, v, fam, rules) is not None and v.reason == "seniority" and gates.is_filter(v.reason)
+        v = gates.Verdict()
+        p.title = "Staff Scientist"
+        assert gates.g9_seniority(p, v, fam, rules) is None and v.info["seniority"] == "borderline", v.lines
+        v = gates.Verdict()
+        p.title = "Principal Scientist"
+        assert gates.g9_seniority(p, v, fam, rules, unread=True) is None and v.info["seniority"] == "borderline"
+        plain = preset_root(Path(tmp) / "plain").hash
+        assert rules.hash != plain, "the person's years and levels are part of the profile hash"
+
+
+def test_shift_lengths_not_hr():
+    """L3-03: an all-caps exclude word right after a number is a shift
+    length ('08-HR', '8 HR'), not human resources; 'HR Coordinator' is still out."""
+    with tempfile.TemporaryDirectory() as tmp:
+        rules = preset_root(tmp)
+
+        def fam(title):
+            p = jobfs.Posting(job_key="k", title=title, company="Acme Bio", company_norm="acme bio")
+            v = gates.Verdict()
+            return None if gates.g4_title(p, v, rules) else v.info["family"]
+        assert fam("Research Associate - 8 HR Days") == "research_associate_lab_tech"
+        assert fam("Clinical Research Coordinator 2 (08-HR)") == "clinical_research"
+        assert fam("Microbiology Technologist - Full Time, Days (08HR)") == "microbiologist"
+        assert fam("HR Coordinator") is None and fam("Senior HR Business Partner") is None
+        # Stanford Health Care's phlebotomy lab assistant stays out (no longer by the HR word)
+        assert fam("Lab Assistant III-P - Full Time - 1.0 FTE, 08-HR, Day Shift") is None
+    assert not gates.exclude_hit("HR", "Lab Tech - 12-HR Nights", gates.words("Lab Tech - 12-HR Nights"))
+    assert gates.exclude_hit("IT", "Associate Director, IT", gates.words("Associate Director, IT"))
+
+
+def test_exact_core_title_first():
+    """L3-04: of the families a title matches, the closest core title wins
+    before file order: a bare 'Research Associate' is the research associate
+    family's, not clinical research's ('Clinical Research Associate')."""
+    with tempfile.TemporaryDirectory() as tmp:
+        rules = preset_root(tmp)
+
+        def fam(title, company="BillionToOne"):
+            p = jobfs.Posting(job_key="k", title=title, company=company, company_norm=jobkey_norm(company))
+            v = gates.Verdict()
+            return None if gates.g4_title(p, v, rules) else v.info["family"]
+        assert fam("Research Associate") == "research_associate_lab_tech"
+        assert fam("Clinical Research Associate") == "clinical_research"
+        assert fam("QC Microbiologist") == "qc_micro_sterility"
+        assert fam("Senior Research Associate, Assay Development") == "assay_development"
+        assert fam("Research Scientist", "Stanford University") == "academic_staff_research"
+
+
+def jobkey_norm(name):
+    import jobkey
+    return jobkey.norm_company(name)
+
+
+def test_regional_remote():
+    """L3-06: a remote location list that names states, none of them home,
+    is a regional field job even when it also says 'Remote United States'.
+    An office city beside a nationwide remote, or a home state among the
+    remote ones, still passes."""
+    with tempfile.TemporaryDirectory() as tmp:
+        rules = preset_rules(tmp)
+    for loc, ok in (("Durham | Remote Michigan | Remote Ohio | Remote United States | Remote Texas", False),
+                    ("Durham | Remote United States | Remote Nevada", False),
+                    ("Remote, Oregon, USA | Remote, Idaho, USA", False),
+                    ("Durham | Remote Oregon | Remote United States | Remote California", True),
+                    ("Durham | Remote United States", True), ("Remote United States | Boston, MA", True),
+                    ("United States - Remote", True), ("South San Francisco, CA | Remote Texas", True)):
+        got, v = list_verdict(rules, "Fortrea", "Clinical Research Associate II", loc)
+        assert got == ok, (loc, v.lines)
+        if not ok:
+            assert v.reason == "location" and "remote, other states" in v.lines[-1], v.lines
+
+
+def test_robots_refused_by_policy():
+    """SV-07: a robots.txt read refused by policy is never 'allowed'. A
+    redirect to a job board or a bad-url host discards the posting at G1
+    (host:<domain> or host:bad-url); a non-public target or any other fetch
+    failure is the robots-unreachable skip, as an unanswered robots.txt is."""
+    url = "https://careers.example-bio.com/jobs/12"
+    for exc, action, reason in ((netfetch.Denied("job-board linkedin.com"), "discard", "host:linkedin.com"),
+                                (netfetch.Denied("bad-url host x"), "discard", "host:bad-url"),
+                                (netfetch.Denied("non-public 10.0.0.1"), "skip", "robots-unreachable"),
+                                (netfetch.FetchError("timed out"), "skip", "robots-unreachable")):
+        f = netfetch.Fetcher(unattended=False, throttle=netfetch.Throttle(enabled=False))
+
+        def boom(u, exc=exc):
+            raise exc
+        f.robots.fetch_text = boom
+        p = jobfs.Posting(job_key="url:careers.example-bio.com/jobs/12", title="Microbiologist", company="Example Bio",
+                          url=url, apply_url=url, lane="watch", ats="other")
+        v = gates.Verdict()
+        assert gates.g1_host(p, v, f) is not None and (v.action, v.reason) == (action, reason), (exc, v.lines)
+
+
+def test_link_refusal_r1():
+    """R1 and SV-08 (gates side): G1 and G12 refuse what netfetch.web_refusal
+    refuses, so a link the queue would never show is discarded with a row in
+    discards.csv, never left in the pool: userinfo, a backslash, whitespace,
+    another port, an IP literal, a single-label host (host:bad-url) and the
+    special-use names (host:non-public)."""
+    bs = chr(92)
+    gh = "https://boards.greenhouse.io/acmebio/jobs/1"
+    for link, why in (("https://user@careers.example-bio.com/jobs/1", "bad-url"),
+                      ("https://careers.example-bio.com" + bs + "jobs/1", "bad-url"),
+                      ("https://careers.example-bio.com/jo bs/1", "bad-url"),
+                      ("https://careers.example-bio.com:8443/jobs/1", "bad-url"),
+                      ("https://13.107.42.14/jobs/1", "bad-url"), ("https://intranet/jobs/1", "bad-url"),
+                      ("http://localhost/jobs/1", "non-public"), ("https://printer.local/jobs/1", "non-public")):
+        p = jobfs.Posting(job_key="greenhouse:1", title="Microbiologist", company="Acme Bio", url=gh,
+                          apply_url=link, lane="watch", ats="greenhouse")
+        v = gates.Verdict()
+        assert gates.g1_host(p, v, None) is not None and v.reason == f"host:{why}", (link, v.lines)
+        v = gates.Verdict()
+        assert gates.g12_route(p, v) is not None and v.reason == "apply_route", (link, v.lines)
+    for link in ("https://careers.example-bio.com:443/jobs/1?q=a%20b", "https://careers.example-bio.com/jobs/1"):
+        p = jobfs.Posting(job_key="greenhouse:1", title="Microbiologist", url=gh, apply_url=link, lane="watch",
+                          ats="greenhouse")
+        assert gates.g1_host(p, gates.Verdict(), None) is None and gates.g12_route(p, gates.Verdict()) is None, link
+
+
+def test_fit_general_form():
+    """L3-05: fit credits a technique's general form at half weight: a
+    posting's 'PCR' for the user's 'real-time PCR', 'sequencing' for '16S
+    rRNA sequencing'. 'culture' is no method on its own (a company culture),
+    and a form the posting names in full is never counted twice."""
+    import library
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "techniques.md"
+        path.write_text("# Techniques\n\n"
+                        "- real-time PCR | aliases: qPCR | level: hands-on | years_ok: yes | evidence: L-0001\n"
+                        "- 16S rRNA sequencing | aliases: 16S sequencing | level: hands-on | years_ok: yes | "
+                        "evidence: L-0002\n"
+                        "- anaerobic culture | level: hands-on | years_ok: yes | evidence: L-0003\n"
+                        "- confocal microscopy | level: familiar | years_ok: no | evidence: L-0004\n",
+                        encoding="ascii")
+        techniques = library.load_techniques(path)
+    fam = {"terms": ["assay development", "NGS"]}
+    text = "Requirements: PCR, cell culture and sequencing workflows; microscopy a plus. A great company culture."
+    assert gates.overlap(text, fam, techniques) == 0.5 + 0.5 + 0.25, gates.overlap(text, fam, techniques)
+    full = "Requirements: real-time PCR and qPCR; PCR primer design."
+    assert gates.overlap(full, fam, techniques) == 1.0, gates.overlap(full, fam, techniques)
+    assert gates.overlap("Requirements: a PhD and good communication.", fam, techniques) == 0
+
+
+def test_posted_values():
+    """R2: a pooled or queued posting's posted value is a YYYY-MM-DD date,
+    'undated' or blank, never other text from a board."""
+    assert gates.posted_value("2026-11-05") == "2026-11-05"
+    assert gates.posted_value("2026-11-05T08:00:00Z") == "2026-11-05"
+    assert gates.posted_value("Posted 3 days ago; rm") == "undated" and gates.posted_value("") is None
+    with tempfile.TemporaryDirectory() as tmp:
+        root = copy_root(tmp)
+        p = make_gates_root.posting("greenhouse:900401", "QC Microbiologist", make_gates_root.gh(900401))
+        p["posted"] = "yesterday `x`"
+        run_all(root, postings=[p])
+        assert pool(root)["greenhouse:900401"]["posted"] == "undated", pool(root)
+
+
 def test_d6_title_rules():
     """L2-02, L2-03 and the seniority words: a business-development title is
     out (not assay development), 'formulation*' also drops 'Formulations',
@@ -492,6 +777,48 @@ def test_g9_avoid():
         assert (gates.g9_words(p, v, fam) is None) == ok, (name, v.lines)
         if not ok:
             assert v.reason == "title" and "another field" in v.lines[-1], v.lines
+
+
+def test_other_field_postdocs():
+    """R6/D6 for the round 4 readers (LBNL's job site lists every division):
+    another field's postdocs and research roles (accelerator physics, quantum
+    devices, electrochemistry, energy and earth systems) leave the families by
+    title, and the postdoc family's G9 words need a biology word in the
+    posting and drop one whose text names more of those fields. A biology,
+    soil-microbe or metabolic-engineering postdoc keeps its place."""
+    with tempfile.TemporaryDirectory() as tmp:
+        rules = preset_rules(tmp)
+        out = ["Earth System Sciences Postdoctoral Fellow", "Electrochemical Engineering Postdoctoral Scholar",
+               "Experimental Postdoc - Quantum Computing and Networking", "Physicist Research Scientist",
+               "Postdoctoral Scholar - Membrane Chemist", "Postdoctoral Scholar, Energy Systems",
+               "Research Associate - Quantum Device Fabrication", "Accelerator Physics Postdoctoral Fellow"]
+        keep = ["Biologist Postdoctoral Fellow", "Postdoctoral Researcher", "Postdoctoral Fellow, Microbiology",
+                "Postdoctoral Scholar, Metabolic Engineering", "Senior Research Associate (Fermentation / Recovery)",
+                "Postdoctoral Fellow - Biochemistry"]
+        for i, title in enumerate(out + keep):
+            ok, v = list_verdict(rules, "Lawrence Berkeley National Laboratory", title, "Berkeley, CA", i)
+            assert ok == (title in keep), (title, v.lines)
+    fam = next(f for f in rules.families if f["id"] == "postdoc")
+    cases = {
+        "accelerator RF": ("The Accelerator Technology and Applied Physics Division seeks a postdoc for RF design "
+                           "of accelerator structures with beam physicists and mechanical engineers. "
+                           "PhD in physics or electrical engineering; electromagnetic simulation. " * 2, False),
+        "AI for accelerators": ("Develop machine learning and artificial intelligence methods for accelerator "
+                                "physics: digital twins, surrogate models, beam diagnostics. PhD in physics. " * 2,
+                                False),
+        "plant microbes": ("Engineer key microbes in plant root communities; genetic, proteomic and metabolomic "
+                           "approaches to microbial stress tolerance and biofilm formation. PhD in microbiology. " * 2,
+                           True),
+        "soil carbon": ("Investigate soil carbon and nutrient cycling in a grassland warming experiment; soil "
+                        "biogeochemistry and plant-soil feedbacks; isotopic analysis and machine learning to scale "
+                        "the results. PhD in ecology or soil science. " * 2, True),
+        "structural biology": ("Determine structures of bacterial membrane proteins by x ray crystallography and "
+                               "cryo-EM; protein expression and purification. PhD in biochemistry. " * 2, True),
+    }
+    for name, (text, ok) in cases.items():
+        p = jobfs.Posting(job_key="k", title="Postdoctoral Researcher", text=text)
+        v = gates.Verdict()
+        assert (gates.g9_words(p, v, fam) is None) == ok, (name, v.lines)
 
 
 def test_fit_overlap():
@@ -952,7 +1279,10 @@ def main():
                test_pass_stops_halfway, test_g9_requirements, test_pool_age_basis, test_g1_lookalike_host,
                test_two_openings_one_title, test_link_schemes_and_canonical_hosts, test_one_bad_posting,
                test_requirement_scan_bounded, test_labeled_pool_d6, test_d6_title_rules, test_g9_avoid,
-               test_fit_overlap, test_office_labels, test_second_ring_set_aside):
+               test_fit_overlap, test_office_labels, test_second_ring_set_aside, test_labeled_pools_r6,
+               test_seniority_rules, test_shift_lengths_not_hr, test_exact_core_title_first, test_regional_remote,
+               test_robots_refused_by_policy, test_link_refusal_r1, test_fit_general_form, test_posted_values,
+               test_other_field_postdocs):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

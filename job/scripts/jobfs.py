@@ -5,6 +5,10 @@ Every script that touches the JobSearch folder goes through this module:
 - today() and now_iso() in the [time] timezone (the sandbox clock is UTC);
 - settings() and search_profile(): TOML over in-code defaults, with a
   last-good fallback when a hand-edited file stops parsing;
+- read_json() and loads_json(), the only way a script reads a JSON file from
+  runner/in/, claude/, state/, queue/, applications/ or upload/ (a size limit
+  per caller, nesting at most 64 deep, one plain BadJson error), and
+  read_json_or() for a reader that treats a bad file as missing;
 - atomic_write_json() (adds _rev and _sha256), read_json_verified(),
   atomic_write_text(), create_only(), append_jsonl(), read_jsonl();
 - RunLock, the runner's self-lock (an OS lock on an open file);
@@ -53,6 +57,7 @@ SETTINGS_DEFAULTS = {
     "worksearch": {"claiming": False, "state": "CA", "claim_effective": "", "de8405_received": ""},
     "time": {"timezone": DEFAULT_TZ},
     "schedule": {"weekly_day": "monday"},
+    "experience": {"years": "", "industry_years": ""},  # R6: seniority override (gates.experience)
 }
 
 # The keys are fixed; research presets and setup fill the values (amendment 2).
@@ -75,7 +80,26 @@ PATTERN_KEYS = ("required_patterns", "preferred_patterns", "title_patterns")
 
 
 class NotReady(Exception):
-    """A verified JSON file is missing, cut short or fails its hash."""
+    """A verified JSON file is missing, cut short or fails its hash.
+    .missing is True when the file (and its .prev.json) is simply not there."""
+
+    def __init__(self, msg, missing=False):
+        super().__init__(msg)
+        self.missing = missing
+
+
+class BadJson(ValueError):
+    """A JSON file or text that is too big, nested too deep, not UTF-8 or not
+    JSON. .kind is "size", "depth", "utf8" or "json"; the first two never
+    change by waiting (a file still arriving can only be "utf8" or "json")."""
+
+    def __init__(self, msg, kind="json"):
+        super().__init__(msg)
+        self.kind = kind
+
+    @property
+    def permanent(self):
+        return self.kind in ("size", "depth")
 
 
 class LockBusy(Exception):
@@ -277,6 +301,143 @@ def search_profile(root=None, keep_last_good=False):
                        keep_last_good=keep_last_good)
 
 
+# ---------- safe JSON input (shared decision R3) ----------
+
+JSON_DEPTH_MAX = 64
+# Size limits, one per kind of caller (bytes). A file Claude or another
+# program drops (an event, a request, an args file) is small; a job folder's
+# files and the runner's small state files are bigger; the pool and the
+# queue files hold posting texts.
+MAX_INBOX = 64 * 1024
+MAX_FILE = 8 << 20
+MAX_STATE = 256 << 20
+
+# One bracket at a time, left to right: everything up to the next bracket
+# outside a string is skipped inside the regex engine (possessive, so it never
+# backtracks), then an opening or closing bracket, or a lone quote (a string
+# with no end: the text is not JSON, and the scan stops there). Linear on any
+# input.
+_JSON_TOKENS = re.compile(r'(?:[^"\[\]{}]++|"[^"\\]*+(?:\\.[^"\\]*+)*+")*+(?:([\[{])|([\]}])|(")|\Z)', re.S)
+
+
+def _no_constant(name):
+    raise ValueError(f"{name} is not a JSON number")
+
+
+def json_depth_ok(text, limit=JSON_DEPTH_MAX):
+    """True when no array or object in text nests deeper than limit. Linear in
+    the text; brackets inside strings do not count."""
+    if text.count("[") + text.count("{") <= limit:
+        return True
+    depth = 0
+    for m in _JSON_TOKENS.finditer(text):
+        if m.group(1):
+            depth += 1
+            if depth > limit:
+                return False
+        elif m.group(2):
+            depth -= 1
+        elif m.group(3):
+            return True  # an unterminated string: json.loads refuses the text there, before any deeper bracket
+    return True
+
+
+def loads_json(text, allow_nan=True, max_depth=JSON_DEPTH_MAX, strict=True):
+    """The JSON value in text (str, or bytes read as UTF-8 with or without a
+    BOM). Nesting deeper than max_depth is refused before parsing; a decode,
+    parse or recursion error is one BadJson (a ValueError). strict=False lets
+    a string hold control characters (some job-site APIs send them)."""
+    if isinstance(text, (bytes, bytearray)):
+        try:
+            text = bytes(text).decode("utf-8-sig")
+        except UnicodeDecodeError as e:
+            raise BadJson(f"not UTF-8 ({e.reason} at byte {e.start})", "utf8")
+    elif isinstance(text, str) and text.startswith("\ufeff"):
+        text = text[1:]
+    if not isinstance(text, str):
+        raise BadJson("not text", "json")
+    if not json_depth_ok(text, max_depth):
+        raise BadJson(f"nested deeper than {max_depth}", "depth")
+    try:
+        if allow_nan:
+            return json.loads(text, strict=strict)
+        return json.loads(text, parse_constant=_no_constant, strict=strict)
+    except RecursionError:
+        raise BadJson("nested too deep to read", "depth")
+    except MemoryError:
+        raise BadJson("too big to read", "size")
+    except ValueError as e:  # JSONDecodeError, a number over the digit limit, NaN refused
+        raise BadJson(f"not JSON ({str(e)[:120]})", "json")
+
+
+def read_json(path, max_bytes, allow_nan=True, strict=True):
+    """The JSON value in the file at path, through loads_json, read only up to
+    max_bytes (more is BadJson "size"). A missing or unreadable file raises
+    OSError (FileNotFoundError when it is not there): that case is the
+    caller's, since a missing file is often normal."""
+    too_big = BadJson(f"over {max_bytes // 1024} KB", "size")
+    with open(path, "rb") as f:
+        try:
+            size = os.fstat(f.fileno()).st_size
+        except OSError:
+            size = 0
+        if size > max_bytes:
+            raise too_big
+        # Sized from the file (never a max_bytes buffer), in 1 MB steps after
+        # that should the file grow while it is read; never past max_bytes.
+        chunks, total, want = [], 0, size + 1
+        while True:
+            part = f.read(min(want, max_bytes + 1 - total))
+            if not part:
+                break
+            chunks.append(part)
+            total += len(part)
+            if total > max_bytes:
+                raise too_big
+            want = 1 << 20
+    return loads_json(b"".join(chunks), allow_nan=allow_nan, strict=strict)
+
+
+_BAD_SEEN = set()
+_BAD_EMIT = [print]
+
+
+def set_bad_file_emit(fn):
+    """Where report_bad's ERROR lines go (the runner sets its own output and log)."""
+    _BAD_EMIT[0] = fn or print
+
+
+def report_bad(path, why, emit=None):
+    """One ERROR line per bad file per process (through emit, else the one
+    set_bad_file_emit chose): the file is treated as missing."""
+    key = str(path)
+    if key in _BAD_SEEN:
+        return
+    _BAD_SEEN.add(key)
+    p = Path(path)
+    shown = "/".join(p.parts[-3:]) if len(p.parts) > 3 else p.as_posix()
+    line = re.sub(r"[\r\n]+", " ", f"ERROR bad file {shown}: {why} (treated as missing)")
+    try:
+        (emit or _BAD_EMIT[0])(line)
+    except Exception:  # an output that fails must not turn a bad file into a stopped run
+        pass
+
+
+def read_json_or(path, max_bytes, default, emit=None):
+    """read_json, or `default` when the file is missing (silently), bad (one
+    ERROR line, see report_bad) or holds another type than default."""
+    try:
+        data = read_json(path, max_bytes)
+    except OSError:
+        return default
+    except BadJson as e:
+        report_bad(path, e, emit)
+        return default
+    if default is not None and not isinstance(data, type(default)):
+        return default
+    return data
+
+
 # ---------- files ----------
 
 def body_sha256(obj):
@@ -340,7 +501,7 @@ def atomic_write_json(path, obj, rev=None):
     if rev is None:
         rev = 1
         try:
-            rev = int(json.loads(path.read_text(encoding="utf-8")).get("_rev", 0)) + 1
+            rev = int(read_json(path, MAX_STATE).get("_rev", 0)) + 1
         except (OSError, ValueError, AttributeError, TypeError):
             pass
     out = {k: v for k, v in obj.items() if k not in ("_rev", "_sha256")}
@@ -362,21 +523,27 @@ def atomic_write_json(path, obj, rev=None):
 
 def _read_verified_once(path):
     try:
-        data = json.loads(Path(path).read_text(encoding="utf-8-sig"))
+        data = read_json(path, MAX_STATE)
     except FileNotFoundError:
-        raise NotReady(f"{path}: missing")
-    except (OSError, ValueError) as e:
+        raise NotReady(f"{path}: missing", missing=True)
+    except (OSError, ValueError) as e:  # BadJson too: too big, too deep, not UTF-8, not JSON
         raise NotReady(f"{path}: {e}")
     if not isinstance(data, dict):
         raise NotReady(f"{path}: not a JSON object")
-    if "_sha256" in data and data["_sha256"] != body_sha256(data):
+    try:
+        ok = "_sha256" not in data or data["_sha256"] == body_sha256(data)
+    except (TypeError, ValueError):  # a value json.dumps cannot write back
+        ok = False
+    if not ok:
         raise NotReady(f"{path}: hash mismatch")
     return data
 
 
 def read_json_verified(path, retries=1, wait=5.0, fallback=True, sleep=time.sleep):
     """A JSON object whose _sha256 matches (files with no hash just have to parse).
-    Retries after `wait` seconds, then reads <name>.prev.json; raises NotReady."""
+    Retries after `wait` seconds, then reads <name>.prev.json; raises NotReady.
+    A file that is there but bad (and no good .prev.json) gets one ERROR line
+    (report_bad): the caller treats it as missing."""
     last = None
     for attempt in range(retries + 1):
         try:
@@ -390,6 +557,8 @@ def read_json_verified(path, retries=1, wait=5.0, fallback=True, sleep=time.slee
             return _read_verified_once(prev_path(path))
         except NotReady:
             pass
+    if not last.missing:
+        report_bad(path, str(last).replace(f"{path}: ", "", 1))
     raise last
 
 
@@ -446,8 +615,8 @@ def read_jsonl(path):
         if not line.strip():
             continue
         try:
-            rec = json.loads(line)
-        except (ValueError, RecursionError):
+            rec = loads_json(line)
+        except ValueError:  # BadJson: a cut line, or one nested too deep
             continue
         if isinstance(rec, dict):
             out.append(rec)
@@ -490,7 +659,7 @@ class RunLock:
 
     def _holder(self):
         try:
-            data = json.loads(self.path.read_text(encoding="utf-8"))
+            data = read_json(self.path, 4096)
         except (OSError, ValueError):
             return None
         return data if isinstance(data, dict) else None
@@ -543,8 +712,8 @@ class RunLock:
         os.lseek(fd, 0, os.SEEK_SET)
         old = os.read(fd, 4096)
         try:
-            left = json.loads(old.decode("utf-8")) if old.strip() else None
-        except (UnicodeDecodeError, ValueError):
+            left = loads_json(old) if old.strip() else None
+        except ValueError:
             left = {"pid": "?", "started": "?", "cmd": "?"}
         self.left_by = left if isinstance(left, dict) else None
         info = {"pid": os.getpid(), "started": utcnow().replace(microsecond=0).isoformat(), "cmd": self.cmd}

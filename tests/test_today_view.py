@@ -956,20 +956,48 @@ def test_tier_a_corrected():
     assert out[0].startswith("NEXT #03") and any(ln.startswith(f"UPLOAD {it3['folder']}/Jordan Q. Avery Resume.pdf")
                                                  for ln in out), out
     assert jobqueue.final_files(folder)[0] is not None
+    assert jobqueue.user_resume(folder) == folder / "Jordan Q. Avery Resume.pdf"
     correct_l0007(root)
     assert jobqueue.final_files(folder) == (None, None)
+    assert jobqueue.user_resume(folder) is None  # never the newest '*Resume*.pdf', which is that same build
+    # R8 (G3-02): never swapped for its Tier B file without a word. next names it REBUILD (before the
+    # item it serves), never hands it over, and the card counts it in one line; Ready leaves it out.
+    out = run_args(root, "next")
+    rebuild = (f"REBUILD #03: its tailored resume cites something you corrected today; rerun the tailor for it "
+               f"(FOLDER {it3['folder']})")
+    assert out[0] == rebuild and out[1] == "NEXT #05 greenhouse:9005", out
+    assert not any(ln.startswith("NEXT #03") or "03_Avery" in ln for ln in out), out
+    lines = card(root).splitlines()
+    want = "1 tailored resume (#3) cites something you corrected today; I'm rebuilding it before it goes out."
+    assert want in lines and "Ready: 18. No account needed for any of them." in lines, lines
+    assert lines[-1].startswith("Starting #5 now."), lines
+    assert report.check_wording(want) == []
     for n in [n for n in range(5, 25) if n not in (9, 12)]:  # #4, #9 and #12 are held (qc_micro cites L-0007)
         emit(root, "applied", n)
-    out = run_args(root, "next")  # a Tier A item with no usable build comes after the others
-    assert out[0].startswith("NEXT #03") and not any("Jordan Q. Avery Resume.pdf" in ln for ln in out), out
-    assert any("this is the fallback" in ln for ln in out), out
+    out = run_args(root, "next")
+    assert out[0] == rebuild and out[1].startswith("NEXT #04") and out[-1].startswith("HOLD #4"), out
+    for n in (4, 9, 12):
+        emit(root, "later", n)
+    out = run_args(root, "next")  # only the rebuild is left: wait for it, never "NEXT none"
+    assert out == [rebuild, "NEXT wait: the rebuilds above are what is left (#3); run next again once each new "
+                            "build passes"], out
+    assert card(root).splitlines()[-1] == "Nothing else is ready until then."
+    # The tailor reran: a new strict build citing the corrected text passes, and #3 is served with it.
+    final["entries"] = {i: library.entry_hash(library.load(root / "achievement_library.md").by_id[i])
+                        for i in ("L-0007", "L-0001")}
+    (folder / "final.json").write_text(json.dumps(final), encoding="ascii")
+    out = run_args(root, "next")
+    assert out[0].startswith("NEXT #03") and any(ln.startswith(f"UPLOAD {it3['folder']}/Jordan Q. Avery Resume.pdf")
+                                                 for ln in out), out
+    assert not any(ln.startswith("REBUILD") for ln in out) and not any("rebuilding" in ln for ln in card(root).splitlines())
+    assert jobqueue.user_resume(folder) == folder / "Jordan Q. Avery Resume.pdf"
     # An entries record that cannot be checked is not one; one with no entries is judged as before.
     final["entries"] = {"L-0007": 7}
     (folder / "final.json").write_text(json.dumps(final), encoding="ascii")
     assert library.final_stale(folder, final) is True
     final.pop("entries")
     assert library.final_stale(folder, final) is False
-    print("ok a Tier A build citing an entry corrected since falls back to its Tier B file")
+    print("ok a Tier A build citing an entry corrected since: REBUILD at next, one card line, served once rebuilt")
 
 
 def test_open_link():
@@ -1007,7 +1035,135 @@ def test_open_link():
     assert today_view.web_link("https://job-boards.greenhouse.io/acme/jobs/1") == \
         "https://job-boards.greenhouse.io/acme/jobs/1"
     assert today_view.web_link(None) == "" and today_view.web_link(["https://example.com"]) == ""
-    print("ok OPEN is only ever a plain http(s) web address; other links are skipped, never opened")
+    # R1: today_view keeps no link rule of its own: what netfetch.web_refusal passes gets its OPEN line.
+    import netfetch
+    for url in ("https://jobs.example.com/apply%20now?q=a%2Fb", "https://jobs.example.com:443/x",
+                "http://jobs.example.com:80/x"):
+        assert netfetch.web_refusal(url) is None and today_view.web_link(url) == url, url
+    for url in bad[:-1] + ["https://jobs.example.com:8443/apply", "http://2130706433/apply",
+                           "https://router.home.arpa/x", "https://jobs.example.com/a b"]:
+        assert netfetch.web_refusal(url) and today_view.web_link(url) == "", url
+    print("ok OPEN is only ever a link netfetch.web_refusal passes; other links are skipped, never opened")
+
+
+def test_open_needs():
+    """G3-03: the ANSWERS line lists only the needs ids still open. An id a
+    morning draft fills for that job, one the answer bank answers now, and
+    every id of a job unparked today (answers.py unpark) drop out; a job with
+    none left says "answered"."""
+    m = dict(QUIET_MORNING, drafts=[{"n": 1, "label": "Why this role", "question_id": "Q-draft1",
+                                     "text": "I have run QC micro methods for 4 years."}])
+    root = make_root("open_needs", morning=m, workday=False)
+    items = queue_items(root)
+    items[0]["needs"], items[0]["answers_status"] = ["Q-draft1", "Q-open01"], "needs_you"
+    items[1]["needs"], items[1]["answers_status"] = ["Q-open02"], "needs_you"
+    items[3]["needs"], items[3]["answers_status"] = ["Q-bank01"], "needs_you"  # #3 is Tier A: it comes later
+    write_queue(root, items)
+    write_plan(root, items[3], [{"label": "Earliest start date?", "status": "needs_you", "qid": "Q-bank01",
+                                 "required": True}])
+    write_queue(root, items)
+
+    def answers_line():
+        return next(ln for ln in run_args(root, "next") if ln.startswith("ANSWERS"))
+    assert answers_line() == "ANSWERS needs_you needs Q-open01", "the drafted id drops, the open one stays"
+    items[0]["needs"] = ["Q-draft1"]
+    write_queue(root, items)
+    assert answers_line() == "ANSWERS answered", "every id drafted: nothing open"
+    emit(root, "applied", 1)
+    assert answers_line() == "ANSWERS needs_you needs Q-open02"
+    emit(root, "parked", 2)
+    emit(root, "unparked", 2)  # answers.py unpark: the answer came, its plan has no question left
+    assert answers_line() == "ANSWERS answered"
+    emit(root, "started", 2)  # unparked earlier today, started now: still settled
+    assert answers_line() == "ANSWERS answered"
+    emit(root, "applied", 2)
+    assert answers_line() == "ANSWERS needs_you needs Q-bank01"
+    (root / "answers.md").write_text("# Answers\n\n## Availability\n\n- ANS-001 | Earliest start date? | "
+                                     "2 weeks after an offer | text | any | no | user:2026-11-10 | 2026-11-10\n",
+                                     encoding="ascii")
+    assert answers_line() == "ANSWERS answered", "the bank answers it now"
+    print("ok ANSWERS lists only open needs ids: drafted, answered and unparked ones drop out")
+
+
+def lead(day, source="linkedin_alert"):
+    return json.dumps({"v": 1, "lead_id": "a" * 16, "source": source, "company": "Acme Bio", "title": "Scientist",
+                       "location": "Springfield, IL", "seen": day, "msg_ref": "b" * 16}) + "\n"
+
+
+def test_alert_line():
+    """R9 (G3-10): the day's first card adds one line when no job-alert lead
+    has arrived for 3 days (today and the 2 before), saying how to fix it in
+    one step. Not for a folder younger than that, not with alert reading off,
+    not after the day's first item, and an alert lead in the last 3 days (a
+    lead file or the runner's leads_state.json) clears it."""
+    root = make_root("alert_line", morning=QUIET_MORNING, workday=False)
+    f = jobfs.Folder(root)
+    line = ("No job-alert email has come in for 3 days, and alerts bring most new jobs. Type /job alerts and "
+            "I'll fix it with you (about 2 minutes).")
+    assert line not in card(root).splitlines(), "a folder with no earlier day: nothing to judge yet"
+    (root / "queue" / "2026-11-09").mkdir(parents=True)
+    lines = card(root).splitlines()
+    assert line in lines and lines[-1].startswith("Starting #1 now."), lines
+    assert report.check_wording(line) == [] and len(line) <= 160
+    f.leads.mkdir(parents=True)
+    (f.leads / "2026-11-09_0630_linkedin.jsonl").write_text(lead("2026-11-09"), encoding="ascii")
+    assert line in card(root).splitlines(), "a lead 3 days ago is not within the last 3 days"
+    (f.leads / "2026-11-10_0630_biospace.jsonl").write_text(lead("2026-11-10", "biospace_alert"), encoding="ascii")
+    assert line not in card(root).splitlines(), "a board's alert lead 2 days ago counts"
+    (f.leads / "2026-11-10_0630_biospace.jsonl").write_text(lead("2026-11-10", "adzuna"), encoding="ascii")
+    assert line in card(root).splitlines(), "an aggregator lead is not an alert"
+    f.state.mkdir(parents=True, exist_ok=True)
+    jobfs.atomic_write_text(f.state / "leads_state.json", json.dumps({"leads": {"x": {
+        "source": "linkedin_alert", "seen": "2026-11-12", "status": "pending", "company": "Acme Bio",
+        "title": "Scientist", "tries": [], "job_keys": []}}}))
+    assert line not in card(root).splitlines(), "the runner's lead state counts too"
+    (f.state / "leads_state.json").write_text("[" * 5000 + "]" * 5000, encoding="ascii")
+    r = subprocess.run([sys.executable, str(SCRIPT), "card", "--root", str(root)], capture_output=True, text=True,
+                       encoding="utf-8", env=dict(os.environ, JOB_SKILL_NOW=NOW))
+    assert r.returncode == 0 and line in r.stdout.splitlines() and "Traceback" not in r.stderr, (r.stdout, r.stderr)
+    f.settings_toml.write_text('[runner]\nmode = "L"\n[alerts]\nread_linkedin = false\n', encoding="ascii")
+    assert line not in card(root).splitlines(), "alert reading off: no line"
+    f.settings_toml.write_text('[runner]\nmode = "L"\n', encoding="ascii")
+    emit(root, "applied", 1)
+    assert line not in card(root).splitlines(), "only on the day's first card"
+    print("ok the alert line: no alert lead for 3 days, on the first card of a folder older than that")
+
+
+def test_unsafe_values():
+    """Shared decision 2: next never prints a job key, code or path for a
+    command line that holds characters a shell reads. Such an item gets one
+    SKIP line and is never filled; ordinary names pass: an ampersand, an
+    apostrophe, '(2)', accented letters."""
+    root = make_root("unsafe_values", morning=QUIET_MORNING, workday=False)
+    items = queue_items(root)
+    for it in items:
+        it["tier"], it["resume_status"] = "B", "built"
+    hostile = [("job_key", "url:jobs.example.com/a$(touch x)"), ("job_key", "url:jobs.example.com/a;b"),
+               ("job_key", "k" * 201), ("folder", "applications/2026-11-12 Acme $HOME - Scientist"),
+               ("folder", "applications/../../Desktop"), ("folder", "applications/x`y`"),
+               ("folder", 'applications/a"b'), ("ats", "greenhouse;x"), ("needs", ["Q-1'x"])]
+    for i, (field, value) in enumerate(hostile):
+        items[i][field] = value  # never created: Windows refuses most of these names anyway
+    fine = len(hostile)
+    ok_folder = "applications/2026-11-12 Johnson & Johnson's Lab (2) - Scientist, QC"
+    items[fine]["folder"] = ok_folder
+    (root / ok_folder).mkdir(parents=True)
+    items[fine]["job_key"] = "workday:jnj:R-0042_x.y:z/1"
+    write_queue(root, items)
+    out = run_args(root, "next")
+    skips = [ln for ln in out if ln.startswith("SKIP")]
+    assert skips == [f"SKIP #{i + 1:02d} unsafe value (a job key or path holds characters a command line must "
+                     "not see; never filled)" for i in range(len(hostile))], out
+    assert out[len(hostile)] == f"NEXT #{fine + 1:02d} workday:jnj:R-0042_x.y:z/1", out
+    assert f"FOLDER {ok_folder}" in out, out
+    assert not any("$" in ln or "`" in ln or ".." in ln for ln in out), out
+    assert card(root).splitlines()[-1].startswith(f"Starting #{fine + 1} now."), "the card starts where next does"
+    import today_view
+    assert today_view.path_ok("applications/2026-11-12 Jos\u00e9 Avery - Scientist/Jos\u00e9 Avery Resume.pdf")
+    for bad in ("/etc/x", "C:/x", "applications\\x", "-rf", "applications/x/", "applications/x\ny",
+                "applications/\u201cx\u201d", "applications/x\u2028y", "", None):
+        assert not today_view.path_ok(bad), bad
+    print("ok next skips an item whose key, code or path is unsafe on a command line; ordinary names pass")
 
 
 def test_wording():
@@ -1024,7 +1180,8 @@ def main():
              test_sensitive_check, test_sensitive_line, test_short_day, test_short_card, test_stale_morning,
              test_card_after_break, test_drafts, test_config_typo, test_no_runner_card, test_runner_state_lines,
              test_computed_checks, test_stale_upload_copy, test_no_variant_line, test_corrected_today,
-             test_tier_a_corrected, test_open_link, test_wording)
+             test_tier_a_corrected, test_open_link, test_open_needs, test_alert_line, test_unsafe_values,
+             test_wording)
     try:
         for t in tests:
             if not only or t.__name__ in only or t.__name__.removeprefix("test_") in only:

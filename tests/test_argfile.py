@@ -51,11 +51,35 @@ def write_args(root, obj, name="args.json"):
     return p
 
 
-def refused(argv):
+def demo_parser():
+    """A script parser with two subcommands, like tracker.py's."""
+    ap = argparse.ArgumentParser(prog="demo")
+    sub = ap.add_subparsers(dest="cmd")
+    for name in ("add", "update"):
+        p = sub.add_parser(name)
+        p.add_argument("--root")
+        for opt in ("--company", "--job-key", "--role", "--notes", "--n", "--date"):
+            p.add_argument(opt)
+        p.add_argument("--used", action="store_true")
+        p.add_argument("--force", action="store_true")
+        p.add_argument("--req-id", nargs="+")
+        p.add_argument("--status", nargs="+")
+        p.add_argument("rest", nargs="*")
+    return ap
+
+
+def link_parser():
+    ap = argparse.ArgumentParser(prog="link")
+    ap.add_argument("url")
+    ap.add_argument("--root")
+    return ap
+
+
+def refused(argv, parser=None):
     out = io.StringIO()
     with contextlib.redirect_stdout(out):
         try:
-            argfile.expand(argv)
+            argfile.expand(argv, demo_parser() if parser is None else parser)
         except SystemExit as e:
             assert e.code == 1, e.code
             return out.getvalue()
@@ -64,17 +88,17 @@ def refused(argv):
 
 def test_expand_rules():
     root = new_root()
-    assert argfile.expand(["add", "--root", str(root), "--company", "Acme"]) == \
+    assert argfile.expand(["add", "--root", str(root), "--company", "Acme"], demo_parser()) == \
         ["add", "--root", str(root), "--company", "Acme"], "no --args-file: unchanged"
     p = write_args(root, {"company": HOSTILE, "job_key": "greenhouse:1", "--role": "-Scientist", "used": True,
                           "force": False, "notes": None, "req-id": ["R1", "R2"], "n": 7, "_": ["P-1a2b3c4d", "x=y"]})
-    out = argfile.expand(["update", "--root", str(root), "--args-file", "claude/args.json"])
+    out = argfile.expand(["update", "--root", str(root), "--args-file", "claude/args.json"], demo_parser())
     assert out == ["update", "--root", str(root), "P-1a2b3c4d", "x=y", "--company=" + HOSTILE,
                    "--job-key=greenhouse:1", "--role=-Scientist", "--used", "--req-id", "R1", "R2", "--n=7"], out
     assert not p.exists(), "the file is removed once read"
     # an absolute path and the --x=y forms work too; a lone positional string
     write_args(root, {"_": "https://example.com/jobs/1"})
-    out = argfile.expand([f"--root={root}", f"--args-file={root / 'claude' / 'args.json'}"])
+    out = argfile.expand([f"--root={root}", f"--args-file={root / 'claude' / 'args.json'}"], link_parser())
     assert out == [f"--root={root}", "https://example.com/jobs/1"], out
     # parse() adds --args-file to the parser's help and parses the expanded line
     ap = argparse.ArgumentParser()
@@ -119,9 +143,52 @@ def test_refusals():
     assert "given both" in refused(base + ["claude/args.json", "--company", "y"])
     write_args(root, {"company": "x"})
     assert "twice" in refused(base + ["claude/args.json", "--args-file", "claude/args.json"])
+    # SV-02: a value nested 20,000 deep (40 KB, under the size cap) is one plain refusal, never a traceback
+    (root / "claude" / "args.json").write_bytes(b'{"company": ' + b"[" * 20000 + b"]" * 20000 + b"}")
+    out = refused(base + ["claude/args.json"])
+    assert "nested deeper than 64" in out and not (root / "claude" / "args.json").exists(), out
     shutil.rmtree(outside, ignore_errors=True)
-    print("ok refusals: outside claude/, not .json, over 64 KB, not an object, root or args-file keys, "
-          "values that would read as options, no --root, given twice")
+    print("ok refusals: outside claude/, not .json, over 64 KB, nested deeper than 64, not an object, root or "
+          "args-file keys, values that would read as options, no --root, given twice")
+
+
+def test_exact_option_names():
+    """R4 / SV-04: a key is taken only when '--<key>' is exactly one of the
+    command's long options, so an abbreviation of --root (or of anything) is
+    refused, and every parser argfile expands parses with allow_abbrev=False."""
+    root = new_root()
+    other = Path(tempfile.mkdtemp(prefix="job_argfile_other_"))
+    base = ["add", "--root", str(root), "--args-file", "claude/args.json"]
+    for key in ("roo", "ro", "r", "Root", "comp", "job", "args", "json-file"):
+        write_args(root, {key: str(other)})
+        out = refused(base)
+        assert "ERROR --args-file" in out and not (root / "claude" / "args.json").exists(), (key, out)
+    write_args(root, {"company": "x", "job_key": "greenhouse:1"})
+    assert argfile.expand(base, demo_parser())[-2:] == ["--company=x", "--job-key=greenhouse:1"]
+    # the subcommand's own options count, not another subcommand's
+    ap = demo_parser()
+    ap._subparsers._group_actions[0].choices["update"].add_argument("--only-update")
+    write_args(root, {"only-update": "x"})
+    assert "not an option" in refused(base, ap)
+    # every script's parser tree, after its argfile hook, refuses an abbreviation inline too
+    for script, (head, _obj, _want) in PER_SCRIPT.items():
+        write_args(root, {"roo": str(other)})
+        code, out = run_main(script, head + ["--root", str(root), "--args-file", "claude/args.json"])
+        assert code == 1 and "ERROR --args-file key 'roo'" in out, (script, code, out)
+        write_args(root, {})
+        tree = parser_tree(script, head + ["--root", str(root), "--args-file", "claude/args.json"])
+        assert tree and all(p.allow_abbrev is False for p in tree), (script, [p.prog for p in tree if p.allow_abbrev])
+    # the reproduction: events.py emit and answers.py add with {"roo": <elsewhere>} write nothing anywhere
+    write_args(root, {"roo": str(other), "type": "started", "json": "{}", "n": 1, "job-key": "greenhouse:1"})
+    code, out = run_main("events", ["emit", "--root", str(root), "--args-file", "claude/args.json"])
+    assert code == 1 and not list(other.rglob("*.json")) and not (root / "runner").exists(), (code, out)
+    write_args(root, {"roo": str(other), "question": "Q?", "answer": "A"})
+    code, out = run_main("answers", ["add", "--root", str(root), "--args-file", "claude/args.json"])
+    assert code == 1 and not list(other.rglob("*")), (code, out, list(other.rglob("*")))
+    shutil.rmtree(other, ignore_errors=True)
+    shutil.rmtree(root, ignore_errors=True)
+    print(f"ok exact option names: abbreviations of --root and other options are refused from the file, and "
+          f"inline in {len(PER_SCRIPT)} scripts (allow_abbrev=False on every parser tree)")
 
 
 class _Got(Exception):
@@ -144,6 +211,30 @@ def parsed(module, argv):
     finally:
         argparse.ArgumentParser.parse_args = orig
     raise AssertionError(f"{module}.main never parsed")
+
+
+def parser_tree(module, argv):
+    """Every parser (the script's and its subcommands') main() parses with."""
+    orig = argparse.ArgumentParser.parse_args
+
+    def grab(self, args=None, namespace=None):
+        raise _Got(self)
+    argparse.ArgumentParser.parse_args = grab
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            importlib.import_module(module).main(argv)
+    except _Got as g:
+        top = g.ns
+    finally:
+        argparse.ArgumentParser.parse_args = orig
+    out, todo = [], [top]
+    while todo:
+        p = todo.pop()
+        out.append(p)
+        for act in p._actions:
+            if isinstance(act, argparse._SubParsersAction):
+                todo += list(act.choices.values())
+    return out
 
 
 # script -> (command line before --args-file, the args object, {namespace attribute: value})
@@ -334,6 +425,7 @@ def test_references_use_the_file():
 def main():
     test_expand_rules()
     test_refusals()
+    test_exact_option_names()
     test_every_script_gets_the_value()
     test_end_to_end()
     test_answers_and_request()

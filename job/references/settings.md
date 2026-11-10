@@ -19,8 +19,8 @@ keep the last good copy and say so in `runner/out/status.json`.
 | "fewer questions" | `[daily] questions_per_day` | 6 | |
 | "read my Indeed alerts" | `[alerts] read_indeed_family` | false | first quote the notice below |
 | "read my ZipRecruiter alerts" | `[alerts] read_ziprecruiter` | false | its links carry sign-in tokens; still never opened |
-| "stop reading LinkedIn alerts" | `[alerts] read_linkedin` | true | |
-| "use Adzuna" / "use USAJOBS" | `[sources] adzuna` / `usajobs` | false | keys only through the installer's prompt (rerun `install_runner.cmd`), never in chat |
+| "stop reading LinkedIn alerts" | `[alerts] read_linkedin` | true | with `senders` empty too, the card's alert line stops |
+| "use Adzuna" / "use USAJOBS" | `[sources] adzuna` / `usajobs` | false | keys only through the installer's prompt (rerun `install_runner.cmd`: it asks only for a key not entered yet), never in chat |
 | "search Workable" / "use The Muse" | `[sources] workable_search` / `muse` | false | their terms are unknown; say so before turning one on |
 | "stop reading Dayforce boards" | `[sources] dayforce` | true | |
 | "stop referral drafts" / "5 asks a day" | `[referrals] enabled` / `asks_per_day` | true / 3 | 3-5 |
@@ -32,6 +32,7 @@ keep the last good copy and say so in `runner/out/status.json`.
 | "I'm claiming unemployment in California" | `[worksearch] claiming`, `state`, `claim_effective`, `de8405_received` | false | one follow-up question ([worksearch.md](worksearch.md)) |
 | "my time zone is Eastern" | `[time] timezone` | America/Los_Angeles | an IANA name, e.g. America/New_York |
 | "weekly summary on Fridays" | `[schedule] weekly_day` | monday | |
+| "I have 6 years of experience" / "too many senior jobs" | `[experience] years` / `industry_years` | blank | blank counts the library's role headings; jobs clearly beyond these (principal level, or 5+ more years) are dropped, and ones that ask a bit more come last |
 | "no Workday today" | none | | a one-day skip of the account block, kept in the session (apply_batch.md) |
 | "more to one company" / "fewer to one company" | `[caps] per_company_30d` | 5 | in any 30 days; no source gives a number, so this is the user's call |
 | "more of one kind of role at a company" | `[caps] per_family_per_company_30d` | 2 | in any 30 days |

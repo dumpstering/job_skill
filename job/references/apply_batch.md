@@ -43,25 +43,45 @@ and the proof path only, in single quotes).
    <url>`, `FOLDER`, `UPLOAD <file> (<what>)`, maybe `LETTER <file>` (a
    built cover letter), `RESUME`, `ANSWERS`, maybe `SENSITIVE`, `DRAFT`,
    `STATE` and `ATTACH`, and the `HANDOVER` lines. It is the same item the
-   card's `Starting #<n>` named. `SKIP #NN closed` lines are items the
-   runner found closed, `SKIP #NN bad link` items whose link is not a plain
-   http(s) web address (never open those). A `HOLD #<n>: ...` line in
+   card's `Starting #<n>` named. Lines before it:
+   - `SKIP #NN closed`: the runner found it closed. `SKIP #NN bad link`:
+     its link is not one the checks pass; never open it. `SKIP #NN unsafe
+     value`: a value no command line may carry; never fill it.
+   - `REBUILD #<n>: ... (FOLDER <path>)`: that job's own Tier A resume cites
+     a library entry the user corrected since. Start its rebuild once and
+     go on with the `NEXT` item meanwhile: with the plugin, one job-tailor
+     sub-agent with paths only, then the audit (daily.md morning step 5);
+     without it, the same at the next batch break; a job from a link gets
+     its resume written again by SKILL.md step 5. When the new strict build
+     passes, send `stage_tier_a` with its `n`; `next` then serves it in its
+     turn with that file. If the rebuild cannot pass (audit `rework`, or 2
+     failed rounds), move its `final.json` to
+     `backups/final_<n>_<YYYY-MM-DD_HHMM>.json`: `next` then serves it with
+     its Tier B file (a job from a link has none: emit `later` for it,
+     reason `user`). `NEXT wait: ...` means only rebuilds are left: run
+     `next` again once they pass.
+
+   A `HOLD #<n>: ...` line in
    place of `OPEN` and `UPLOAD` means its base resume cites a library entry
    corrected since the build: say that line, open and fill nothing, and on
    "skip" emit `later` (reason `user`; it comes back tomorrow, rebuilt);
-   after `APPROVED <family> v<N> again` run `next` again. A last `WAIT <n>
+   on `/job variants` follow variants.md "One correction, every family",
+   then run `next` again. A last `WAIT <n>
    items with no resume yet` line counts items held for a base resume the
    user has not approved; never fill them. `NEXT none`: the list is done;
    give the closing line from
    `today_view.py progress` and offer "more" (with a `WAIT` line, say the
    card's base-resume line instead of "more"). Jobs added from a link today
    (`events.py add`) are in the list at once, after the runner's items.
-   An item whose `ANSWERS` line still shows `needs <ids>` that the user has
-   not answered today (the item is not `unparked` in `events.py overlay`)
-   and that no `DRAFT` line answers: emit `parked` at once (reason
+   `ANSWERS ... needs <ids>` lists only the questions still open (an id a
+   morning draft fills, the bank answers, or that was answered and
+   unparked today is left out): emit `parked` at once (reason
    `unknown_required`, those ids as `question_ids`) and run `next` again,
    without opening the form or asking for the file. `answers.py unpark`
-   brings it back when the answer comes.
+   brings it back when the answer comes. `ANSWERS answered`: everything it
+   waited on is answered today or drafted; fill it from `answers.py plan
+   --job "<job folder>" --dry-run`, a `DRAFT` line filling its drafted
+   field.
 2. **Caps.** Write `{"company": "<Company>"}` and run `caps.py check
    --family <family> --job-key <key> --posting "<job folder>/posting.md"
    --args-file claude/args.json` (the posting names the lab or department
@@ -103,8 +123,8 @@ and the proof path only, in single quotes).
    `unknown_required`, its question id), leave the tab as it is, and go to
    the next item; the question joins the next batch. When a parked item
    comes back after `answers.py unpark`, its folder is still claimed, so the
-   runner has not re-planned it: fill it from `answers.py plan --root R --job
-   "<job folder>" --dry-run`, not the older `fill_plan.json`.
+   runner has not re-planned it: fill it from `answers.py plan --job "<job
+   folder>" --dry-run`, not the older `fill_plan.json`.
 7. **Handover.** Print the `HANDOVER` lines exactly (at most 5 lines; add
    one `Check:` item when the page needs one, such as Lever's consent box).
    The `Check:` line names only what needs the user's eye: a field left
@@ -113,18 +133,20 @@ and the proof path only, in single quotes).
    during this item, run `next` again first, so its lines are current.
    Save `filled.md` in the job folder. Write `{"company": "<Company>",
    "role": "<Role>", "location": "<Location>", "url": "<apply url>",
-   "folder": "<the FOLDER path>", "job-key": "<key>"}` and run `tracker.py
-   add --status "Filled - awaiting submit" --source Runner --tier <A|B>
-   --family <f> --variant <v> --ats <ats> --found-via <lane> --posted <date>
-   --queue-date <date> --account <none|exists|new> --args-file
-   claude/args.json`, taking tier, family, variant, posted and account from
-   the item in `queue/<date>/queue.json` and the lane from its
-   `posting.json` (mode L prints `ADDED P-<8hex> (pending)`; keep that ID).
+   "folder": "<the FOLDER path>", "job-key": "<key>", "tier": "<A|B>",
+   "family": "<f>", "variant": "<v>", "ats": "<ats>", "found-via":
+   "<lane>", "posted": "<date>", "queue-date": "<date>", "account":
+   "<none|exists|new>"}` and run `tracker.py add --status "Filled - awaiting
+   submit" --source Runner --args-file claude/args.json`, taking tier,
+   family, variant, posted and account from the item in
+   `queue/<date>/queue.json` (leave `posted` out when it is `undated`) and
+   the lane from its `posting.json` (mode L prints `ADDED P-<8hex>
+   (pending)`; keep that ID).
    A job filled before (a reopened handover)
    prints `ADDED <ID> (existing row)`: its one row, kept. `REFUSED <ID>
    already Applied ...`: it was sent; emit `applied` and go on, never a
-   second handover. A job added with `/job add <link>` takes
-   `--source Skill --found-via pasted` (its folder has no `posting.json`).
+   second handover. A job added with `/job add <link>` takes `--source
+   Skill` and `"found-via": "pasted"` (its folder has no `posting.json`).
    A pasted `/job <link>` job already has its row: `tracker.py update`.
    Emit `handed_over`. Rewrite `claude/session.json` (`beat`, `current_n`).
 8. **Wait for the reply** (next section).
@@ -183,7 +205,9 @@ none.
 
 The queue's `account_block` lists new-account tenants (`tenants`, after
 `after_n`), at most `[daily] new_account_tenants_per_day` (3) a day; more
-wait until tomorrow.
+wait until tomorrow. Only employers whose best job is among the day's best
+come forward here; another new-account job keeps its place by fit, and its
+account is made at that job ([apply.md](apply.md) "Accounts").
 1. Say in one line: "2 new Workday sites: Genentech, Gilead. Use <email>.
    Create each account, then reply done." The email comes from `tracker.py
    account --site <host> --reuse` (`ACCOUNT ...` when one exists; `REUSE

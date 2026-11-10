@@ -12,7 +12,8 @@ extracted it to %LOCALAPPDATA%\JobRunner\app\<version>. The steps (spec 7.5):
      can run "pythonw.exe -I -m jobrunner <cmd>";
   4. write %LOCALAPPDATA%\JobRunner\config.toml with the JobSearch folder;
   5. ask for the optional Adzuna and USAJOBS keys and store them in keys.toml,
-     readable by this user only (kept on an update);
+     readable by this user only (kept on an update, which asks only for a
+     key not entered yet);
   6. check that Task Scheduler's command line can start the runner (the .pth
      and config.toml are UTF-8, so a non-ASCII user name works);
   7. register JobRunner-Daily (05:30, WakeToRun, StartWhenAvailable, 2 h limit)
@@ -204,20 +205,39 @@ function Read-Key([string]$Prompt) {
 }
 
 function Write-KeyFile([string]$Path) {
-    Write-Step 'Optional keys (press Enter to skip each). They stay on this PC, in a file only you can read.'
-    $lines = @('# job_skill runner keys: never shared, never printed.')
-    $adzunaId = Read-Key 'Adzuna app_id'
-    if ($adzunaId) {
-        $adzunaKey = Read-Key 'Adzuna app_key'
-        $lines += '[adzuna]', ('app_id = ' + (Get-TomlString $adzunaId)), ('app_key = ' + (Get-TomlString $adzunaKey))
+    # Asks only for a key keys.toml does not hold yet, so running the installer again adds a skipped key
+    # (SETUP_GUIDE.md); keys already there are kept as they are. Sets $script:KeysWritten (Write-Step
+    # writes to the output, so the function returns nothing).
+    $script:KeysWritten = $false
+    $have = @()
+    if (Test-Path -LiteralPath $Path) { $have = @(Get-Content -LiteralPath $Path -Encoding UTF8) }
+    $hasAdzuna = $have -contains '[adzuna]'
+    $hasUsa = $have -contains '[usajobs]'
+    if ($hasAdzuna -and $hasUsa) { return }
+    Write-Step 'Free keys (press Enter to skip each; run this installer again to add one later). They stay on this PC, in a file only you can read.'
+    $lines = @($have)  # an array even for one line, so += appends lines
+    if (-not $have.Count) { $lines = @('# job_skill runner keys: never shared, never printed.') }
+    $added = $false
+    if (-not $hasAdzuna) {
+        $adzunaId = Read-Key 'Adzuna app_id'
+        if ($adzunaId) {
+            $adzunaKey = Read-Key 'Adzuna app_key'
+            $lines += '[adzuna]', ('app_id = ' + (Get-TomlString $adzunaId)), ('app_key = ' + (Get-TomlString $adzunaKey))
+            $added = $true
+        }
     }
-    $usaKey = Read-Key 'USAJOBS API key'
-    if ($usaKey) {
-        $usaEmail = Read-Host -Prompt 'The email you used to request the USAJOBS key'
-        $lines += '[usajobs]', ('key = ' + (Get-TomlString $usaKey)), ('email = ' + (Get-TomlString $usaEmail.Trim()))
+    if (-not $hasUsa) {
+        $usaKey = Read-Key 'USAJOBS API key'
+        if ($usaKey) {
+            $usaEmail = Read-Host -Prompt 'The email you used to request the USAJOBS key'
+            $lines += '[usajobs]', ('key = ' + (Get-TomlString $usaKey)), ('email = ' + (Get-TomlString $usaEmail.Trim()))
+            $added = $true
+        }
     }
+    if (-not $added -and $have.Count) { return }
     Write-Utf8 $Path $lines
     Protect-UserOnly $Path
+    $script:KeysWritten = $true
 }
 
 # ---------- plan ----------
@@ -253,7 +273,7 @@ Write-Step ("CREATE " + $(if ($basePython) { $basePython } else { 'python' }) + 
 Write-Step ("PIP $venvPython " + ($pipArgs -join ' '))
 Write-Step "PTH $pth -> $appDir"
 Write-Step "CONFIG $config (folder = $Folder)"
-Write-Step ("KEYS $keys" + $(if (Test-Path -LiteralPath $keys) { ' (kept)' } else { ' (asked once, user-only ACL)' }))
+Write-Step ("KEYS $keys" + $(if (Test-Path -LiteralPath $keys) { ' (kept; asks for a key not entered yet)' } else { ' (asked, user-only ACL)' }))
 foreach ($def in (Get-TaskPlan $pythonw $appDir)) { Show-Task $def }
 Write-Step "SHORTCUT Desktop\$ShortcutName -> $pythonw -I -m jobrunner daily"
 Write-Step "SELFTEST $venvPython -I -m jobrunner selftest --net --root $Folder"
@@ -309,8 +329,11 @@ if ($checkCode -ne 0) {
 }
 Write-Step 'CHECKED the job finder starts (config.toml and jobrunner_app.pth)'
 
-if (-not $NoKeys -and -not (Test-Path -LiteralPath $keys)) { Write-KeyFile $keys; Write-Step "WROTE $keys (user-only)" }
-elseif (Test-Path -LiteralPath $keys) { Protect-UserOnly $keys; Write-Step "KEPT $keys" }
+if (-not $NoKeys) {
+    Write-KeyFile $keys  # asks only for a key not entered yet
+    if ($script:KeysWritten) { Write-Step "WROTE $keys (user-only)" }
+    else { Protect-UserOnly $keys; Write-Step "KEPT $keys" }
+} elseif (Test-Path -LiteralPath $keys) { Protect-UserOnly $keys; Write-Step "KEPT $keys" }
 
 if ($NoTasks) {
     Write-Step 'TASKS not registered (-NoTasks)'

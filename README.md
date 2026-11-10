@@ -19,6 +19,21 @@ zero-token work. Version 1.2.
 - **A pasted link** still runs the v1.1 single-job flow: duplicate check,
   fit, questions, a truthful tailored resume, the fill.
 
+## Where the daily volume comes from
+
+- **The watch list** (`config/watchlist.csv`; the life-science preset has
+  about 280 Bay Area employer boards) gives a backlog in the first week and
+  then a few applications a day: on the live run of 2026-11-06 about 4 new
+  eligible postings a day passed the per-company caps, about 3 of them jobs
+  the user would want.
+- **Job-alert emails** (LinkedIn job alerts in Gmail, read for company,
+  title and place only, then resolved to the employer's own posting) and the
+  **free Adzuna and USAJOBS keys** are what fill the rest of the day's list.
+  SETUP_GUIDE.md puts both near the top, about 5 minutes each; running
+  `install_runner.cmd` again asks for a key that was skipped.
+- The card adds one line when no alert lead has arrived for 3 days, and
+  `/job alerts` gets them coming again in one short exchange.
+
 Nothing personal is in this repository. The fixtures are synthetic
 (`Jordan Q. Avery`, `example.com`, Springfield), and `build_zip.py` refuses
 to package personal files.
@@ -166,7 +181,11 @@ correction used where one was given):
   BambooHR, Breezy, Workable widget, Rippling, Pinpoint, Teamtailor JSON
   Feed, Personio XML, ADP Workforce Now (short pages), Oracle Recruiting
   Cloud, Paylocity, Dayforce (CSRF plus cookie), Jobvite and JazzHR
-  JSON-LD, Phenom sitemaps, Comeet, Manatal, Hireology.
+  JSON-LD, Phenom sitemaps, Comeet, Manatal, Hireology. Round 4
+  (2026-11-06): SAP SuccessFactors career-site search pages (Bayer,
+  Boehringer Ingelheim, Grifols), a Radancy TalentBrew sitemap over Oracle
+  Taleo (Kaiser Permanente) and Oracle Taleo Social Sourcing landing pages
+  (Lawrence Berkeley National Laboratory).
 - robots.txt positions read live for api.smartrecruiters.com,
   recruiting.ultipro.com, *.icims.com, paycomonline.net,
   recruitingbypaycor.com and careers-page.clearcompany.com.

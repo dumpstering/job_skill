@@ -30,6 +30,11 @@ The runner reads employer boards (`scripts/boards.py`) and aggregators (`scripts
 | comeet | company slug | board id (e.g. 1B.00E) | | | GET www.comeet.com/jobs/{board}/{site} (COMPANY_POSITIONS_DATA) | none (first_seen) |
 | manatal | slug | | | | GET www.careers-page.com/api/v1.0/c/{board}/jobs/ (follows `next`) | none (first_seen) |
 | hireology | slug | | | | GET api.hireology.com/v2/public/careers/{board}?page_size=500 | `created_at` |
+| successfactors | short name | | career site host, e.g. `jobs.bayer.com` | `location=` places, e.g. `Berkeley\|San Francisco` (default: the home states' names) | GET {host}/search/?q=&locationsearch={place}&sortColumn=referencedate&sortDirection=desc, then &startrow= up to the site's total (table or tile layout); detail = the job page's description block | job page `datePosted`, else the results row's date |
+| talentbrew | short name | | career site host, e.g. `www.kaiserpermanentejobs.org` | | GET {host}/sitemap.xml; only `/job/{city}/{title}/{org}/{id}` links whose city is a home place, newest id first, at most 1000; detail page JSON-LD | `datePosted` |
+| selectminds | short name | | career site host, e.g. `jobs.lbl.gov` | `pages=` landing pages, e.g. `postdoctoral-fellow-opportunities-at-lbl-12\|...` (default: the home page) | GET {host}/landingpages/{page}: its newest jobs only (the search pages answer 403); detail = the job page's description block | none (first_seen) |
+
+The three career-site readers run on the employer's own host, so the row's `careers_url` must be on that host (the unattended policy allows a watch-list row's careers_url host). TalentBrew and SelectMinds sites hand the apply over to the employer's Taleo, so those postings are recorded as `taleo` (one account per tenant).
 
 Lead-only ATSs never get a list call, whatever the row's status: smartrecruiters, icims, ukg, paycom, clearcompany, paycor, neogov, and other. Their postings arrive as leads and are read one at a time (spec 3.3). Rows with no usable endpoint carry `status=paused` or `lead_only` and a note.
 
@@ -54,6 +59,7 @@ python aggregators.py run --root R [--offline DIR] [--keys PATH] [--out-postings
 Output lines:
 - `BOARD <ats>:<board> OK <n> postings pages=<p> stop=<why>`, `EMPTY pages=<p>`, `GONE <why>`, `ERROR <why>`, `DENY <reason>`, `SKIP <why>`.
 - `WARN detail <url>: <why>` when one detail call failed (the list record is kept).
+- `RETRY BOARD <ats>:<board> ...` (one of the lines above) when a board's list call failed on a timeout or a connection error (or HTTP 502/504, or its robots.txt did not answer) and was read once more after the other boards, at least 30 s later. Only the retry's result counts.
 - `POLL ok=.. gone=.. skip=..` after a poll.
 - `SOURCE <name> OK <n> postings|leads requests=<k>`, `OFF`, `NOKEY`, `ERROR <why>`, `DENY <reason>`.
 
@@ -67,6 +73,7 @@ JSONL lines are `jobfs.Posting` dicts plus `ai_text` and `hidden` lists (G11 rea
 - OK or EMPTY: active, errors reset.
 - 3 errors in a row: paused. Errors count once a day, so a rerun the same morning is not another strike. A run in which no board answered at all (the PC had no network yet) counts none and prints `WARN offline: no board answered (<n> tried); board errors not counted today`. A robots disallow: robots_blocked. A Crawl-delay that is not a number from 0 to 10 seconds: that run prints `BOARD <ats>:<board> SKIP crawl-delay <host>`, writes `skip: crawl-delay <host> ...` in `last_error`, and counts no strike.
 - One odd answer (a null row, a number where a list belongs, JSON nested thousands deep) is that board's `ERROR` line naming the error type, or a skipped row; the poll always finishes.
+- A list call that times out or loses its connection is retried once at the end of the poll: an answer then takes no strike. A board still in error after that is one `board <key>: <why>` entry in `runner/out/status.json` `errors` (not on a morning with no network at all, which the tick's offline retry covers).
 - A Workday tenant that lists 0 jobs even unfiltered on 3 polls (3 days): check_site. Its `site` in the watch list is probably wrong; open the employer's careers page and copy the site from the real Workday URL. A tenant with jobs but none at home is healthy.
 - A gone marker twice in a row: gone (never polled again until the row is edited).
 - Paused, robots_blocked, check_site and dormant boards are retried on `[schedule] weekly_day`.

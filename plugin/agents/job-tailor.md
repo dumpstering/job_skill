@@ -47,6 +47,12 @@ build request) goes in your report for the main task to apply.
 
 ## Steps
 
+A rebuild (the brief says the user corrected a library entry the earlier
+build cites, `REBUILD #<n>`): the folder already holds `resume.json` and
+`final.json`. Read every line citing a corrected entry against its new text,
+rewrite those lines from the library as it is now, and build again (step 4);
+the old `final.json` counts only until a new build passes.
+
 1. **Phase 1, silently** (fit_and_questions.md, "Daily batch mode"). Write the
    Job Fit Assessment and every question to `notes.md`. Put at most 2
    questions, the ones whose answers would change the resume most, in

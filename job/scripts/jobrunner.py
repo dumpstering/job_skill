@@ -82,7 +82,20 @@ started 2 times, never finished), never run a third time.
 
 The daily fails soft per unit (shared decision 2): a board, lane, the lead
 resolver, the gates or the network import that raises is one ERROR line
-naming it and the exception type, and the daily still builds the queue.
+naming it and the exception type, and the daily still builds the queue. The
+tick's idle check and each of its steps are units too. Every JSON file is
+read through jobfs.read_json (shared decision R3): an event or request file
+that cannot be read as JSON (over 64 KB, nested deeper than 64, not JSON
+after 3 tries) moves to runner/in/bad/ with one line
+    ERROR bad event file <name>: <why>; moved to runner/in/bad/
+    ERROR bad request file <name>: <why>; moved to runner/in/bad/
+(a bad request is also answered ok=false), and a bad state or queue file is
+treated as missing with one line ERROR bad file <path>: <why> (treated as
+missing). Liveness starts an item only while the tick has room for its reads
+inside the 10-minute limit (LIVENESS budget: <n> items left for the next
+tick) and writes runner/out/liveness.json before and after each item. A tick
+removes state/request_starts markers whose request was answered or that are
+over 30 days old.
 
 selftest prints PASS or FAIL lines for python, packages, tzdata, folder
 write, robots and build, plus the reach checks with --net (a site that does
@@ -145,6 +158,12 @@ REQUEST_MAX = 64 * 1024
 REQUEST_YOUNG = 5
 REQUEST_TRIES = 3
 REQUEST_STARTS_MAX = 2   # a request started this often without finishing is answered ok=false (decision 3)
+REQUEST_START_KEEP_DAYS = 30   # a marker whose request was never answered (deleted by hand) goes after this
+TICK_LIMIT_SECONDS = 10 * 60   # the Tick task's limit (install_runner.ps1)
+# Liveness starts a new item only while the tick has at least this long left:
+# one item is at most about three reads (robots, the API, the page) of 60 s each.
+LIVENESS_ITEM_SECONDS = 200
+LIVENESS_MARGIN_SECONDS = 60   # room left for the status write and the log at the end
 NAME_MAX = 120
 URL_MAX = 2000
 FUNNEL_COLUMNS = ["date", "seen_by_lane", "discarded_by_gate", "pool", "queued", "started", "submitted",
@@ -211,16 +230,16 @@ class RequestError(Exception):
 
 # ---------- small helpers ----------
 
-def read_json(path, default):
-    try:
-        data = json.loads(Path(path).read_text(encoding="utf-8-sig"))
-        return data if isinstance(data, type(default)) else default
-    except (OSError, ValueError):
-        return default
+def read_json(path, default, max_bytes=jobfs.MAX_STATE):
+    """A JSON file through the safe loader (shared decision R3), or default:
+    missing is silent, a bad file (too big, nested too deep, not JSON) is one
+    ERROR line (jobfs.report_bad) and is treated as missing."""
+    return jobfs.read_json_or(path, max_bytes, default)
 
 
 def verified(path, default):
-    """A runner JSON with its _sha256 checked (no retry wait: the runner wrote it)."""
+    """A runner JSON with its _sha256 checked (no retry wait: the runner wrote
+    it). A bad file is one ERROR line and is treated as missing."""
     try:
         data = jobfs.read_json_verified(path, retries=0)
         return data if isinstance(data, type(default)) else default
@@ -312,6 +331,7 @@ class Run:
     def __init__(self, args, cmd):
         self.args = args
         self.cmd = cmd
+        self.started = time.monotonic()   # the tick's time budget (liveness) counts from here
         # Absolute, so every path handed to another module (variants, answers) is one path.
         self.root = Path(args.root).resolve()
         self.folder = jobfs.Folder(self.root)
@@ -326,6 +346,13 @@ class Run:
         self.log_lines = []
         self.errors = []
         self.new_finds = []   # pool items discover() added this run (an offline morning's rerun queues them)
+        # A bad state or queue file (too big, nested too deep, not JSON) is
+        # treated as missing with one ERROR line in this run's output and log.
+        jobfs.set_bad_file_emit(self.bad_file)
+
+    def bad_file(self, line):
+        self.out(line)
+        self.errors.append(line[len("ERROR "):] if line.startswith("ERROR ") else line)
 
     def settings_mode(self):
         mode = str(jobfs.settings(self.root)["runner"].get("mode", "L")).upper()
@@ -455,14 +482,15 @@ def runner_names(folder):
     path = Path(folder) / ".runner_files"
     try:
         text = path.read_text(encoding="utf-8-sig")
-    except OSError:
+    except (OSError, UnicodeDecodeError):
         return set()
-    try:
-        data = json.loads(text)
-        if isinstance(data, list):
-            return {str(x) for x in data}
-    except ValueError:
-        pass
+    if text.lstrip().startswith("["):
+        try:
+            data = jobfs.loads_json(text)
+            if isinstance(data, list):
+                return {str(x) for x in data}
+        except ValueError:  # BadJson: read it as lines
+            pass
     return {ln.strip() for ln in text.splitlines() if ln.strip() and not ln.startswith("#")}
 
 
@@ -657,6 +685,8 @@ def discover(run):
     offline = bool(results) and boards.no_network(results)
     if offline:  # the PC had no network yet: say so, never a silent day
         run.errors.append(f"offline {run.day.isoformat()}: no job board answered this morning")
+    else:  # L3-01: the boards still in error after the poll's one retry ('board <key>: <why>')
+        run.errors += unit(run, "boards", boards.error_lines, results, default=[]) or []
     # A tick retries discovery once a job site answers (offline_retry); a run
     # that reached the boards clears the flag.
     run.write_status(discovery_offline=run.day.isoformat() if offline else None)
@@ -870,7 +900,7 @@ def write_today_md(run, items, block, counts):
     lines += ["## Ready items", "", "NN | Company | Role | Posted | ATS/effort | Tier | Note", "---|---|---|---|---|---|---"]
     for it in items[:40]:
         lines.append(" | ".join([f"{int(it.get('n') or 0):02d}", cell(it.get("company")), cell(it.get("role")),
-                                 cell(it.get("posted") or "undated"), effort_label(it), cell(it.get("tier")),
+                                 events.posted_value(it.get("posted")), effort_label(it), cell(it.get("tier")),
                                  cell(tier_note(run.root, it))]))
     lines.append("")
     if block.get("tenants"):
@@ -1277,8 +1307,8 @@ def answer_requests(run):
     """Every request waiting (a rebuild_queue still waits for the session);
     returns how many were answered."""
     done = 0
-    for path in pending_requests(run.folder):
-        if handle_request(run, path):
+    for path in unit(run, "requests", pending_requests, run.folder, default=[]):
+        if unit(run, f"request {path.name}", handle_request, run, path, default=False):
             done += 1
     return done
 
@@ -1573,7 +1603,7 @@ def replan(run, unparked):
         try:
             answers.plan(run.root, folder, family=it.get("family") or None, write=True)
             register(folder, ["fill_plan.json", "fill_plan.prev.json"])
-            run.out(f"REPLAN #{int(it.get('n') or 0):02d} {it.get('job_key')}")
+            run.out(f"REPLAN #{int(it.get('n') or 0):02d} {events.shown_key(it.get('job_key'))}")
         except answers.Refused as e:
             run.log(f"REPLAN #{n}: {e}")
 
@@ -1585,7 +1615,7 @@ def apply_events(run):
     unparked = pending_unparked(run)
     code, lines = quiet_call(tracker.main, ["apply-events", "--root", str(run.root)])
     for line in lines:
-        (run.out if line.startswith(("APPLIED", "LOCKED", "REJECTED", "MISSING")) else run.log)(line)
+        (run.out if line.startswith(("APPLIED", "LOCKED", "REJECTED", "MISSING", "ERROR")) else run.log)(line)
     applied = 0
     m = re.search(r"APPLIED (\d+)", " ".join(lines))
     if m:
@@ -1629,25 +1659,49 @@ def liveness_url(run, it, f):
     return None, f"skip host {netfetch.host_or_blank(url) or 'bad-url'}: not a job-site host"
 
 
-def liveness(run, items):
-    """Re-read the next items' postings; a closed one leaves the pool."""
+def liveness_time_left(run, clock=time.monotonic):
+    """Seconds the tick has left before its 10-minute limit."""
+    started = getattr(run, "started", None)
+    return TICK_LIMIT_SECONDS - (clock() - started) if started is not None else TICK_LIMIT_SECONDS
+
+
+def liveness(run, items, clock=time.monotonic):
+    """Re-read the next items' postings; a closed one leaves the pool. Inside
+    the tick's time budget (G3-07): an item starts only while the tick has
+    room for its reads, and liveness.json is written before and after each
+    item, so a tick stopped by its limit still records what it did, and the
+    item it was reading counts as checked (the next tick moves on)."""
     import gates
     import netfetch
     import posting
     path = run.folder.runner_out / "liveness.json"
     data = read_json(path, {})
-    live = data.setdefault("items", {})
-    closed = []
-    for it in items:
+    live = data.get("items") if isinstance(data.get("items"), dict) else {}
+    data["items"] = live
+
+    def save():
+        jobfs.atomic_write_text(path, json.dumps(data, indent=1, sort_keys=True) + "\n")
+
+    closed, checked = [], 0
+    for i, it in enumerate(items):
+        if liveness_time_left(run, clock) < LIVENESS_ITEM_SECONDS + LIVENESS_MARGIN_SECONDS:
+            left = len(items) - i
+            run.out(f"LIVENESS budget: {left} item{'s' if left != 1 else ''} left for the next tick")
+            break
         key = str(it.get("job_key") or f"#{it.get('n')}")
         rec = {"checked": jobfs.now_iso(run.root), "n": it.get("n"), "closed": False, "why": ""}
+        checked += 1
         try:
             f = run.fetcher()
             url, why = liveness_url(run, it, f)
             if url is None:
                 rec["why"] = why
                 live[key] = rec
+                save()
                 continue
+            # Recorded before the read: a tick stopped while reading it never retries it first.
+            live[key] = dict(rec, why="started (the tick stopped while reading it)")
+            save()
             reading = posting.read_posting(url, fetcher=f, root=run.root, lane="liveness",
                                            first_seen=run.day.isoformat(), ats=it.get("ats") or None)
             rec["closed"] = bool(reading.posting.closed)
@@ -1661,33 +1715,60 @@ def liveness(run, items):
             run.out(f"ERROR {line}")
             run.errors.append(line)
         live[key] = rec
+        save()
         if rec["closed"]:
             closed.append(key)
-            run.out(f"CLOSED #{int(it.get('n') or 0):02d} {key}")
-    jobfs.atomic_write_text(path, json.dumps(data, indent=1, sort_keys=True) + "\n")
+            run.out(f"CLOSED #{int(it.get('n') or 0):02d} {events.shown_key(key)}")
     if closed:
         pool = gates.load_pool(run.root)
         for it in pool["items"]:
             if it.get("job_key") in closed:
                 it["closed"] = True
         gates.save_pool(run.root, pool["items"], date_=run.day)
-    run.out(f"LIVENESS checked {len(items)} closed {len(closed)}")
+    run.out(f"LIVENESS checked {checked} closed {len(closed)}")
+
+
+def prune_request_starts(run, now=None):
+    """Remove state/request_starts markers whose request was answered (its
+    result file exists) or that are older than 30 days (a request file
+    deleted by hand). Returns how many were removed."""
+    base = run.folder.state / "request_starts"
+    if not base.is_dir():
+        return 0
+    now = now if now is not None else time.time()
+    removed = 0
+    for p in base.glob("*.json"):
+        try:
+            answered = run.folder.result(p.stem).exists()
+            old = now - p.stat().st_mtime > REQUEST_START_KEEP_DAYS * 86400
+            if answered or old:
+                p.unlink()
+                removed += 1
+        except OSError:
+            continue  # held by another program: the next tick tries again
+    if removed:
+        run.log(f"REQUEST markers pruned {removed}")
+    return removed
 
 
 def tick(run):
     """Short work only, within the Tick task's 10 minutes: events, short
     requests, uploads, liveness. A daily that is due and the long requests
-    go to the Daily task (start_daily); the tick never runs them itself."""
-    if idle(run):
+    go to the Daily task (start_daily); the tick never runs them itself.
+    Every step, the idle check included, is a unit (shared decision R3): a
+    bad file or a bug in one is one ERROR line, and the tick goes on."""
+    unit(run, "request markers", prune_request_starts, run)
+    if unit(run, "idle check", idle, run, default=False):
         run.write_status(last_tick=jobfs.now_iso(run.root))
         run.out("TICK idle")
         return 0
     worked = []
     f = run.folder
     try:
-        has_events = f.events.exists() and any(p.suffix == ".json" for p in f.events.iterdir())
+        has_events = bool(unit(run, "events", lambda: f.events.exists() and any(
+            p.suffix == ".json" for p in f.events.iterdir()), default=False))
         applied = 0
-        if has_events or snapshot_stale(f):
+        if has_events or unit(run, "events", snapshot_stale, f, default=False):
             code, applied = optional(run, "events", apply_events, run) or (1, 0)
             if code == 2:
                 run.out("MISSING openpyxl: run  pip install openpyxl  and run again")
@@ -1696,27 +1777,27 @@ def tick(run):
                 optional(run, "jobs from links", user_addendum, run)
         # Requests come before the bookkeeping, so a file another program holds
         # open (a PDF viewer, Excel) never keeps "more" from being answered.
-        for path in pending_requests(f):
-            if handle_request(run, path, in_tick=True):
+        for path in unit(run, "requests", pending_requests, f, default=[]):
+            if unit(run, f"request {path.name}", handle_request, run, path, True, default=False):
                 worked.append(path.name)
         if applied:
             optional(run, "uploads", stage, run, run.day)
             optional(run, "funnel", upsert_funnel, run, run.day)
         if optional(run, "network import", network_import, run) is not None:
             worked.append("network")
-        if staging_due(run):
+        if unit(run, "uploads", staging_due, run, default=False):
             optional(run, "uploads", stage, run, run.day)
             worked.append("uploads")
-        why, ok = start_reason(run)
+        why, ok = unit(run, "daily check", start_reason, run, default=("", False))
         if why and ok:
-            start_daily(run, why)
+            unit(run, "daily start", start_daily, run, why)
             worked.append("daily")
         elif optional(run, "offline retry", offline_retry, run):
             worked.append("offline")
         else:
-            due = liveness_due(run)
+            due = unit(run, "liveness", liveness_due, run, default=[])
             if due:
-                optional(run, "liveness", liveness, run, due)
+                unit(run, "liveness", liveness, run, due)
                 worked.append("liveness")
     finally:
         try:
@@ -1741,10 +1822,10 @@ def check_arg(run, op, key, kind, value):
         import netfetch
         if len(value) > URL_MAX or not re.match(r"^https?://", value, re.I):
             raise RequestError(f"{key} is not an http(s) URL")
-        # The attended policy on netfetch's canonical host (shared decision 1):
-        # bad-url (a host that is not plain a-z 0-9 . -), job-board, r3-list and
-        # non-public links are refused when the file is written and when read.
-        deny = netfetch.Policy(unattended=False).reason(value)
+        # netfetch.web_refusal, the one link refusal (shared decision R1), then
+        # the attended policy (the R3 list endpoints): checked when the file is
+        # written and again when the runner reads it.
+        deny = netfetch.web_refusal(value) or netfetch.Policy(unattended=False).reason(value)
         if deny:
             raise RequestError(f"DENY {deny}")
         return value
@@ -1774,23 +1855,29 @@ def check_arg(run, op, key, kind, value):
     return value
 
 
+class BadRequestFile(Exception):
+    """A request file that cannot be read as JSON: it goes to runner/in/bad/."""
+
+
 def read_request(run, path):
-    """(request, None) or (None, reason); (None, None) means wait for it."""
+    """(request, None) or (None, reason); (None, None) means wait for it.
+    Raises BadRequestFile for a file that cannot be read as JSON (over 64 KB,
+    nested deeper than 64, or not JSON after 3 tries; shared decision R3)."""
     m = REQ_NAME.match(path.name)
     if not m:
         return None, "bad file name (expected <stamp>_<8hex>_<op>.json)"
     try:
-        raw = path.read_bytes()
+        req = jobfs.read_json(path, REQUEST_MAX)
     except OSError as e:
         return None, f"unreadable: {e}"
-    if len(raw) > REQUEST_MAX:
-        return None, "request over 64 KB"
-    try:
-        req = json.loads(raw.decode("utf-8-sig"))
-    except (UnicodeDecodeError, ValueError) as e:
+    except jobfs.BadJson as e:
+        if e.kind == "size":
+            raise BadRequestFile("request over 64 KB")
+        if e.permanent:
+            raise BadRequestFile(str(e))
         if events.is_young(path) or events.note_failure(run.root, path.name) < REQUEST_TRIES:
             return None, None
-        return None, f"not JSON after {REQUEST_TRIES} tries: {e}"
+        raise BadRequestFile(f"not JSON after {REQUEST_TRIES} tries: {e}")
     if not isinstance(req, dict) or req.get("v") != 1:
         return None, "not a v1 request"
     if req.get("id") != m.group(1) or req.get("op") != m.group(2):
@@ -1827,10 +1914,23 @@ def finish_request(run, path):
 
 def handle_request(run, path, in_tick=False):
     """Answer one request file; True when it was handled (and moved). In a
-    tick a long op (LONG_OPS) waits for the daily, which the tick starts."""
-    req, why = read_request(run, path)
+    tick a long op (LONG_OPS) waits for the daily, which the tick starts.
+    A file that cannot be read as JSON is answered ok=false and moved to
+    runner/in/bad/ with one ERROR line."""
     m = REQ_NAME.match(path.name)
     req_id, op = (m.group(1), m.group(2)) if m else (path.stem, "unknown")
+    try:
+        req, why = read_request(run, path)
+    except BadRequestFile as e:
+        write_result(run, req_id, op, False, [f"REJECTED {e}"])
+        try:
+            events.set_aside(run.root, path, str(e))
+        except OSError as err:  # held open by another program: the next run moves it
+            run.out(f"ERROR bad request file {path.name}: {e}; not moved yet ({type(err).__name__})")
+            return False
+        run.out(f"ERROR bad request file {path.name}: {e}; moved to runner/in/bad/")
+        run.errors.append(f"bad request file {path.name}: {e}")
+        return True
     if req is None and why is None:
         return False  # still arriving
     if req is None:
@@ -1987,7 +2087,7 @@ def req_fetch_posting(run, args, lines):
                                                          "closed": bool(p.closed), "why": "request"}
         jobfs.atomic_write_text(run.folder.runner_out / "liveness.json", json.dumps(live, indent=1, sort_keys=True) + "\n")
     return True, {"closed": bool(p.closed), "job_key": p.job_key, "title": p.title, "company": p.company,
-                  "posted": p.posted, "ai_text": len(reading.ai_text), "hidden": len(reading.hidden)}
+                  "posted": events.posted_value(p.posted), "ai_text": len(reading.ai_text), "hidden": len(reading.hidden)}
 
 
 def req_build(run, args, lines):
@@ -2319,7 +2419,9 @@ def cmd_request(args):
         if args.json_file:
             req_args = argfile.load(args.json_file, args.root)
         else:
-            req_args = json.loads(args.json)
+            if len(args.json.encode("utf-8", "replace")) > REQUEST_MAX:
+                raise ValueError("over 64 KB")
+            req_args = jobfs.loads_json(args.json)
         if not isinstance(req_args, dict):
             raise ValueError("not an object")
         req_id, path = make_request(args.root, args.op, req_args)

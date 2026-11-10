@@ -21,6 +21,17 @@ You need:
 Submit, never creates accounts, never handles passwords or verification
 codes, and never solves CAPTCHAs. Submit is always yours.
 
+**Where your daily jobs come from.** The job finder's list of employers
+finds a backlog of fitting jobs in the first week, then a few new ones a
+day. Two things you set up once fill the rest of each day's list, so do
+both:
+- **Job-alert emails** (Day 1 step 7): LinkedIn job alerts sent to your
+  Gmail. About 5 minutes.
+- **Two free keys, Adzuna and USAJOBS** (Day 2 step 2). About 5 minutes
+  each.
+If no alert email has come in for 3 days, the morning card says so; type
+`/job alerts` and Claude fixes it with you.
+
 ## Day 1: install and set up (about 30-45 minutes)
 
 1. **Make the folder.** In File Explorer, open Documents and create a folder
@@ -49,10 +60,11 @@ codes, and never solves CAPTCHAs. Submit is always yours.
    are claiming unemployment), in one list. "Skip" is fine for anything. It
    also asks where you applied recently, so reposts get caught, and shows
    your publications and lab techniques for a yes.
-7. **Create job alerts on LinkedIn** when Claude suggests them: 5 now, daily,
-   by email, one per broad job title; Claude suggests 3 more each of the
-   next few days, up to 20. Claude never opens LinkedIn; it only reads the
-   alert emails for the company, title and place.
+7. **Create job alerts on LinkedIn: most of your daily jobs come from
+   them.** When Claude suggests them: 5 now, daily, by email, one per broad
+   job title; Claude suggests 3 more each of the next few days, up to 20.
+   Claude never opens LinkedIn; it only reads the alert emails for the
+   company, title and place.
 8. **Request your LinkedIn data export:** on LinkedIn, Me > Settings &
    Privacy > Data Privacy > Download your data. It can take up to 48 hours.
    Claude uses it to find people you know at the companies you apply to.
@@ -75,10 +87,13 @@ codes, and never solves CAPTCHAs. Submit is always yours.
    without a window and also on battery. If the PC sleeps through 5:30,
    the morning run starts when it wakes. It adds a desktop shortcut, "Run
    job finder now".
-2. **Optional free keys.** The installer asks for keys for Adzuna and
-   USAJOBS (federal jobs). Type them only into that installer window,
-   never into a chat. You can skip them and add them later by running
-   `install_runner.cmd` again.
+2. **Two free keys: do this, they add jobs every day.** Get an Adzuna key
+   at developer.adzuna.com (a free account, then its API key) and a USAJOBS
+   key (federal jobs) at developer.usajobs.gov (a key request with your
+   email); the sign-up steps are UNVERIFIED. Type them only into the
+   installer window when it asks, never into a chat. Skipped one?
+   Double-click `install_runner.cmd` again: it asks only for a key you have
+   not entered yet.
 3. **The first run.** Double-click "Run job finder now". Then in Claude say
    `/job setup` again to finish: Claude switches to the job finder, shows
    the job families and places it searches (reply "ok" or name a change),
@@ -178,7 +193,9 @@ spreadsheet is your record, not a filing.
   Chrome", "confirm salary once a day").
 - `/job watch <company>` - add an employer to the job finder's list.
 - `/job network` - people you know at the companies on your list.
-- `/job variants` - your base resumes.
+- `/job variants` - your base resumes (after you correct something they
+  use, one yes approves every changed one).
+- `/job alerts` - get job-alert emails coming again.
 In Cowork the plugin form is `/job-search:job` followed by the same words.
 
 LinkedIn and Indeed do not allow automated tools, so Claude never opens or
@@ -207,6 +224,9 @@ birth, bank details or passwords.
 - **The card asks you to close the spreadsheet:** close `applications.xlsx`
   in Excel; Claude never needs it open.
 - **A job page will not load:** paste the posting text instead.
+- **The card says no job-alert email has come in:** type `/job alerts`.
+- **Few jobs a day after the first week:** check that the LinkedIn alerts
+  are on and that you entered both free keys (Day 2 step 2).
 - **`/job` does not appear:** type `/job-search:job`, or "Use the job
   skill:" followed by what you want.
 - **A usage limit:** stop; type `/job` after the window resets. Nothing is

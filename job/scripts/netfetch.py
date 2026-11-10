@@ -12,6 +12,13 @@ need no network; --robots also reads robots.txt (live, or from --offline
 fixtures).
 
 What it enforces (spec 8.2, 3.3, 3.14):
+- One refusal for links (web_refusal, R1): every check that decides whether
+  a link may be stored, shown, opened or fetched asks it. It answers None or
+  job-board <domain>, bad-url <why> (no http(s) link, a backslash, space or
+  control character, userinfo, a port other than 80/443, a host canon_host
+  refuses, an IP literal in any form, a single-label host) or non-public
+  <host> (localhost, .local, .internal, .lan, .home.arpa, a private IP, or
+  at connect time a name that resolves to a non-public address).
 - One canonical host (host_of, canon_host): urlparse's hostname, lowercased,
   one trailing dot removed. A host with any character outside a-z 0-9 . -,
   an empty label or a label over 63 characters is refused (bad-url), so a
@@ -56,11 +63,12 @@ import ssl
 import sys
 import threading
 import time
+import unicodedata
 from email.utils import parsedate_to_datetime
 from http.cookiejar import CookieJar
 from pathlib import Path
 from urllib.error import HTTPError
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 from urllib.request import (HTTPCookieProcessor, HTTPHandler, HTTPRedirectHandler, HTTPSHandler, ProxyHandler,
                             Request, build_opener, getproxies)
 
@@ -108,23 +116,12 @@ class Denied(FetchError):
 # agent then fetches with its own tool (exit 3, TRY).
 
 def check_public(url):
-    try:
-        u = urlparse(url)
-        host = (u.hostname or "").lower()
-    except ValueError:  # an unbalanced [ in the host part
-        raise FetchError(f"refused {str(url)[:80]}: not a well-formed link")
-    if u.scheme not in ("http", "https") or not host:
-        raise FetchError(f"refused {url[:80]}: only public http(s) links are fetched")
-    if any(ch in u.netloc for ch in "@%\\"):
-        raise FetchError(f"refused {url[:80]}: unusual characters in the host part")
-    if host == "localhost" or host.endswith((".localhost", ".local", ".internal", ".lan", ".home.arpa")):
-        raise FetchError(f"refused {host}: not a public site")
-    try:
-        ip = ipaddress.ip_address(host)
-    except ValueError:
-        return
-    if not ip.is_global:
-        raise FetchError(f"refused {host}: not a public address")
+    """Raise Denied (a FetchError) with web_refusal's reason for a link that
+    may not be fetched; the static half of the guard (connect_public is the
+    other)."""
+    reason = web_refusal(url)
+    if reason:
+        raise Denied(reason)
 
 
 # One wall-clock deadline per fetch (FETCH_DEADLINE): a server that answers one
@@ -213,7 +210,8 @@ def connect_public(host, port, timeout):
     for info in infos:
         ip = ipaddress.ip_address(info[4][0].split("%")[0])
         if not ip.is_global:
-            raise FetchError(f"refused {name}: resolves to a non-public address ({ip})")
+            # a refusal, not a fetch failure (R1): posting.py exits 4 and prints no TRY
+            raise Denied(f"non-public {name}")
     last = None
     for family, socktype, proto, _, addr in infos:
         s = DeadlineSocket(family, socktype, proto)
@@ -415,30 +413,158 @@ def r3_list(host, path):
     return host == "careers-page.clearcompany.com" and path_l.startswith("/api/")
 
 
-def hard_deny(url):
-    """The DENY reason that holds for every fetch, attended or not, else None;
-    never raises. A host canon_host refuses is bad-url, or job-board <domain>
-    when its spelling maps to a job board. A URL naming no host is left to the
-    policy (bad-url there)."""
+# ---------- the one link refusal (R1) ----------
+
+LINK_MAX = 2048
+WEB_PORTS = (80, 443)  # no employer or ATS link in the live pools or the preset names another port
+SPECIAL_USE = ("localhost", "local", "internal", "lan", "home.arpa")  # never a public site (RFC 6761, 8375, ...)
+NUMERIC_LABEL = re.compile(r"[0-9]+|0x[0-9a-f]*")  # a browser reads a host ending in one as an IPv4 address
+SCHEME = re.compile(r"([A-Za-z][A-Za-z0-9+.-]{0,30}):")
+
+
+def _odd_char(url):
+    """Why url holds a character no plain link has, else ''."""
+    if "\\" in url:
+        return "backslash in the link"
+    for ch in url:
+        if ch.isspace() or unicodedata.category(ch)[0] in "CZ":  # controls, format marks, spaces, separators
+            return "space or control character in the link"
+    return ""
+
+
+def _board_readings(url):
+    """The job board any reader of url would reach, else None: Python's
+    urlparse host, and the host a browser reads (WHATWG: tabs and newlines
+    dropped, any run of slashes or backslashes after the scheme skipped, the
+    authority ending at the first / \\ ? or #, userinfo up to the last @,
+    percent-escapes decoded), each judged on its canonical or IDNA form."""
+    seen = []
     try:
-        host = host_of(url)
+        seen.append(urlparse(url).hostname or "")
+    except ValueError:
+        pass
+    m = SCHEME.match(url)
+    rest = re.sub(r"[\t\r\n]", "", url[m.end():] if m else url).lstrip("/\\")
+    auth = re.split(r"[/\\?#]", rest, maxsplit=1)[0].rpartition("@")[2]
+    if not auth.startswith("["):
+        auth = auth.partition(":")[0]
+    seen += [auth, unquote(auth)]
+    for raw in seen:
+        if raw:
+            board = job_board(raw) or job_board(idna_host(raw))
+            if board:
+                return board
+    return None
+
+
+def _ip_literal(host):
+    """'non-public <host>' or 'bad-url ip-address <host>' for an IP-literal
+    host (dotted, integer, hex or octal IPv4, or IPv6 in brackets), else ''."""
+    inner = host[1:-1] if host.startswith("[") and host.endswith("]") else host
+    if not (host.startswith("[") or NUMERIC_LABEL.fullmatch(inner.split(".")[-1] or "-")):
+        return ""
+    try:
+        if not ipaddress.ip_address(inner.split("%")[0]).is_global:
+            return f"non-public {shown(host)}"
+    except ValueError:
+        pass  # 0x7f.1, 2130706433, 0177.0.0.1: still an address to a browser
+    return f"bad-url ip-address {shown(host)}"
+
+
+def web_refusal(url):
+    """None when url may be stored, shown, opened or fetched as a web link,
+    else one reason (R1): 'job-board <domain>', 'bad-url <why>' or
+    'non-public <host>'. Needs no network and never raises.
+
+    Refused: anything but an http(s) link with '//' and a host; a job board by
+    any reading (Python's or a browser's: a backslash, userinfo or lookalike
+    spelling that leads to one); a backslash, whitespace, control or format
+    character anywhere; userinfo (an '@' in the authority); a port other than
+    80 or 443; a host canon_host refuses; an IP-literal host in any form; a
+    single-label host; and the special-use names localhost, .localhost,
+    .local, .internal, .home.arpa and .lan. A name that resolves to a
+    non-public address is refused when connecting (connect_public, same
+    'non-public <host>' reason). Percent-escapes in a path or query are fine."""
+    if not isinstance(url, str) or not url:
+        return "bad-url no link"
+    if len(url) > LINK_MAX:
+        return f"bad-url longer than {LINK_MAX} characters"
+    m = SCHEME.match(url)
+    if not m or m.group(1).lower() not in ("http", "https"):
+        return "bad-url not an http(s) link"
+    board = _board_readings(url)
+    if board:
+        return f"job-board {board}"
+    odd = _odd_char(url)
+    if odd:
+        return f"bad-url {odd}"
+    if url[m.end():m.end() + 2] != "//":
+        return "bad-url no host"
+    auth = re.split(r"[/?#]", url[m.end() + 2:], maxsplit=1)[0]
+    if "@" in auth:
+        return "bad-url user name in the link"
+    if auth.startswith("["):
+        if "]" not in auth:
+            return "bad-url not a well-formed host"
+        return _ip_literal(auth.partition("]")[0] + "]") or "bad-url ip-address"
+    raw, colon, port = auth.partition(":")
+    if not raw:
+        return "bad-url no host"
+    if colon and port:
+        if not re.fullmatch(r"[0-9]{1,5}", port) or int(port) not in WEB_PORTS:
+            return f"bad-url port {shown(port, 12)}"
+    try:
+        host = canon_host(raw)
     except Denied as d:
-        try:
-            raw = urlparse(str(url or "")).hostname or ""
-        except ValueError:
-            raw = ""
-        board = job_board(raw) if raw else None
-        return f"job-board {board}" if board else d.reason
-    if not host:
-        return None
+        return d.reason
     board = job_board(host)
     if board:
         return f"job-board {board}"
-    try:
-        path = urlparse(str(url)).path
-    except ValueError:
-        return "bad-url"
-    if r3_list(host, path):
+    if any(host == s or host.endswith("." + s) for s in SPECIAL_USE):
+        return f"non-public {host}"
+    ip = _ip_literal(host)
+    if ip:
+        return ip
+    if "." not in host:
+        return f"bad-url single-label host {host}"
+    return None
+
+
+# Pages that are about an employer but are not its own site (SV-09): social and
+# reference sites. Job boards (LinkedIn, Glassdoor, ...) come from job_board.
+NOT_EMPLOYER_SITES = ("facebook.com", "fb.com", "fb.me", "twitter.com", "x.com", "t.co", "instagram.com",
+                      "youtube.com", "youtu.be", "crunchbase.com", "wikipedia.org", "wikimedia.org",
+                      "wikidata.org", "tiktok.com", "threads.net", "bsky.app")
+EMPLOYER_SITE_MAX = 200
+
+
+def employer_site(*values):
+    """The employer's own website among values (each a string or a list of
+    them, in order: JSON-LD url, then sameAs): the first http(s) link of at
+    most 200 characters that web_refusal passes and whose host is neither a
+    job board nor a social or reference site (Facebook, X or Twitter,
+    Instagram, YouTube, Crunchbase, Wikipedia), else ''."""
+    for v in values:
+        for s in (v if isinstance(v, list) else [v]):
+            s = s.strip() if isinstance(s, str) else ""
+            if not s or len(s) > EMPLOYER_SITE_MAX or web_refusal(s):
+                continue
+            host = host_of(s)
+            if any(on_domain(host, d) for d in NOT_EMPLOYER_SITES):
+                continue
+            return s
+    return ""
+
+
+def hard_deny(url):
+    """The DENY reason that holds for every fetch, attended or not, else None;
+    never raises: web_refusal's reason (job-board, bad-url, non-public), then
+    the R3 list endpoints (r3-list <host>)."""
+    reason = web_refusal(url)
+    if reason:
+        return reason
+    host = host_of(url)  # web_refusal passed, so this neither raises nor is blank
+    if r3_list(host, urlparse(url).path):
         return f"r3-list {host}"
     return None
 
@@ -518,18 +644,12 @@ class Policy:
         self.extra |= canon_hosts([host])
 
     def reason(self, url, method="GET"):
-        """The DENY reason for url, or None when it may be fetched."""
+        """The DENY reason for url, or None when it may be fetched: hard_deny
+        (web_refusal, then the R3 lists), then, unattended, https only, no
+        encoded slash in the path and the allowlist."""
         deny = hard_deny(url)
         if deny:
             return deny
-        try:
-            check_public(url)
-        except FetchError:
-            host = host_of(url)  # hard_deny passed, so this does not raise
-            u = urlparse(url)
-            if u.scheme in ("http", "https") and host and not any(ch in u.netloc for ch in "@%\\"):
-                return f"non-public {host}"
-            return "bad-url"
         if not self.unattended:
             return None
         u = urlparse(url)
@@ -1011,9 +1131,9 @@ def cmd_check(args):
 
 
 def main(argv=None):
-    ap = Parser(description="Network policy check for job_skill.")
+    ap = Parser(description="Network policy check for job_skill.", allow_abbrev=False)  # R4: exact option names
     sub = ap.add_subparsers(dest="cmd", required=True)
-    c = sub.add_parser("check", help="ALLOW or DENY a URL under the runner policy")
+    c = sub.add_parser("check", help="ALLOW or DENY a URL under the runner policy", allow_abbrev=False)
     c.add_argument("url")
     c.add_argument("--method", default="GET", type=str.upper, choices=("GET", "POST"))
     c.add_argument("--root", help="JobSearch folder: adds watch-list careers_url hosts, robots cache")

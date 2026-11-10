@@ -175,11 +175,8 @@ def write_csv(path, columns, rows):
 
 
 def read_json(path, default):
-    try:
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
-        return data if isinstance(data, type(default)) else default
-    except (OSError, ValueError, RecursionError):
-        return default
+    """The safe loader (R3): missing is default; a bad file is default with one ERROR line."""
+    return jobfs.read_json_or(path, jobfs.MAX_STATE, default)
 
 
 def spec_label(spec):

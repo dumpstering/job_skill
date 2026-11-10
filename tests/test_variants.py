@@ -512,6 +512,47 @@ def test_docs_round3():
     print("ok writing docs: corrections replace entries; jobs built from them are held the same day")
 
 
+def test_docs_round4():
+    """Round 4 doc side: R1 (exit 4 never opened by any tool; TRY only for a
+    link the checks passed), R2 (keys safe by construction, stated once; no
+    per-call key rule), R8 (one yes for every family; REBUILD in the fill
+    loop; open needs only), R9 (where volume comes from; /job alerts), SV-06
+    (job-morning commands quoted, from <skill>)."""
+    root = HERE.parent
+    refs = root / "job" / "references"
+
+    def flat(path):
+        return " ".join(path.read_text(encoding="ascii").split())
+    skill = flat(root / "job" / "SKILL.md")
+    assert "a link posting.py refused is never opened or fetched by any tool, the browser included" in skill, "R1"
+    assert "(only ever a link the checks passed that failed to load" in skill, "R1: TRY"
+    assert skill.count("safe by construction") == 1 and "a job key holding any other character" not in skill, "R2"
+    assert "`variants.py` - `new`, `approve`, `check`, `tune`, `diff`, `tier-b`, `rebuild`" in skill
+    assert "| `/job alerts` | [references/setup.md](references/setup.md) |" in skill, "R9 route"
+    vmd = flat(refs / "variants.md")
+    for need in ("## One correction, every family (`rebuild`)", "variants.py rebuild --approve <hash>",
+                 "Never ask per family.", "Reply yes to use them all."):
+        assert need in vmd, need
+    ab = flat(refs / "apply_batch.md")
+    assert "`REBUILD #<n>: ... (FOLDER <path>)`" in ab and "`ANSWERS answered`" in ab, "R8 in the fill loop"
+    assert "is not `unparked` in `events.py overlay`" not in ab, "G3-03: no cross-check by hand"
+    assert "--posted <date>" not in ab, "R2: posted travels in the args file (a date, or left out when undated)"
+    disc = (refs / "discovery.md").read_text(encoding="ascii")
+    assert "python scripts/" not in disc and "<JobSearch>" not in disc, "SV-06"
+    assert 'python "<skill>/scripts/leads.py" validate' in disc and '--root "<folder>"' in disc, "SV-06"
+    for name in ("runner.md", "daily.md", "setup.md", "files.md"):
+        text = (refs / name).read_text(encoding="ascii")
+        assert "python scripts/" not in text and "<JobSearch>" not in text, name
+    guide, readme = flat(root / "SETUP_GUIDE.md"), flat(root / "README.md")
+    assert "**Where your daily jobs come from.**" in guide and "`/job alerts`" in guide, "R9 guide"
+    assert "## Where the daily volume comes from" in (root / "README.md").read_text(encoding="ascii"), "R9 readme"
+    assert "free Adzuna and USAJOBS keys" in readme and "it asks only for a key you have not entered yet" in guide
+    assert "## Alerts (`/job alerts`, from the card's alert line)" in (refs / "setup.md").read_text(encoding="ascii")
+    walk = (HERE / "walkthrough_v12.md").read_text(encoding="ascii")
+    assert '--base "Jordan Avery Resume"' not in walk, "G3-04"
+    print("ok round-4 docs: exit 4, the key rule once, one yes for every family, REBUILD, /job alerts, quoted commands")
+
+
 def test_split_items_and_swaps():
     assert variants.split_items("SQL (basic queries, simple joins), Python, R.") == ["SQL (basic queries, simple joins)", "Python", "R"]
     swaps = [{"variant": "real-time PCR", "to": "qPCR"}]
@@ -539,7 +580,93 @@ def test_agents():
     print("ok agents: auditor read-only, tailor writes only its job folder, untrusted-posting sentence")
 
 
+def test_rebuild_all():
+    """R8 (G3-01): one correction to an entry every family cites. rebuild
+    takes every such family at once: the corrected entry once, a "- "/"+ "
+    diff of the changed lines for a family Claude fixed in a new version, the
+    "= " lines citing it for one whose files stand, the strict base build, and
+    one PLAN; --approve with that PLAN (the user's one yes) approves them all
+    and rebuilds today's jobs built from a version it replaced. A plan the
+    files or the library moved past is refused."""
+    root = fresh_root()
+    approve(root)
+    v1, two = root / "variants" / FAMILY / "v1", root / "variants" / "qc_two" / "v1"
+    two.mkdir(parents=True)
+    for name in ("resume.json", "pool.json", "letter.json", "review.md"):
+        shutil.copyfile(v1 / name, two / name)
+    code, out = cli("approve", "--root", root, "--family", "qc_two", "--max-pages", "1")
+    assert code == 0 and out.startswith("APPROVED qc_two v1"), out
+    folder = job(root, "2026-11-06 Example Bio - QC Scientist", "posting_qpcr.md")
+    status, _ = quiet(variants.tier_b, root, folder, family="qc_two")
+    assert status in ("built", "fallback_base"), status
+    sys.path.insert(0, str(SCRIPTS))
+    import jobfs
+    item = {"n": 1, "job_key": "greenhouse:4242", "folder": f"applications/{folder.name}", "family": "qc_two",
+            "tier": "B", "resume_status": status}
+    jobfs.atomic_write_json(jobfs.Folder(root).queue_json("2026-11-06"), {"v": 1, "date": "2026-11-06",
+                                                                          "items": [item]})
+    code, out = cli("rebuild", "--root", root)
+    assert code == 0 and out.strip() == "REBUILD none: no approved base resume cites a corrected library entry", out
+    lib = root / "achievement_library.md"
+    lib.write_bytes(lib.read_bytes().replace(b"Gram stain and identification", b"Gram stain, and identification"))
+    code, out = cli("rebuild", "--root", root)
+    lines = out.splitlines()
+    assert code == 0, out
+    assert lines[0] == 'CHANGED L-0007: "BSL-2 lab work daily: culture, Gram stain, and identification by MALDI-TOF."'
+    cite = ("  = pool.json: Worked daily in a BSL-2 lab: culture, Gram stain and identification by MALDI-TOF. "
+            "(cites L-0007)")
+    for fam in (FAMILY, "qc_two"):
+        head = lines.index(f"REBUILD {fam} v1 again: no line changes; 1 line cites the corrected entry")
+        assert lines[head + 1] == cite and lines[head + 2] == f"BUILD ok {fam} v1 (base_resume.pdf)", lines
+    plan1 = next(ln for ln in lines if ln.startswith("PLAN ")).split()[1]
+    assert lines[-1].endswith(f"run variants.py rebuild --approve {plan1}"), lines[-1]
+    assert (v1 / "base_resume.pdf").exists() and variants.files_approval(v1)[0], "the build never touches approval"
+    # Claude judged qc_two's line to say more than the corrected entry: a new version with the fix.
+    code, out = cli("new", "--root", root, "--family", "qc_two", "--copy")
+    assert code == 0 and "NEW qc_two v2" in out, out
+    pool2 = root / "variants" / "qc_two" / "v2" / "pool.json"
+    pool2.write_bytes(pool2.read_bytes().replace(b"Gram stain and identification", b"Gram stain, and identification"))
+    code, out = cli("rebuild", "--root", root)
+    lines = out.splitlines()
+    i = lines.index("REBUILD qc_two v1 -> v2: 2 changed lines")
+    assert lines[i + 1] == ("  - pool.json extra bullet, Scientist II, QC Microbiology | Northwind Biologics: Worked "
+                            "daily in a BSL-2 lab: culture, Gram stain and identification by MALDI-TOF."), lines
+    assert lines[i + 2].startswith("  + pool.json") and "Gram stain, and identification" in lines[i + 2], lines
+    assert lines[i + 3] == "BUILD ok qc_two v2 (base_resume.pdf); 1 of today's jobs are rebuilt on the yes", lines
+    assert sum(1 for ln in lines if ln.startswith("CHANGED")) == 1, "the corrected entry is shown once"
+    plan2 = next(ln for ln in lines if ln.startswith("PLAN ")).split()[1]
+    assert plan2 != plan1 and "PLAN " + plan2 + " (2 families)" in lines
+    for stale in (plan1, "000000000000", "not-a-plan"):
+        code, out = cli("rebuild", "--root", root, "--approve", stale)
+        assert code == 1 and out.startswith("REFUSED the base resumes or the library changed"), out
+    assert (root / "variants" / "qc_two" / "current.txt").read_text(encoding="utf-8").strip() == "v1"
+    code, out = cli("rebuild", "--root", root, "--approve", plan2)
+    lines = out.splitlines()
+    assert code == 0 and lines[-1] == "DONE approved=2 rebuilt=1 prep_failed=0", out
+    assert lines[0].startswith(f"APPROVED {FAMILY} v1 again (") and lines[1].startswith("APPROVED qc_two v2 ("), out
+    assert not any(ln.startswith("CHANGED") for ln in lines), "the user saw those lines before the yes"
+    assert (root / "variants" / "qc_two" / "current.txt").read_text(encoding="utf-8").strip() == "v2"
+    a2 = json.loads((root / "variants" / "qc_two" / "v2" / "approved.json").read_text(encoding="utf-8"))
+    assert a2["max_pages"] == 1 and a2["mode"] == "industry", "the new version keeps the old one's caps"
+    log = json.loads((folder / "tune_log.json").read_text(encoding="utf-8"))
+    assert log["family"] == "qc_two" and log["version"] == 2 and log["approved_sha256"] == a2["sha256"], log
+    for fam in (FAMILY, "qc_two"):
+        assert variants.usable(root, fam)[0] is not None, fam
+    code, out = cli("rebuild", "--root", root)
+    assert out.startswith("REBUILD none"), out
+    # A folder under variants/ whose name is not a family id is never printed for a command line.
+    (root / "variants" / "x$(y)").mkdir()
+    code, out = cli("check", "--root", root)
+    assert "$" not in out and "REFUSED 1 folder in variants/ whose name is not a family id" in out, out
+    print("ok rebuild: every family a correction broke, one combined diff, one PLAN, one yes; held jobs rebuilt")
+
+
 def main():
+    if sys.argv[1:]:  # tests that build their own root, by name: test_variants.py rebuild_all
+        for name in sys.argv[1:]:
+            globals()["test_" + name.removeprefix("test_")]()
+        print("PASS")
+        return
     root = test_approve_and_check()
     test_one_character_unapproves(root)
     test_randomized_tune(root)
@@ -555,8 +682,10 @@ def main():
     test_cli_rules()
     test_docs_round2()
     test_docs_round3()
+    test_docs_round4()
     test_split_items_and_swaps()
     test_agents()
+    test_rebuild_all()
     print("PASS")
 
 

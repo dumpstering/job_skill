@@ -346,9 +346,53 @@ def test_zip_limits():
     assert code == 1 and out == ["ERROR network import stopped: RuntimeError"], (code, out)
 
 
+def test_old_keys_match():
+    """R2: a Referrals or Applications row that keeps an earlier version's job
+    key (with '?', '=' and '&') still names the queue item whose key this
+    version computes for the same link; a blank key never matches."""
+    import jobkey
+    link = "https://careers.example-bio.com/Jobs/QC?jobId=77&id=3"
+    old, new = jobkey.raw_key(link), jobkey.job_key(link)
+    assert old != new and not jobkey.inline_ok(old) and jobkey.inline_ok(new), (old, new)
+    rows = [{"Job key": old, "Status": "Sent", "Date": "2026-11-11"}]
+    assert network.referral_state(new, rows, 0, date(2026, 11, 12))[0] == "asked"
+    assert network.referral_state("", [{"Job key": "", "Status": "Sent", "Date": "2026-11-11"}], 0,
+                                  date(2026, 11, 12))[0] == ""
+
+    class Store:
+        def app_rows(self):
+            return [{"Job key": old, "Applied": "2026-11-10"}]
+    assert network.applied_on(Store(), new) == "2026-11-10"
+
+
+def test_ask_link_refusal():
+    """R1: the posting link a referral ask shows is one netfetch.web_refusal
+    passes (posting.json's URL, else the item's apply URL); with neither, the
+    ask names the role without a link."""
+    import json
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        folder = root / "applications" / "a"
+        folder.mkdir(parents=True)
+        item = {"folder": "applications/a", "apply_url": "https://jobs.example-bio.com/j/1",
+                "role": "Scientist", "company": "Example Bio"}
+        for pj_url, want in (("https://user@jobs.example-bio.com/j/1", "https://jobs.example-bio.com/j/1"),
+                             ("https://careers.example-bio.com/j/1", "https://careers.example-bio.com/j/1"),
+                             ("javascript:alert(1)", "https://jobs.example-bio.com/j/1")):
+            (folder / "posting.json").write_text(json.dumps({"url": pj_url, "req_ids": ["R-1"]}), encoding="ascii")
+            assert network.posting_facts(root, item)[0] == want, (pj_url, network.posting_facts(root, item))
+        item["apply_url"] = "https://10.0.0.5/j/1"
+        (folder / "posting.json").write_text(json.dumps({"url": "https://localhost/j/1"}), encoding="ascii")
+        link = network.posting_facts(root, item)[0]
+        assert link == "", link
+        full, body = network.draft("Pat", item, link, "", "I grow bacteria.", "Jordan", applied="2026-11-05")
+        assert "2026-11-05." in body and ": ." not in body and "http" not in full, full
+
+
 def main():
     for fn in (test_import_zip, test_import_old_layout, test_zip_traversal, test_matching, test_match_cli,
-               test_asks, test_same_text_guard, test_fact_words, test_zip_limits):
+               test_asks, test_same_text_guard, test_fact_words, test_zip_limits, test_old_keys_match,
+               test_ask_link_refusal):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

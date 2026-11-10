@@ -415,7 +415,7 @@ def letter_built(job):
     """True when the job folder holds a built letter: the one final.json names
     (a passing strict build), or the runner's cover_B.pdf."""
     try:
-        name = json.loads((Path(job) / "final.json").read_text(encoding="utf-8")).get("letter")
+        name = jobfs.read_json(Path(job) / "final.json", jobfs.MAX_FILE).get("letter")
         if name and (Path(job) / str(name)).exists():
             return True
     except (OSError, ValueError, AttributeError):
@@ -439,7 +439,7 @@ def field_type(qtype):
 def job_country(job, head):
     """US, CA, ... from posting.json, else the posting's Location line."""
     try:
-        data = json.loads((job / "posting.json").read_text(encoding="utf-8-sig"))
+        data = jobfs.read_json(job / "posting.json", jobfs.MAX_FILE)
         if country_code(data.get("country", "")):
             return country_code(data["country"])
     except (OSError, ValueError, AttributeError):
@@ -789,12 +789,9 @@ def queue_item(root, job):
     except ValueError:
         return None
     for q in sorted(jobfs.Folder(root).queue.glob("*/*.json"), reverse=True):
-        try:
-            data = json.loads(q.read_text(encoding="utf-8-sig"))
-        except (OSError, ValueError):
-            continue
-        for it in data.get("items", []) if isinstance(data, dict) else []:
-            if str(it.get("folder", "")).replace("\\", "/").rstrip("/") == rel:
+        data = jobfs.read_json_or(q, jobfs.MAX_STATE, {})  # R3: a bad queue file is skipped, one ERROR line
+        for it in data.get("items", []) if isinstance(data.get("items"), list) else []:
+            if isinstance(it, dict) and str(it.get("folder", "")).replace("\\", "/").rstrip("/") == rel:
                 return it
     return None
 
@@ -808,7 +805,7 @@ def read_plan(folder):
 
 def read_list(path):
     try:
-        data = json.loads(Path(path).read_text(encoding="utf-8-sig"))
+        data = jobfs.read_json(path, jobfs.MAX_FILE)
     except (OSError, ValueError):
         return []
     return [q for q in data if isinstance(q, dict) and isinstance(q.get("q"), str)] if isinstance(data, list) else []
@@ -1027,7 +1024,7 @@ def migrate(root):
 
 def session_id(root):
     try:
-        return str(json.loads(jobfs.Folder(root).session_json.read_text(encoding="utf-8")).get("task") or "answers.py")
+        return str(jobfs.read_json(jobfs.Folder(root).session_json, jobfs.MAX_FILE).get("task") or "answers.py")
     except (OSError, ValueError, AttributeError):
         return "answers.py"
 
@@ -1086,10 +1083,10 @@ class Parser(argparse.ArgumentParser):
 
 
 def main(argv=None):
-    ap = Parser(description=__doc__.splitlines()[0])
+    ap = Parser(description=__doc__.splitlines()[0], allow_abbrev=False)
     sub = ap.add_subparsers(dest="cmd", required=True)
     for name in ("plan", "years", "questions", "add", "list", "unpark", "migrate"):
-        p = sub.add_parser(name)
+        p = sub.add_parser(name, allow_abbrev=False)
         p.add_argument("--root", required=True, help="the JobSearch folder")
     sub.choices["plan"].add_argument("--job", required=True, help="the job folder")
     sub.choices["plan"].add_argument("--family")
@@ -1166,8 +1163,12 @@ def run(args, root):
         return 0
     if args.cmd == "unpark":
         done = unpark(root, args.date, args.session)
+        import events  # R2: a key printed for a command line is checked first (events.shown_key)
         for it, ev in done:
-            print(f"UNPARKED #{it.get('n')} {it.get('job_key', '')} ({', '.join(ev['payload']['question_ids']) or 'parked'})")
+            n = it.get("n")
+            n = n if isinstance(n, int) and not isinstance(n, bool) else "?"
+            print(f"UNPARKED #{n} {events.shown_key(it.get('job_key', ''))} "
+                  f"({', '.join(ev['payload']['question_ids']) or 'parked'})")
         print(f"UNPARK n={len(done)}")
         return 0
     done, skipped = migrate(root)

@@ -9,6 +9,7 @@ and sets JOBRUNNER_HOME to a temp folder, so nothing touches the real
 %LOCALAPPDATA%\\JobRunner. Exits non-zero on the first failure and prints PASS.
 """
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -759,7 +760,8 @@ def test_docs():
 
     batch, runner_md, setup, daily_md = flat("apply_batch.md"), flat("runner.md"), flat("setup.md"), flat("daily.md")
     # an unparked item in a claimed folder fills from a fresh plan, not the stale fill_plan.json
-    assert 'after `answers.py unpark`' in batch and 'answers.py plan --root R --job "<job folder>" --dry-run' in batch
+    assert 'after `answers.py unpark`' in batch and re.search(
+        r'answers\.py plan (--root R )?--job "<job folder>" --dry-run', batch), "apply_batch.md: plan --dry-run"
     # the lock is an OS lock; nothing is "older than 2 hours"
     assert "older than 2 hours" not in runner_md and "an OS lock" in runner_md
     # a selftest FAIL has a path; the sandbox check has its own record and a use
@@ -1252,6 +1254,148 @@ def test_fail_soft_units():
     print("ok a failing liveness item, network import or discovery stage is one ERROR line; the run goes on")
 
 
+DEEP = b'{"v": 1, "x": ' + b"[" * 20000 + b"]" * 20000 + b"}"   # 40 KB: under every size cap
+
+
+def drop(root, sub, name, body=DEEP):
+    path = jobfs.Folder(root).runner_in / sub / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(body)
+    old = time.time() - 60  # not a file still arriving
+    os.utime(path, (old, old))
+    return path
+
+
+def test_deep_files():
+    """SV-02 / R3: an event or request file nested 20,000 deep never stops the
+    daily (it reaches the queue), a tick, or today_view card and next; the
+    runner answers a bad request ok=false and moves bad files to
+    runner/in/bad/ with one ERROR line each; a bad state file is treated as
+    missing with one ERROR line."""
+    for sub, name in (("events", "20261106T050000Z_0000abcd_started.json"),
+                      ("requests", "20261106T050000Z_0000abce_more.json")):
+        fresh = TMP / f"deep_daily_{sub}" / "JobSearch"
+        shutil.copytree(FIXTURE, fresh)
+        path = drop(fresh, sub, name)
+        code, lines, err = run("daily", fresh, "--date", DAY, now="2026-11-06T13:30:00Z")
+        assert code == 0 and lines[-1].startswith("DAILY ok queue=30 "), (sub, lines[-4:], err[-1500:])
+        assert jobfs.Folder(fresh).queue_json(DAY).exists(), sub
+        if sub == "requests":
+            assert f"ERROR bad request file {name}: nested deeper than 64; moved to runner/in/bad/" in lines, lines
+            res = result_of(fresh, "20261106T050000Z_0000abce")
+            assert res["ok"] is False and res["lines"] == ["REJECTED nested deeper than 64"], res
+            assert not path.exists() and (jobfs.Folder(fresh).runner_in / "bad" / name).exists()
+    root = copy_day("deep_tick")
+    ev = drop(root, "events", "20261106T170000Z_0000abcd_started.json")
+    req = drop(root, "requests", "20261106T170001Z_0000abce_more.json")
+    for cmd in ("card", "next"):
+        r = subprocess.run([sys.executable, str(SCRIPTS / "today_view.py"), cmd, "--root", str(root)],
+                           capture_output=True, text=True, encoding="utf-8", env=env())
+        assert r.returncode == 0 and "Traceback" not in r.stderr and r.stdout.strip(), (cmd, r.stdout[-600:],
+                                                                                        r.stderr[-1500:])
+    code, lines, err = run("tick", root)
+    assert code == 0 and lines[-1].startswith("TICK done"), (lines, err[-1500:])
+    assert f"ERROR bad event file {ev.name}: not JSON: nested deeper than 64; moved to runner/in/bad/" in lines, lines
+    assert f"ERROR bad request file {req.name}: nested deeper than 64; moved to runner/in/bad/" in lines, lines
+    bad = jobfs.Folder(root).runner_in / "bad"
+    assert sorted(p.name for p in bad.glob("*.json")) == sorted([ev.name, req.name]) and not ev.exists()
+    assert result_of(root, "20261106T170001Z_0000abce")["ok"] is False
+    # a bad state file (the liveness record) is treated as missing, one ERROR line, and the tick goes on
+    live = jobfs.Folder(root).runner_out / "liveness.json"
+    live.write_bytes(DEEP)
+    code, lines, err = run("tick", root)
+    assert code == 0 and lines[-1].startswith("TICK"), (lines, err[-1500:])
+    assert sum(1 for ln in lines if ln.startswith("ERROR bad file ") and "liveness.json" in ln) == 1, lines
+    print("ok a deeply nested event, request or state file: the daily builds the queue, the tick, card and next "
+          "go on; bad files move to runner/in/bad/ with one ERROR line")
+
+
+def test_tick_units():
+    """R3: the tick's idle check and idle work run inside unit(): a step that
+    raises is one ERROR line and the tick still ends with TICK done."""
+    root = copy_day("tick_units")
+    jobrunner, r = in_process(root)
+    real = jobrunner.liveness_due
+    jobrunner.liveness_due = lambda run_: (_ for _ in ()).throw(RecursionError("maximum recursion depth"))
+    try:
+        assert jobrunner.tick(r) == 0
+    finally:
+        jobrunner.liveness_due = real
+        os.environ.pop("JOB_SKILL_NOW", None)
+        r.flush_log()
+    errs = [ln for ln in r.log_lines if ln.startswith("ERROR")]
+    assert "ERROR idle check: RecursionError: maximum recursion depth" in errs, errs
+    assert "ERROR liveness: RecursionError: maximum recursion depth" in errs, errs
+    assert r.log_lines[-1].startswith("TICK done"), r.log_lines[-3:]
+    print("ok the tick's idle check and liveness are units: an exception is one ERROR line")
+
+
+def test_liveness_budget():
+    """G3-07: liveness starts an item only while the tick has room for its
+    reads (inside the 10-minute limit), and writes liveness.json before and
+    after each item, so a tick stopped mid-read still records its work."""
+    root = copy_day("liveness_budget")
+    empty = TMP / "liveness_budget_net"
+    empty.mkdir()
+    (empty / "index.json").write_text("{}", encoding="ascii")
+    jobrunner, r = in_process(root, offline=empty)
+    import posting
+    q = json.loads(jobfs.Folder(root).queue_json(DAY).read_text(encoding="utf-8"))
+    items = [dict(it) for it in q["items"][:3]]
+    path = jobfs.Folder(root).runner_out / "liveness.json"
+    path.unlink(missing_ok=True)
+    clock = [1000.0]
+    r.started = 1000.0
+    seen = []
+    real_read = posting.read_posting
+
+    def slow_read(url, *a, **kw):
+        on_disk = json.loads(path.read_text(encoding="utf-8"))["items"]
+        seen.append({k: v["why"] for k, v in on_disk.items()})
+        clock[0] += 200  # three slow reads of about 60 s each
+        raise OSError("timed out")
+    posting.read_posting = slow_read
+    real_url = jobrunner.liveness_url
+    jobrunner.liveness_url = lambda run_, it, f: (f"https://boards-api.greenhouse.io/v1/boards/x/jobs/{it['n']}", None)
+    try:
+        jobrunner.liveness(r, items, clock=lambda: clock[0])
+    finally:
+        posting.read_posting = real_read
+        jobrunner.liveness_url = real_url
+        os.environ.pop("JOB_SKILL_NOW", None)
+        r.flush_log()
+    live = json.loads(path.read_text(encoding="utf-8"))["items"]
+    k0, k1, k2 = (it["job_key"] for it in items)
+    assert set(live) == {k0, k1} and live[k0]["why"].startswith("error") and live[k1]["why"].startswith("error"), live
+    assert seen[0] == {k0: "started (the tick stopped while reading it)"}, seen
+    assert seen[1][k0].startswith("error") and seen[1][k1].startswith("started"), seen
+    assert "LIVENESS budget: 1 item left for the next tick" in r.log_lines, r.log_lines[-4:]
+    assert r.log_lines[-1] == "LIVENESS checked 2 closed 0", r.log_lines[-3:]
+    print("ok liveness keeps inside the tick's limit and writes liveness.json after each item")
+
+
+def test_request_markers():
+    """G3-06: a tick prunes state/request_starts markers whose request was
+    answered or that are older than 30 days; a recent unanswered one stays."""
+    root = copy_day("markers")
+    jobrunner, r = in_process(root)
+    try:
+        answered, old, fresh = ("20261101T170000Z_0000bbb1", "20261001T170000Z_0000bbb2", "20261106T160000Z_0000bbb3")
+        for rid in (answered, old, fresh):
+            jobrunner.note_request_start(r, rid, "more", 1)
+        jobrunner.write_result(r, answered, "more", True, [])
+        t = time.time() - 31 * 86400
+        os.utime(jobrunner.request_start_path(r, old), (t, t))
+        jobrunner.tick(r)
+        r.flush_log()
+    finally:
+        os.environ.pop("JOB_SKILL_NOW", None)
+    left = sorted(p.stem for p in (jobfs.Folder(root).state / "request_starts").glob("*.json"))
+    assert left == [fresh], left
+    assert "REQUEST markers pruned 2" in r.log_lines, r.log_lines[:5]
+    print("ok a tick prunes request markers that were answered or are over 30 days old")
+
+
 def test_diy_sheets_per_item():
     """SEC-12: two do-it-yourself jobs at one employer get one answer sheet
     each, named E<n>_<Company>.md with the n of its upload file."""
@@ -1282,7 +1426,8 @@ def main():
              test_tick_user_addendum, test_diy_staging, test_no_import_from_root, test_missed_daily,
              test_session_before_queue, test_held_files, test_carried_folder_reapproval, test_relative_root_and_log,
              test_offline_morning, test_liveness_hosts, test_docs, test_request_attempts, test_request_hosts,
-             test_fail_soft_units, test_diy_sheets_per_item]
+             test_fail_soft_units, test_diy_sheets_per_item, test_deep_files, test_tick_units, test_liveness_budget,
+             test_request_markers]
     if sys.argv[1:]:  # python tests/test_runner.py test_locked test_missed_daily
         tests = [t for t in tests if t.__name__ in sys.argv[1:]]
     try:

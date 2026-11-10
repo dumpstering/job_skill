@@ -1,0 +1,315 @@
+# Sentences from public Bay Area life-science postings (live pools, 2026-11-05/06) that hold a word the
+# AI-text patterns look for. None is addressed to an AI: hidden.ai_lines must flag none of them.
+If you're driven by purpose, energized by innovation, and ready to help shape the future of precision medicine at scale, this is where you belong.
+You will have the chance to use cutting-edge molecular techniques, next-generation sequencing, and robotic tools to move assays from research prototypes to commercially available products run at large scale on real patient samples in our clinical lab.
+If you're an assay scientist who likes turning a complex, multi-part system into a workflow that works run after run, read on.
+Viz.ai is the leader in building and deploying AI-powered Care Pathways and helping doctors do their work.
+Viz.ai was the first company to be awarded CMS reimbursement for AI and is ranked the #1 Healthcare AI Platform by hospitals and health systems in the Black Book Research survey.
+For more information, visit Viz.ai.
+The Senior Clinical Study Manager plans, monitors, and executes the clinical research trials and pilots that demonstrate the real-world impact of Viz.ai's AI-enabled care pathways, with a particular focus on Life Sciences partnerships and health system pilots.
+Ensure accurate maintenance of internal systems (with emphasis on the Clinical Trial Management System), databases, tracking tools, timelines, and project plans with project-specific information.
+This role offers an opportunity to contribute to evidence programs that integrate clinical and product research, advance patient outcomes, and strengthen Viz.ai's leadership in healthcare innovation.
+- If you are a self-starter and naturally motivated, our work is driven by curiosity, innovation and team collaboration which allows us to leverage our skills immeasurably.
+and EU, with a team in Tel Aviv operating in a flexible hybrid model, conveniently located near a train line.
+Viz.ai is committed to providing highly competitive cash compensation, equity, and benefits.
+Viz.ai is an Equal Opportunity Employer and considers applicants for employment without regard to race, color, religion, sex, orientation, national origin, age, disability, genetics, or any other basis prohibited by federal, state, or local law.
+AI is reinventing life sciences the same way it reinvented software engineering, and our team is building that future.
+The work involves planning targeted data generation campaigns, designing evals that accurately measure model performance, and formulating post-training recipes aimed at making models useful for real drug discovery problems.
+The opportunity to work at the vanguard of AI research and frontier biology, with world-class people, on a mission that matters.
+Now we are expanding that same disruptive model across all of genomics.
+We are now looking to combine our deep experimental expertise with robotics and emerging AI tools to rethink how biology experiments are performed and push the boundaries of knowledge generation.
+- Lead research projects from hypothesis and experimental design through execution, data analysis, and iteration - Use data, computational tools, and LLMs to accelerate experimental design, troubleshooting, and analysis - Collaborate with scientists and engineers to integrate new capabilities into increasingly sophisticated automated systems
+- Translate complex, manual wet-lab protocols into reliable, reproducible robotic workflows - Build and optimize experiments for our fleet of liquid handling robots, identifying and removing the limits that prevent experiments from being automated - Support our research team in the adoption of automated protocols
+- Within 30 days: align with the team on the capabilities to build, and deliver at least one new robotics-accelerated capability (e.g.
+replace manual protocols with automated ones;
+We are hiring research scientists to work on foundation model pre-training.
+At Chai, pre-training research is largely domain-agnostic: understanding model architecture, reading training curves, and knowing when to move between phases of a recipe.
+We look for researchers with a strong track record, which can take many forms: getting a model to work, developing impactful theory, or making a substantial contribution to the field.
+- Depth in generative modelling, model architecture, or scaling laws.
+If you're a protein chemist who treats careful handling and characterization as the core of the work, read on.
+- Contributes to the development and/or review of study plans, ICFs, site manuals, patient materials, CRF completion guidelines, system specifications, etc.
+If you are unsure if a message is from Vera Therapeutics, please email human resources.
+The ideal candidate thinks about the whole system: how upstream chemistry, construct design, and what happens on a nanopore flow cell each shape the data.
+- Contribute to experimental design for ProSE studies and sequencing runs, and work with automation to move proven manual workflows onto automated platforms.
+- Use sequencing data as a measurement of the whole system.
+- Familiarity with automated liquid handling platforms (such as Hamilton, KingFisher).
+- Comfort using AI tools (Claude, Claude Code) to accelerate literature review, protocol design, and data analysis.
+- Correlate assay findings to the physical characteristics of the system using multimodal characterization, and connect assay outcomes and mechanistic understanding to new component requirements.
+We are a clinical-stage generative biology company pioneering the AI revolution in drug design and development.
+By unifying computational design and clinical development within a single operating model, we translate this approach into clinical-stage programs and are leading a shift from traditional drug discovery toward systematic drug generation.
+is a clinical-stage biopharmaceutical company focused on powering the immune system to transform lives by discovering and developing medicines for serious infectious diseases and cancer.
+Veracyte is a growing company that offers significant career opportunities if you are curious, driven, patient-oriented and aspire to help us build a great company.
+Our Veracyte Diagnostics Platform delivers high-performing cancer tests that are fueled by broad genomic and clinical data, deep bioinformatic and AI capabilities, and a powerful evidence-generation engine, which ultimately drives durable reimbursement and guideline inclusion for our tests, along with new insights to support continued innovation and pipeline development.
+Xaira is an innovative biotech startup focused on leveraging AI to transform drug discovery and development.
+The company is leading the development of generative AI models to design protein and antibody therapeutics, enabling the creation of medicines against historically hard-to-drug molecular targets.
+- Use AI tools to analyze multi-modal data.
+- Develop and validate methods for automated protein purification.
+- Design a data management system to track protein production data.
+- Document automated protein production processes.
+- Experience with automated liquid handling systems and robotic platforms (preferred).
+- Develop and optimize automated workflows, ensuring data quality, reproducibility, and process efficiency.
+- Partner with drug discovery, computational biology, and AI-based protein design teams to analyze, interpret, and share insights from screening data.
+Profluent is the frontier AI lab for biology.
+This role offers a unique opportunity to shape the future of AI-driven protein design while collaborating with a dynamic, interdisciplinary team of experts in machine learning, protein engineering, cell biology, and gene editing.
+*MODEL EXCELLENCE: The magnitude of our challenge requires our shared commitment to demonstrating integrity, accountability, equality and clarity across communications and decision making.
+- Design and execute experiments to evaluate critical method parameters and define appropriate system suitability and control strategies.
+model good documentation practices and data integrity expectations.
+Arc Institute is an independent nonprofit research organization at the interface of artificial intelligence and biology, working to accelerate scientific progress and understand the root causes of complex diseases.
+Our two Institute Initiatives reflect this model in action:
+- Virtual Cell Initiative: Building a full-stack virtual cell model to identify disease mechanisms and nominate drug targets, accelerating the path from biological insight to clinical trials.
+- Join Arc's Alzheimer's Disease Initiative as the production engine behind a first-of-its-kind 3D brain-model screening program, where the cells you make drive disease-target discovery.
+This work directly enables the large-scale perturbation screening and cell engineering efforts behind Arc's Virtual Cell Initiative and Alzheimer's Disease Initiative (ADI).
+- Help establish, refine, and run an efficient end-to-end viral production platform spanning demand intake to final delivery, including a request/intake system, plasmid hand-off, and QC standards.
+- How can we eliminate pathogenic autoantibodies while leaving the rest of the immune system intact?
+The role of a Laboratory Assistant I has the ability to receive specimens with an ability to exercise independent judgement in the performance of assigned laboratory tasks.
+If you are based in California, we encourage you to read this important information for California residents.
+- SAR-driven design, purification, and characterization of tLNPs and targeted moiety conjugated lipids and AI-based SAR prediction tools for tLNP applications.
+- Maintain careful records in ELN (electronic lab notebook) and organize materials and reagents with detailed tracking in our LIMS system.
+- Document research progress under a Quality Management System.
+- Establish and lead the Arc Biosafety Program and Institutional Biosafety Committee (IBC) operations to ensure seamless oversight of biological agent usage.
+- Interest in learning new techniques, keeping accurate records, following instructions, and complying with company policies.
+- Support development and validation of AI-driven assay development tools and experimental design templates in collaboration with software teams.
+- Knowledge of emerging reagents, immunoassay technologies, biomarker discovery, assay prototyping, performance optimization, and control system design.
+- Experience in electronic health record (EHR) data, real-world evidence (RWE), and/or neurology, pediatric, or neonatal research is highly desirable - Experience with clinical research involving AI-enabled medical devices or SaMD is a plus
+If you are an HCP and we pay or reimburse your recruiting expenses as a result of interviewing with Ceribell, your name, address and the amount of payments made may be reported to the government.
+- Prior experience with automated liquid handling systems (Opentrons, Hamiliton STAR, DragonFly, Tecan systems).
+provide clear instructions and ongoing guidance.
+Calico (Calico Life Sciences LLC) is an Alphabet-founded research and development company whose mission is to harness advanced technologies and model systems to increase our understanding of the biology that controls human aging.
+- BS/MS degree in physiology, biology, genetics, neuroscience or a related field, with 8+ years (BS) or 6+ years (MS) of extensive experience with in vivo mammalian model systems - Proficiency in mammalian in vivo experiments and primary cell isolation and culture;
+If you are detail-oriented, analytical, and motivated to make an impact, you will find meaningful opportunities to learn and contribute as the company continues to grow.
+- Responsible for the operation of automated laboratory equipment to support the processing of samples.
+- Experience with troubleshooting and maintenance of instrumentation platforms and automated integrated systems.
+- Publication record and/or patents in induced proximity or targeted degradation space - Experience with computational tools for ternary complex prediction or AI/ML-driven drug design - Familiarity with a broad range of non-degradative modalities beyond classical bifunctional degraders (e.g., glues, LYTACs, AUTACs, MrTACs, RIPTACs, TCIPs, Tracers, DACs)
+- Proficient in Microsoft Word (including the use of templates), Microsoft Copilot, Excel, Adobe Acrobat, MS Project/Project Server, and PowerPoint.
+- Preferred: - Very comfortable with generative AI tools (e.g., ChatGPT, Claude, Copilot, Perplexity) through regular personal or professional use, and eager to apply them to regulatory and scientific writing.
+Prior experience using AI for medical writing is not required, but candidates should be able to learn quickly how to use these tools in drafting, summarizing, comparing documents and quality control, while checking all AI-generated content against source documents to maintain accuracy, traceability and compliance.
+- Contribute to SOPs and work instructions for SRDs, Medical Information, and grants.
+Quality Management System
+- Maintain the established Quality Management System (QMS) in accordance with applicable standards and company procedures.
+- Coordinate training related to quality system procedures and requirements.
+- Skilled in assay development using primary cells or iPSC-derived cells, with experience in at least one renal, cardiac, or hepatic model.
+- Experience scaling automated screening workflows in close partnership with lab automation engineers.
+Our mission is to develop therapies that empower the immune system to combat neurodegeneration and our team is focused on developing treatments for some of the most challenging diseases facing our society.
+Collaborate across Biology, ADPE, and Preclinical teams while identifying opportunities to integrate innovative technologies, especially AI, to expedite programs, improve scientific workflows, and save valuable resources.
+- You are an active user of large language models (LLMs) and have a strong interest in evolving AI technologies and how they can improve scientific research and productivity.
+- Participate in medical education for healthcare professionals (HCPs) through virtual/on-site presentations at healthcare institutions, investigator meetings, national/international conferences, advisory boards, or regional meetings.
+In this role, you will develop and optimize automated workflows to support cell line development, contribute to pipeline projects, and conduct experiments to improve the performance of our optogenetic Chinese Hamster Ovary (CHO) cell lines.
+If you're excited by the opportunity to help shape a young brand from the ground up, and passionate about building something with purpose, you'll feel right at home here.
+- Own system suitability criteria, control standards, and performance trending for our highest volume characterizations.
+- Enter all existing and new study protocols into the Institutional Review Board (IRB) online system;
+seek assistance on maintaining all protocols in the system by communicating with IRB Analysts.
+- Fluency in the usage of Institutional Review Board (IRB) online iMEDris system for submission, renewal, and modification of protocols through this system.
+coordinate staff work schedules, assist with training of Assistant CRCs, and assist Clinical Research Supervisor and/or PI with oversight of other research staff;
+- Enter all existing and new study protocols into the Committee on Human Research (CHR) online system;
+seek assistance on maintaining all protocols in the system by communicating with CHR Analysts.
+Obtains patient vital signs utilizing automated equipment.
+Responsible for ECG archive system duties including:
+Educates on cardiac testing: Explain stress acquisition system and/or processed data to faculty, house staff, fellows and visitors.
+It is the only campus in the 10-campus UC system dedicated exclusively to the health sciences.
+- Identify potential study issues and communicate concerns promptly to the appropriate supervisor.
+Under supervision and guidance, administer and score standardized neuropsychological assessments of memory and cognitive function, following established procedures for test instructions, presentation order, timing, discontinuation criteria, and allowable prompts and repetition
+coordinate staff work schedules, assist with training of Assistant CRCs and other team members, and assist Clinical Research Supervisor and/or PI with oversight of other research staff;
+coordinate recruitment and data collection for multi-site studies in the VA system;
+The fields of Microbiology and Immunology encompass many aspects of human health, and a goal of our research is to further the basic understanding of microbes and the immune system, as well as translate this knowledge into improvement of human health.
+To maintain, troubleshoot and operate (TLA) Total Lab Automation system.
+To monitor and operate TUG sample delivery system.
+Attaining this level of performance will require instruction from Supervisors and/or person(s) designated by the Supervisor as well as capability and initiative on the part of the employee.
+2.Make the proper cups for the appropriate tests with the correct additives, andprocess, package for send-out and store specimens in accordance with label andLaboratory Manual instructions.
+5.Handle the specimen as directed by the lab manual instructions.
+Follow instructions (posted on label printer) for processing STAT and routine orders on the same specimen.
+Task F: Responses to Inquiries/Communications: 1.Communicate non-technical information (such as collection instructions and turn-around times, test results, etc.) obtained from the Laboratory Manual, the in- andout-patient price files, the laboratory computer and requisitions.
+Package specimens according to the instructions on the computer-generated label with the aid of the Laboratory Manual as needed.
+Task I: Computer Crashes: Process specimens when the computer system is not functioning, following instructions in the written internal crash plan, processing specimens correctly without aid of computer labels and forwarding them to the proper testing sections, and writing patient/test information on all pour-off tubes.
+Follow these instructions except where given prior approval to dootherwise by your supervisor.
+Receives in lab system manually and delivers samples to departments.
+Automation Track Troubleshooting Identifies automation track system errors.
+Follows manual procedure of pulling samples from storage system if storage module is not operational.
+Standards: 1.Follows instructions from the automation system screen when recovering an automation track system error.
+Task L: PTS (Pneumatic Tube System) Responsible of making sure the PTS (Pneumatic Tube System) bin is not full and consistently unloads PTS tube carriers.
+Separates out samples with paper order requisition for manual receiving in the lab system.
+Task M: TUG Autonomous Robot (Sample Delivery System): Continuously monitors, operates and troubleshoots TUG robot delivery system throughout the shift.
+Recovers the TUG robot on the floor if it gets stuck on the hallway, doorway or elevator.
+The UCSF Department of Neurology is seeking a Laboratory Assistant to provide hands-on support for routine laboratory operations and organization.
+The Laboratory Assistant will also help change formalin, xylenes, ethanol, and sucrose solutions and perform other general laboratory duties as needed.
+assist with training of Assistant CRCs help assure compliance with all relevant regulatory agencies;
+- Mentor clinical research coordinators and assistants, and help them successfully perform functions including recruitment, scheduling, visit management, subject characterization, and data entry.
+- Provide guidance to clinical research coordinators and assistants, and help them successfully perform functions including recruitment, scheduling, visit management, subject characterization, and data entry.
+- Fluency in the usage of Committee of Human Research (CHR) online iMEDris system for submission, renewal, and modification of protocols through this system.
+Enters patient data and test requests into the laboratory information system.
+- Prioritization of blood, urine, stool, and body fluid specimens as they are delivered to the laboratory through a pneumatic tube system or messengers, based on ordered priority or stability requirements, as STAT or routine.
+- Communicate with a supervisor and engineering when there are issues with the pneumatic tube system.
+- Uses a multi-line telephone system to answer and transfer incoming calls into the laboratory.
+Uses the overhead paging system or takes messages as needed.
+- Answers questions and communicates information obtained from the Clinical Lab Processing Guide (e.g., specimen collection requirements and instructions, turnaround times.
+Reads patient test results found in the laboratory computer system (Epic-Beaker) to hospital healthcare providers.
+- Provides specimen containers and gives instructions for the collection of random urine, clean catch urine, 24-hour urine collections (with or without preservatives), and stool specimens for bacteriology and parasitology.
+- Provides specimen containers and gives instructions for the collection of random urine, clean catch urine, 24-hour urine collections, urine AFB, and stool specimens for bacteriology and parasitology.
+- Troubleshoots and addresses issues with samples and workflow accordingly and promptly - Performs emergency, routine, and scheduled preventive instrument maintenance in accordance with procedures.
+- Document and communicate all instrument issues and corrective action/s promptly and accurately to team members, specialist/s, and supervisor/s.
+- Review and add tests appropriately, promptly, manually, and/or using LIS tools and capabilities.
+- Promptly and effectively follows through on issues.
+- Perform all Quality Assurance (QA) tasks as indicated by job assignments and/or as directed by supervisor and/or management - Document and communicate all QA issues and corrective action/s promptly and accurately to team members, specialist/s, and supervisor/s.
+- Maintains and submits laboratory, institution, and state requirements in a prompt and timely manner.
+Continues to efficiently perform duties and responsibilities as assigned when the Lab or Hospital information system is not functioning
+coordinate staff work schedules, assist with training of Assistant CRCs and other CRC team members, and assist Research Personnel Manager and/or PI with oversight of other research staff;
+The role includes managing investigator protocols within the Committee on Human Research (CHR) online system, including renewals, modifications, and new study submissions.
+assisting in training Assistant CRCs;
+coordinate staff work schedules, recruit and train Assistant CRCs for the research team, and assist the Clinical Research Supervisor and/or PI with oversight of other research staff;
+Operating and maintaining core equipment (cryostat, automatic tissue processor, Ventana automated immunostrainer, liquid nitrogen storage systems, tissue embedder, and microtome).
+- Competency with MS Access - Experience operating with the Ventana Automated Immunostainer - Experience working with human biospecimens - Experience working in a CLIA laboratory and understanding the importance of maintaining patient confidentiality - Experience with tissue collection, preparation and other related logistics for clinical trials
+The goals are to increase industry-sponsored research, create a system that will assist a physician within the division to operationalize an investigator-initiated study, and to develop a general cardiology cohort study.
+assist with training of Assistant CRCs, and assist Clinical Research Supervisor and/or PI with oversight of other research staff;
+The role: BigHat Biosciences is seeking a self-motivated individual for a Research Associate I, Production role to power our high-throughput, automated platform for antibody production and deep molecular characterization.
+- Perform automated and manual high-throughput processing on the BigHat platform, including DNA preparation, protein expression, and protein characterization.
+- Operate automated liquid handlers and analytical instruments to ensure all lab and platform operations run efficiently.
+- Hands-on experience with, or interest in, automated liquid handlers (e.g.
+The role: BigHat Biosciences is looking for a hands-on, bench-driven scientist to perform IND-enabling developability assessments on late stage drug candidates from our Milliner Platform for AI-designed therapeutics.
+The Role: BigHat Biosciences is looking for a hands-on, bench-driven scientist to drive antibody developability assessments that advance our Milliner Platform for AI-designed therapeutics.
+The role: BigHat Biosciences is seeking a self-motivated individual for a Research Associate II, Production role to power our high-throughput, automated platform for antibody production and deep molecular characterization.
+We work as a team, using clear goals, open communication, and direct feedback to make autonomous decisions with the bigger picture in mind.
+- Higher-throughput, plate-based workflows or automated liquid handling.
+Your first CRO study will be launched, with you owning vendor selection, scope and data acceptance criteria, and you will have agreed with our ex vivo team and disease lead on the human system, readouts and proof-of-mechanism criteria for your first target.
+We are committed to strong clinical investigations including the evaluation of new pharmacologic agents, which offer potentially promising therapeutic benefits, as well as outcome studies which characterize clinical parameters to effect positive changes in patient care.
+- Formally supervise, train, and/or mentor new staff or students, as assigned, potentially including hiring, preparing or assisting with the preparation of performance evaluations, and performing related duties, in addition to instruction on project work.
+- Enter, manage, and track participant data in secure study databases accurately and promptly.
+general instruction is provided by the supervisor.
+Its research spans the molecular and cellular biology of the visual system, the function of retinal and cortical circuits, and computational and systems neuroscience.
+This position is part of the Enigma Project (enigmaproject.ai), a large-scale interdisciplinary initiative based at Stanford University focused on recording and decoding the brain at the highest coverage and resolution technically feasible today.
+- Design and run in-silico experiments on brain foundation models to explore model behavior, characterize neural tuning and population structure, and generate predictions about the biological system.
+- Analyze large-scale neural activity and behavioral data using statistical, machine learning, and population-geometry methods, and evaluate model predictions against experimental data.
+- Work with the experimental team to identify, prioritize, and design validation experiments, including model-guided and closed-loop paradigms.
+- Work with agentic AI tools and AI scientists to automate analyses and scale hypothesis generation and evaluation.
+- Deep understanding of visual neuroscience, including the anatomy, physiology, and computational principles of the visual system, and command of the relevant primary literature.
+- Experience working with encoding models or digital twin models of neural activity, and with model-guided or closed-loop experimental design.
+The Stanford Digital Brain Project is a five-year, multi-investigator initiative to build a foundation model of the healthy adult human brain.
+Train and mentor research assistants, graduate students, postdoctoral fellows, and other laboratory personnel in electrophysiology, patch clamp, calcium imaging, experimental design, data analysis, and rigorous scientific practices.
+- Proficiency in using computers, software, AI tools, RedCap, and web-based applications in a previous administrative setting.
+provide instruction on routine basis;
+mentoring and training of staff and assistance with preparation of performance evaluations for staff who do not directly report to this role, and performing related duties, in addition to instruction on project work.
+Professor Scott Sagan is seeking a tenacious research assistant with first-rate analytical capabilities and outstanding academic credentials to conduct social science research, draft reports, support teaching and lecture activities, and assist with a range of administrative needs.
+Past research assistants in the position have gone on to PhD programs in Political Science at MIT, Stanford, Harvard, and UCSD;
+The research assistant will work directly with Dr.
+General instruction provided by the supervisor as needed.
+Reporting to the Assistant Director of the Biosafety & Biosecurity group of EH&S and with limited supervision you will ensure the safe use of campus biological agents, recombinant DNA and biohazards in accordance with Cal OSHA, NIH Guidelines and other applicable regulations.
+Working with other members of the Biosafety team you will review Clinical Gene Transfer trials using recombinant nucleic acids or infectious agents in preparation for the Administrative Panel on Biosafety, including communication with the Stanford University IRB as needed.
+The ultimate goal of this work is to identify new treatments for human disease, especially cancer and immune system malfunction.
+Stanford University is seeking an Assistant Clinical Research Coordinator to perform administrative support duties related to the collection of clinical data and/or the coordination of clinical studies.
+- Participate in system integration, testing, commissioning, and performance optimization.
+- Oversee system to ensure that product safety issues and product-associated events are reported to regulatory agencies.
+- Experience working in a broader enterprise/cross-division business unit model.
+- Participating in occasional travel for in-person instruction and live procedure coverage.
+The Associate Quality Specialist is responsible for administrative and tactical activities that support the efficient functioning of Quality Assurance and the Quality System.
+- Responsible for implementing and maintaining the effectiveness of the Quality System.
+- Participate in Quality System processes which may include training, corrective action and preventive action (CAPA) - activities, equipment maintenance, product and process planning, quality audits, validation.
+- Knowledge of FDA Quality System Requirements and other applicable US Code of Federal - Regulations for Devices.
+Activities will involve using ERP system (e.g.
+This position will work independently to provide quality assurance oversight pertaining to Document Management and Training in the Master Control Quality Management System (QMS).
+- Provide user assistance, training, and oversight on document control and record management systems, processes, and procedures - Strong working knowledge of GMP practices and how they might apply to SOPs, work instructions, and controlled records - Perform administrative tasks to maintain both the electronic document management system.
+document formatting, SOP style consistency, clear and concise wording, document change controls, etc.) - Strong understanding of version and revision control for a variety of controlled document types - Assist users with formatting documents such as SOPs, work instructions, or quality agreements using approved templates and finalizing controlled forms.
+- Proficient in Microsoft Word formatting including styles, pagination, section breaks, headers and footers, table properties, attachments, and page layouts - Strong grasp of GxP training program requirements, including role-based training, curricula hierarchy, instructor led training, and training assignments - Ability to promptly respond to email inquiries and user support.
+You will connect rigorous experimental biology with human data, computation, AI, automation, and emerging technologies to accelerate high-quality decisions from target discovery through early development.
+- Continuously apply AI-enabled, computational, agentic, and data-science approaches to synthesize evidence, generate mechanistic insights, prioritize experiments, and improve the speed and quality of scientific decision-making.
+- Demonstrated experience using AI-enabled tools, machine learning, computational biology, agentic research workflows, advanced analytics, or data integration to generate and test biological hypotheses.
+You will define and execute integrated strategies that connect human biology, computation, AI-enabled reasoning, preclinical models and experimental testing to improve the quality, speed, and scalability of therapeutic discovery.
+- Computational expertise: Leverage AI-enabled analytical approaches such as machine learning and agentic workflows to synthesize literature and internal data, identify therapeutic mechanisms, prioritize targets, understand variants biology, design experiments, and continuously refine scientific models.
+- Experience using AI-enabled tools, agentic workflows, advanced analytics, quantitative modeling, or multimodal data integration to generate and test biological hypotheses.
+If you're energized by turning ideas into products that reach store shelves and consumers' homes, we'd love to meet you.
+- Perform Quality review of clinical and commercial batch records and supporting documentation to ensure compliance with cGMP requirements, approved manufacturing instructions and regulatory filings.
+- Review and approve deviations, investigations, CAPAs, change controls and associated Quality Management System records to ensure timely resolution and appropriate root cause analysis.
+- Review and approve GMP documentation including Standard Operating Procedures (SOPs), Master Batch Records, specifications, protocols, reports and work instructions.
+- Ensure compliance with Cytokinetics Quality Management System requirements, cGMP regulations and applicable global regulatory expectations.
+- Maintain GMP documentation and Quality records within the electronic Quality Management System (eQMS).
+- Experience managing or reviewing deviations, investigations, CAPAs, change controls and other Quality System records.
+If you are excited about what you could accomplish at Cytokinetics and believe you can add value to our team, we would love to hear from you.
+We are seeking a highly motivated computational scientist to lead translational biomarker discovery at the intersection of human genetics, multi-omics, and AI/ML.
+This is a hands-on computational leadership role for a scientist excited to apply modern AI/ML to human data in muscle disease.
+The biopharmaceutical industry is undergoing a transformation, requiring advanced digitalization to adopt data- and AI-driven approaches and develop innovative therapies quicker.
+Learn about the Danaher Business System which makes everything possible.
+This role will also contribute to establishing the internal quality framework including developing quality documentation and implementation of an electronic document management system (EDMS) and quality modules.
+- Support efforts to implement and utilize the internal electronic document management system.
+- Perform hands-on mammalian cell culture, transient transfection, engineered cell model development, receptor-expression confirmation, and assay-ready cell support.
+- Evaluate assay performance, robustness, system suitability, relative potency, parallelism, and critical assay parameters to enable phase-appropriate method qualification and transfer.
+- Guide the LVV control strategy, including identity, vector genome titer, infectious titer, potency or functional activity, purity, residuals, replication-competent lentivirus testing, adventitious agent safety, sterility, endotoxin, appearance, stability, and reference standard strategy, as applicable.
+The company is focused on chimeric antigen receptor (CAR) and T cell receptor (TCR) engineered cell therapies designed to empower the immune system's ability to recognize and kill tumors.
+- Working knowledge of computer system validation, data governance, data science, knowledge management, and data protection.
+- Organize, prepare, and maintain critical reagents with appropriate system suitability criteria.
+- Working knowledge of laboratory automation, computer system validation, data governance, data science, knowledge management, and data protection.
+As a Senior Scientist, HIV Discovery Virology, at Gilead you will work in a highly collaborative and dynamic research environment to support the discovery and development of novel long-acting agents for HIV treatment and prevention.
+Primary responsibilities will include leading a wide breadth of preclinical studies to characterize investigational small and/or large molecule therapeutic agents, as well as evaluating new targets and therapeutic strategies in a fast-paced team environment.
+- Author and maintain Pilot Lab work instructions and standard operating procedures.
+- Create Inclusion: Know the business value of diverse teams, model inclusion, and embed the value of diversity in how teams are managed.
+- Perform data-based review of CTL raw data packages, including verification of method conditions, sample and standard preparation, reference standard use, system suitability, representative chromatograms, and calculation accuracy;
+- Use lab information management system (LIMS) to verify accurate transcription of results against CTL documents and specifications, complete test- and sample-level review and authorization, review audit trails, and generate provisional CoAs, Stability Summary Reports, and Analytical Reports.
+- Use electronic documentation management system to retrieve, review, and accept CTL CoAs, stability reports, raw data packages, specifications, and test methods;
+- Contribute to continuous improvement of data review processes and electronic system workflows, including authoring or revising SOPs, work instructions, and job aids and supporting system changes and user testing.
+Beyond operational stewardship, the Manager will contribute to the continued development of CMC Regulatory Affairs data and content capabilities through data quality initiatives, process development, governance, system and solution testing, and cross-functional projects.
+- Perform routine and targeted data quality reviews, identify discrepancies or gaps, investigate potential root causes, and coordinate resolution with appropriate data owners, process owners, and system stakeholders.
+- Serve as a data and content subject matter contributor to CMC Regulatory Affairs and PDM-wide process, system, digital, and data initiatives.
+- Build knowledge of emerging approaches to regulatory data, structured content, automation, and artificial intelligence and contribute to initiatives that make regulatory information increasingly structured, governed, traceable, reusable, and AI-ready.
+- Experience participating in process design, requirements gathering, system testing, user acceptance testing, or implementation activities is desirable.
+- Strong collaboration and communication skills with the ability to work effectively with subject matter experts, process owners, system teams, and stakeholders across functions.
+- Create Inclusion: Understand the business value of diverse teams, model inclusion, and embed the value of diversity in how teams are supported and led.
+The enormous quantities of genomic data being generated by Illumina in collaboration with our partners worldwide represents a major opportunity to develop novel data-driven and artificial intelligence methods to extract clinically actionable information from the genome, and apply it towards improving human health.
+Illumina prohibits the use of generative artificial intelligence (AI) in the application and interview process.
+We are searching for the best talent for a Senior Regulatory Affairs Program Lead to support our OTTAVA robotics group.
+Under minimal supervision, the selected candidate will lead regulatory strategy development and execution for the robotic systems portfolio.
+If you are an individual with a disability and would like to request an accommodation, please contact us via https://www.jnj.com/contact-us/careers or contact AskGS to be directed to your accommodation resource.
+Labcorp is seeking a Lab Assistant to join our Monogram Biosciences team in South San Francisco, CA!
+Labcorp is seeking a Lab Assistant to join our team in Dublin, OH.
+If you are passionate about helping people and have a drive for service, then Labcorp could be a great next career step!
+If you are an individual with a disability who needs assistance using our online tools to search and apply for jobs, or needs an accommodation, please visit our accessibility site or contact us at Labcorp Accessibility.
+- Familiarity with machine learning, AI, or quantitative biomarker development.
+We are seeking an innovative scientific leader to develop and advance automated workflows for antibody discovery and characterization in South San Francisco.
+- Hands on experience with automated liquid handling platforms, such as the Hamilton Microlab STAR, robotic arms, and related automation software, including method programming, configuration, and troubleshooting.
+- Experience training laboratory users, standardizing automated methods, and overseeing safe and compliant laboratory operations.
+Antibodies, Antibody Discovery, Automation, Cell-Based Assays, ELISA Techniques, Flow Cytometry, Laboratory Automation, Laboratory Robotics, Laboratory Techniques, Liquid Handling, People Management, Robotic Liquid Handlers, Team Supervision
+- Experience utilizing AI/ML to support discovery strategy initiatives
+eTMF - Assist with eTMF reconciliation - Execute eTMF Quality Control Plan - Update manuals/documents (e.g., patient diaries, instructions) - Document proper destruction of clinical supplies.
+Research Assistant, Applications Lab
+We are seeking a Research Assistant to support laboratory operations, including DNA and RNA library preparation, sequencing on the PacBio HiFi systems, and troubleshooting experiments.
+As a Research Assistant in PacBio's Applications Lab, you will support sequencing projects for internal teams and external customers.
+- The interview seems to involve AI video or audio.
+- Ignore it if it seems like a scam.
+- Lead continuous quality improvement initiatives, authoring and maintaining standard operating procedures (SOPs), working instructions, and auditor-ready training curricula.
+Responsibilities include culturing and characterizing advanced cellular models, designing and executing model development and qualification studies, establishing functional and phenotypic assays, analyzing and interpreting complex datasets, and maintaining rigorous, high-quality documentation.
+- Collaborate closely with multidisciplinary teams within and outside gRED to align model development and experimental strategies with program needs.
+- Demonstrated ability to work across disciplines and rapidly learn and implement new biological model systems.
+- Experience with automated high-content screening hardware and software (e.g., ImageXpress Micro, IncuCyte, MetaXpress, InCarta).
+- Design and implement translational research plans leveraging clinical samples, multi-omic profiling, spatial biology, single-cell technologies, functional immune assays, and emerging AI-enabled analytical approaches, including agentic AI tools, to uncover mechanisms of response, resistance, tumor microenvironment interactions, and disease evolution.
+This is a hands-on position for a scientist passionate about assay development as well as engaging in state-of-the-art computational tools, including and especially AI.
+- Computational Methods: Collaborate with computational biologists and AI scientists to develop approaches for integrating and interpreting multimodal data, and explore predictive modeling strategies to power Lab-in-the-Loop.
+- Automation: Use liquid handling automation to execute automated sample preparation workflows, including protein precipitation, liquid-liquid and solid-phase extraction, and chemical derivatization.
+- Data & AI Workflows: Execute mass spectrometry data processing and statistical analysis leveraging in-house AI/ML workflows and commercial software tools to scale analysis and reporting.
+- Metabolic & Computational Insight: Solid foundation in biochemistry, cellular metabolism, coupled with hands-on experience or strong aptitude using Generative AI tools for coding - Collaboration & Communication: Excellent communication skills with a proven track record of working effectively in multidisciplinary project teams.
+If you're ready to be part of our legacy of hope and innovation, we encourage you to take the first step and explore our current job openings.
+- Accessions patient information into Laboratory information system(s).
+- Provides training and orientation to new Lab Assistants.
+- Know Me: Anticipate my needs and status to deliver effective care - Show Me the Way: Guide and prompt my actions to arrive at better outcomes and better health - Coordinate for Me: Own the complexity of my care through coordination
+If you are hungry for growth and eager to leave your mark, this is the place for you.
+Ideal candidate will have demonstrated experience and sourcing success within any of the med-surg or PPI categories within a large health system or an academic medical center.
+Monitors and evaluates contract volume, supply chain information system performance, purchasing volume and flow, and value based selection reporting and outcomes;
+- Preferred: Supply chain management or category management experience with a hospital or healthcare system.
+Experience in critically evaluating genetic data, research publications and online resources - Experience in databases, tools, and resources commonly used in human or model organism genetics and genomics required (e.g.
+These openings are part of a Functional Service Outsourcing (FSO) model.
+Please only apply if you are interested in this model as opposed to being Sponsor dedicated.
+Clinical Trial Management System).
+- Identify opportunities to apply emerging technologies, including AI and machine learning, to improve product performance, development processes, or customer experience.
+Clinical Trial Management System, CTMS).
+Performs QC check of reports generated from CTMS system where required.
+May have exposure to potentially hazardous elements, including infectious agents, typically found in healthcare or laboratory environments.
+Clinical Trial Management System (CTMS)).
+Normally receives general instructions on routine work, detailed instructions on new projects or assignments.
+As a Senior Clinical Research Associate I in our FSP model, you will be dedicated to one specific client, acting as a representative of the client while exercising strong communication and collaboration skills.
+- Performs QC check of reports generated from CTMS system where required.
+### Join the Future of Robotic Biomanufacturing!
+Multiply Labs is a robotics company on a mission to solve a significant bottleneck in modern medicine: the manufacturing of life-saving advanced biologics, from gene and cell therapies to antibodies and more.
+Robotics and AI are making automated biologics manufacturing feasible, reliable, and economically scalable.
+- The Technology: Advanced robotic orchestration, high-precision automation, cloud-integrated hardware-software systems, dextrous manipulation, and imitation learning.
+To learn more and to view a video of our robots in action, visit us at www.multiplylabs.com and follow us on LinkedIn.
+- 5+ years of hands-on experience in a machine shop, R&D lab, or rapid prototyping environment within the robotics or medical device industry.
+- Hands-on experience with automated liquid handling systems for assay development and execution - Experience troubleshooting and communicating issues - Advanced data analysis skills using Excel and statistical software packages;
+- Lead cross-functional project teams (including Data Science, AI/ML, Engineering, Protein Sciences, Automation) on the execution of rapid, iterative multi-objective optimization to identify high-value therapeutic antibodies through gold-standard assays.
+regulatory archive logs, record new submissions, and file health authority correspondence and partner documentation promptly and accurately.
+Track time-point completion and documentation status, communicate upcoming milestones, and promptly escalate missed pulls, storage excursions, or other discrepancies.
+Ability to coordinate requirements with clients, internal teams, and external laboratories, communicate changing priorities promptly, and resolve scheduling and documentation issues collaboratively.
+- Proficient in Laboratory Information System (LIMS), fleet management software, computer skills, including MS Office suite.

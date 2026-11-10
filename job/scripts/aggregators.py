@@ -376,9 +376,9 @@ class Parser(argparse.ArgumentParser):
 
 
 def main(argv=None):
-    ap = Parser(description="Aggregator lanes (job_skill v1.2 runner).")
+    ap = Parser(description="Aggregator lanes (job_skill v1.2 runner).", allow_abbrev=False)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    r = sub.add_parser("run", help="run every enabled aggregator lane")
+    r = sub.add_parser("run", help="run every enabled aggregator lane", allow_abbrev=False)
     r.add_argument("--root", required=True)
     r.add_argument("--offline", help="fixture folder with index.json instead of the network")
     r.add_argument("--keys", help="keys.toml path (default %%LOCALAPPDATA%%\\JobRunner\\keys.toml)")

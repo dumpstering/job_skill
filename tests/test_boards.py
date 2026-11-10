@@ -43,8 +43,12 @@ SPECS = {
     "dayforce:asburyauto": "dayforce:asburyauto/ASBURYCAREERSITE", "jobvite:sutrobio": "jobvite:sutrobio",
     "jazzhr:buckinstitute": "jazzhr:buckinstitute", "phenom:abbvie": "phenom:abbvie@careers.abbvie.com",
     "recruitee:acmebio": "recruitee:acmebio",
+    # round 4 career sites (R7): SuccessFactors table and tile layouts, TalentBrew, SelectMinds
+    "successfactors:bayer": "successfactors:bayer@jobs.bayer.com",
+    "successfactors:boehringer": "successfactors:boehringer@jobs.boehringer-ingelheim.com",
+    "talentbrew:kp": "talentbrew:kp@www.kaiserpermanentejobs.org", "selectminds:lbl": "selectminds:lbl@jobs.lbl.gov",
 }
-UNDATED = {"rippling", "pinpoint", "manatal", "comeet"}  # first_seen after 2 polls (3.10)
+UNDATED = {"rippling", "pinpoint", "manatal", "comeet", "selectminds"}  # first_seen after 2 polls (3.10)
 ISO = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
@@ -733,6 +737,241 @@ def test_jazzhr_page_without_jsonld():
     shutil.rmtree(tmp)
 
 
+def poll_root(tmp, rows):
+    root = tmp / "JobSearch"
+    (root / "config").mkdir(parents=True)
+    (root / "state").mkdir()
+    (root / "config" / "watchlist.csv").write_text("employer,ats,board,host,status\n" + "".join(
+        r + "\n" for r in rows), encoding="ascii")
+    return root
+
+
+def test_retry_once_at_end_of_poll():
+    """L3-01: a board whose list call times out (or loses its connection) is
+    read once more after the other boards. An answer then is no strike and
+    its postings count; a second failure is the day's one strike and
+    error_lines() names it for status.json. An HTTP error is not retried, and
+    a morning with no network at all retries nothing (the tick does)."""
+    tmp = Path(tempfile.mkdtemp())
+    try:
+        lever = "https://api.lever.co/v0/postings/slowbio?mode=json&skip=0&limit=100"
+        fx = tmp / "fx"
+        shutil.copytree(FIX, fx)
+        index = json.loads((fx / "index.json").read_text(encoding="ascii"))
+        index[lever] = [{"error": "api.lever.co: timed out"}, {"file": "lever_synthego.json"}]
+        (fx / "index.json").write_text(json.dumps(index), encoding="ascii")
+        root = poll_root(tmp, ["Vaxcyte,greenhouse,vaxcyte,,active", "Slow Bio,lever,slowbio,,active"])
+        lines = []
+        results = boards.poll(root, fetcher=fetcher(fx), details=False, emit=lines.append)
+        assert "BOARD lever:slowbio ERROR api.lever.co: timed out" in lines, lines
+        retry = [ln for ln in lines if ln.startswith("RETRY ")]
+        assert retry == [f"RETRY BOARD lever:slowbio OK {EXPECTED['lever:synthego']['n']} postings pages=1 stop=short"], \
+            lines
+        slow = [r for r in results if r.spec.board == "slowbio"][0]
+        assert slow.status == "OK" and slow.readings and boards.error_lines(results) == [], boards.error_lines(results)
+        health = boards.load_health(root)["lever:slowbio"]
+        assert health["consecutive_errors"] == "0" and health["last_error"] == "", health
+        # fails twice: one strike, named for status.json
+        index[lever] = {"error": "api.lever.co: <urlopen error [WinError 10060] connection timed out>"}
+        index["https://boards-api.greenhouse.io/v1/boards/flaky/jobs?content=true"] = {"status": 500}
+        (fx / "index.json").write_text(json.dumps(index), encoding="ascii")
+        root2 = poll_root(tmp / "b", ["Vaxcyte,greenhouse,vaxcyte,,active", "Slow Bio,lever,slowbio,,active",
+                                      "Flaky,greenhouse,flaky,,active"])
+        f = fetcher(fx)
+        lines = []
+        results = boards.poll(root2, fetcher=f, details=False, emit=lines.append)
+        assert [ln for ln in lines if ln.startswith("RETRY ")] == [
+            "RETRY BOARD lever:slowbio ERROR api.lever.co: <urlopen error [WinError 10060] connection timed out>"], lines
+        lever_calls = [u for m, u in f.offline.requests if u == lever]
+        flaky_calls = [u for m, u in f.offline.requests if "/boards/flaky/" in u]
+        assert len(lever_calls) == 2 and len(flaky_calls) == 1, (lever_calls, flaky_calls)  # HTTP 500: no retry
+        assert boards.error_lines(results) == [
+            "board lever:slowbio: api.lever.co: <urlopen error [WinError 10060] connection timed out>",
+            "board greenhouse:flaky: HTTP 500 from boards-api.greenhouse.io"], boards.error_lines(results)
+        health = boards.load_health(root2)
+        assert health["lever:slowbio"]["consecutive_errors"] == "1", health["lever:slowbio"]
+        # a robots.txt that did not answer is asked again on the retry (DENY robots-unreachable)
+        index["https://boards-api.greenhouse.io/robots.txt"] = [{"error": "boards-api.greenhouse.io: timed out"},
+                                                                 {"status": 404}]
+        (fx / "index.json").write_text(json.dumps(index), encoding="ascii")
+        lines = []
+        results = boards.poll(poll_root(tmp / "r", ["Capmo,personio,capmo,,active",
+                                                    "Vaxcyte,greenhouse,vaxcyte,,active"]),
+                              fetcher=fetcher(fx), details=False, emit=lines.append)
+        assert "BOARD greenhouse:vaxcyte DENY robots-unreachable boards-api.greenhouse.io" in lines, lines
+        assert any(ln.startswith("RETRY BOARD greenhouse:vaxcyte OK 3 postings") for ln in lines), lines
+        # no network at all: nothing is retried
+        nonet = tmp / "nonet"
+        nonet.mkdir()
+        (nonet / "index.json").write_text(json.dumps({
+            "https://api.lever.co/robots.txt": {"status": 404},
+            lever: {"error": "api.lever.co: timed out"},
+            "https://boards-api.greenhouse.io/robots.txt": {"status": 404},
+            "https://boards-api.greenhouse.io/v1/boards/vaxcyte/jobs?content=true": {"error": "x: timed out"}}),
+            encoding="ascii")
+        lines = []
+        boards.poll(poll_root(tmp / "c", ["Vaxcyte,greenhouse,vaxcyte,,active", "Slow Bio,lever,slowbio,,active"]),
+                    fetcher=fetcher(nonet), details=False, emit=lines.append)
+        assert not any(ln.startswith("RETRY ") for ln in lines) and any("WARN offline" in ln for ln in lines), lines
+    finally:
+        shutil.rmtree(tmp)
+
+
+def test_retry_waits_and_reads_the_cause():
+    """The retry waits until RETRY_GAP seconds after the failure (live runs
+    only), and transient() reads the exception's cause chain: a timeout, a
+    reset connection, an unresolved name or HTTP 502/504 are retried; a
+    policy refusal, HTTP 500 or an odd answer are not."""
+    spec = boards.parse_spec("lever:slowbio")
+    calls, slept = [], []
+
+    class Live:
+        offline = None
+
+        def sleep(self, s):
+            slept.append(s)
+    results = [boards.BoardResult(spec, "ERROR", "api.lever.co: timed out", retry=True)]
+    boards.retry_failed(results, [(0, 100.0)], lambda s: calls.append(s) or boards.BoardResult(s, "EMPTY"),
+                        Live(), lambda line: None, gap=30.0, clock=lambda: 110.0)
+    assert slept == [20.0] and calls == [spec] and results[0].status == "EMPTY", (slept, calls)
+    slept.clear()
+    boards.retry_failed([results[0]], [(0, 100.0)], lambda s: boards.BoardResult(s, "EMPTY"), Live(),
+                        lambda line: None, gap=30.0, clock=lambda: 200.0)
+    assert slept == [], slept  # the other boards took longer than the gap already
+
+    def chained(cause):
+        try:
+            raise cause
+        except Exception:  # noqa: BLE001
+            try:
+                raise netfetch.FetchError("example.com: something went wrong")
+            except netfetch.FetchError as e:
+                return e
+    import socket
+    from urllib.error import URLError
+    for cause in (TimeoutError("timed out"), ConnectionResetError(10054, "reset"), socket.gaierror(11001, "x"),
+                  URLError(TimeoutError("timed out")), ConnectionRefusedError(10061, "refused")):
+        assert boards.transient(chained(cause)), cause
+    for cause in (ValueError("odd"), KeyError("x")):
+        assert not boards.transient(chained(cause)), cause
+    for status, want in ((502, True), (504, True), (500, False), (404, False), (429, False)):
+        e = netfetch.FetchError(f"HTTP {status} from example.com")
+        e.status = status
+        assert boards.transient(e) is want, status
+    assert not boards.transient(netfetch.Denied("robots-unreachable example.com: timed out"))
+
+
+def test_career_site_readers():
+    """R7: SuccessFactors (table and tile layouts, paging by startrow up to
+    the site's own total, one search per location= place, the job page's
+    datePosted over the row's date), TalentBrew (only the home places' jobs,
+    by the city in the link; no-local when none) and SelectMinds (a gone
+    landing page is a WARN note; all gone is GONE). Keys hold only the R2
+    characters and carry the job's number, not its title."""
+    res, f = read("successfactors:bayer@jobs.bayer.com")
+    assert [rd.posting.job_key for rd in res.readings] == [
+        "successfactors:jobs.bayer.com:1452679733", "successfactors:jobs.bayer.com:1429392733",
+        "successfactors:jobs.bayer.com:1443944333"], res.readings
+    assert {rd.posting.posted_field for rd in res.readings} == {"jobDate"}
+    assert all(rd.posting.state == "CA" and rd.posting.city for rd in res.readings)
+    res, _ = read("successfactors:boehringer@jobs.boehringer-ingelheim.com")
+    assert [(rd.posting.posted, rd.posting.posted_field) for rd in res.readings] == [
+        ("2026-11-06", "datePosted"), ("2026-10-28", "datePosted")], res.readings
+    assert "Run assays" in res.readings[0].posting.text and "Job Segment" not in res.readings[0].posting.text
+    # paging and place searches on a synthetic site
+    tmp = Path(tempfile.mkdtemp())
+    try:
+        host = "careers.example.com"
+        row = ('<tr class="data-row"><td><a href="/job/Springfield-Lab-Tech-{i}/{jid}/" class="jobTitle-link">'
+               'Lab Tech {i}</a></td><td class="colLocation"><span class="jobLocation">Berkeley, CA, US</span></td>'
+               '<td class="colDate"><span class="jobDate">Nov {d}, 2026</span></td></tr>')
+        label = '<span class="paginationLabel" aria-label="x">Results <b>1 - 2</b> of <b>3</b></span>'
+        pages = {
+            0: label + row.format(i=1, jid=9000001, d=3) + row.format(i=2, jid=9000002, d=2)
+            + '<tr class="data-row"><td><a href="javascript:alert(1)/job/x/9000009/" class="jobTitle-link">X</a></td></tr>'
+            + '<tr class="data-row"><td><a href="https://elsewhere.example.net/job/x/9000008/" class="jobTitle-link">'
+              'Y</a></td></tr>',
+            2: label + row.format(i=3, jid=9000003, d=1)}
+        index = {}
+        for start, body in pages.items():
+            (tmp / f"p{start}.html").write_text(body, encoding="ascii")
+            for where in ("Berkeley", "San%20Francisco"):
+                index[boards.csb_search_url(host, "", where.replace("%20", " "), start)] = f"p{start}.html"
+        (tmp / "index.json").write_text(json.dumps(index), encoding="ascii")
+        spec = boards.parse_spec("successfactors:example@careers.example.com", "location=Berkeley|San Francisco")
+        f = fetcher(tmp, extra_hosts=(host,))
+        res = boards.read_board(spec, f, details=False, first_seen="2026-11-05")
+        got = [(rd.posting.title, rd.posting.posted) for rd in res.readings]
+        assert got == [("Lab Tech 1", "2026-11-03"), ("Lab Tech 2", "2026-11-02"), ("Lab Tech 3", "2026-11-01")], got
+        searched = [u for m, u in f.offline.requests if "/search/" in u]
+        assert len(searched) == 3 and searched[1].endswith("&startrow=2") and "San%20Francisco" in searched[2], searched
+        assert res.stop == "seen-ids", res.stop  # the second place listed the same jobs
+        # TalentBrew: home places only
+        spec = boards.parse_spec("talentbrew:kp@www.kaiserpermanentejobs.org")
+        res = boards.read_board(spec, fetcher(extra_hosts=(spec.host,)), places=["Oakland", "Pleasanton"],
+                                details=False, first_seen="2026-11-05")
+        assert sorted(rd.posting.title for rd in res.readings) == [
+            "Clinical Laboratory Scientist", "Research Specialist II Research Support"], res.readings
+        res = boards.read_board(spec, fetcher(extra_hosts=(spec.host,)), places=["Fresno"], details=False,
+                                first_seen="2026-11-05")
+        assert res.status == "EMPTY" and res.stop == "no-local", res.line()
+        # SelectMinds: one landing page gone is a note, all gone is GONE
+        lbl = tmp / "lbl"
+        shutil.copytree(FIX, lbl)
+        index = json.loads((lbl / "index.json").read_text(encoding="ascii"))
+        index["https://jobs.lbl.gov/landingpages/postdoc-12"] = index["https://jobs.lbl.gov/"]
+        index["https://jobs.lbl.gov/landingpages/old-99"] = {"status": 404}
+        (lbl / "index.json").write_text(json.dumps(index), encoding="ascii")
+        spec = boards.parse_spec("selectminds:lbl@jobs.lbl.gov", "pages=postdoc-12|old-99")
+        res = boards.read_board(spec, fetcher(lbl, extra_hosts=("jobs.lbl.gov",)), details=False,
+                                first_seen="2026-11-05")
+        assert res.status == "OK" and len(res.readings) == 3, res.line()
+        assert res.detail_errors == ["landing page /landingpages/old-99: HTTP 404"], res.detail_errors
+        spec = boards.parse_spec("selectminds:lbl@jobs.lbl.gov", "pages=old-99")
+        res = boards.read_board(spec, fetcher(lbl, extra_hosts=("jobs.lbl.gov",)), first_seen="2026-11-05")
+        assert res.status == "GONE", res.line()
+    finally:
+        shutil.rmtree(tmp)
+    keys = []
+    for key in ("successfactors:bayer", "successfactors:boehringer", "talentbrew:kp", "selectminds:lbl"):
+        res, _ = read(SPECS[key])
+        keys += [rd.posting.job_key for rd in res.readings]
+    assert len(keys) == 11 and all(re.fullmatch(r"[A-Za-z0-9._:/-]{1,200}", k) for k in keys), keys
+    assert "taleo:kaiserpermanentejobs.org:100384886784" in keys and "taleo:jobs.lbl.gov:7681" in keys, keys
+
+
+def test_career_site_parsing_bounded():
+    """D3 for the round 4 readers: a 3 MB results page of unclosed rows and
+    a job page of unclosed description tags are read in well under a second
+    each, and a job page whose blocks are missing falls back to its text."""
+    import time
+    hostile = ('<tr class="data-row"><a href="/job/' + "a" * 590 + ' class="jobTitle-link' + "x" * 150
+               + '<span class="jobLocation">' + " " * 300) * 2000
+    t0 = time.monotonic()
+    rows = boards.csb_rows(hostile, "careers.example.com")
+    assert rows == [] and time.monotonic() - t0 < 2.0, time.monotonic() - t0
+    tiles = '<li class="job-tile" data-url="/job/x/' + "9" * 3000 + '/">' * 5000
+    t0 = time.monotonic()
+    assert boards.csb_rows(tiles, "careers.example.com") == [] and time.monotonic() - t0 < 2.0
+    page = '<span class="jobdescription">' + "<p>Run assays " * 200000
+    t0 = time.monotonic()
+    block = boards.page_block(page, boards.CSB_DESC_START, boards.CSB_DESC_END)
+    assert len(block) == boards.DESC_MAX and time.monotonic() - t0 < 2.0
+    sm = ('<div id="job_list_1"><a href="https://jobs.lbl.gov/jobs/' + "-" * 400 + '" class="job_link">'
+          + "T" * 500) * 3000
+    t0 = time.monotonic()
+    out = [boards.SM_LINK.search(c) for c in boards.chunks(sm, boards.SM_MARK, boards.SELECTMINDS_ROWS)]
+    assert len(out) == boards.SELECTMINDS_ROWS and time.monotonic() - t0 < 2.0, time.monotonic() - t0
+    sitemap = ('<?xml version="1.0"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">'
+               + ("<url><loc>https://www.example.org/job/" + "a-" * 150 + "/x/1/2</loc></url>") * 20000 + "</urlset>")
+    t0 = time.monotonic()
+    rows = [loc for loc, _ in boards.sitemap_entries(sitemap)[1] if boards.TB_JOB.fullmatch(urlparse(loc).path)]
+    assert rows == [] and time.monotonic() - t0 < 5.0, time.monotonic() - t0
+    for text, want in (("Oct 29, 2026", "2026-10-29"), ("Fri Nov 06 02:01:00 UTC 2026", "2026-11-06"),
+                       ("Feb 30, 2026", ""), ("Foo 1, 2026", ""), ("14 hours ago", ""), (None, "")):
+        assert boards.month_day_year(text) == want, (text, boards.month_day_year(text))
+
+
 def profile_families():
     import tomllib
     path = PRESET / "families.toml"
@@ -768,7 +1007,8 @@ def main():
               test_workday_empty_tenant_flagged, test_oracle_stale_stop, test_offline_mornings,
               test_jazzhr_page_without_jsonld, test_odd_answers_stay_on_their_board,
               test_fuzz_bodies_stay_on_their_board, test_crawl_delay_skip_noted, test_list_titles_unescaped,
-              test_facet_city_state_without_comma, test_place_lines_bounded):
+              test_facet_city_state_without_comma, test_place_lines_bounded, test_retry_once_at_end_of_poll,
+              test_retry_waits_and_reads_the_cause, test_career_site_readers, test_career_site_parsing_bounded):
         t()
         print("ok", t.__name__)
     if os.environ.get("JOB_SKILL_LIVE") == "1":

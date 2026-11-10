@@ -417,11 +417,17 @@ def test_text_is_never_a_formula():
     root = new_root()
     path = root / "applications.xlsx"
     evil = '=HYPERLINK("http://x","y")'
+    # R1: a link netfetch.web_refusal refuses is never stored; the add writes nothing
+    for opt, bad in (("--url", "file:///C:/x"), ("--url", "javascript:alert(1)"), ("--referral-url", "=x"),
+                     ("--employer-site", "https://user@acme.example/"), ("--url", "https://acme.example:8443/j")):
+        out = run(root, "add", "--company", "Site Co", "--role", "Dev", opt, bad, code=1)
+        assert out.startswith(f"ERROR {opt} refused (bad-url") and not path.exists(), (opt, bad, out)
     run(root, "add", "--company", "=1+1", "--role", "@SUM(A1)", "--notes", "-2+3",
-        "--url", "file:///C:/x", "--location", "\t=cmd", "--family", "=f", "--req-id", "+r",
-        "--referral=-ref", "--referral-url", "=x", "--proof", "@p")
-    run(root, "add", "--company", "Site Co", "--role", "Dev", "--url", "javascript:alert(1)")
+        "--location", "\t=cmd", "--family", "=f", "--req-id", "+r",
+        "--referral=-ref", "--proof", "@p")
     run(root, "add", "--company", "Web Co", "--role", "Dev", "--url", "https://web.example/j/1")
+    out = run(root, "update", 2, "url=javascript:alert(1)", code=1)
+    assert out.startswith("ERROR --url refused"), out
     run(root, "log-email", "--message-id", "=m9", "--email-date", "2026-11-01", "--from", "+cmd",
         "--subject", evil, "--class", "=Other", "--quote", "@x", "--change", "-1")
     run(root, "update", 2, "notes=" + evil, "contact=\r=1")
@@ -436,15 +442,14 @@ def test_text_is_never_a_formula():
         return {h: ws.cell(2, i + 1) for i, h in enumerate(heads)}
     app = cells(wb["Applications"])
     for name, want in (("Company", "=1+1"), ("Role", "@SUM(A1)"), ("Notes", "-2+3"), ("Location", "=cmd"),
-                       ("URL", "file:///C:/x"), ("Family", "=f"), ("Req ID", "+r"), ("Referral", "-ref"),
-                       ("Referral URL", "=x"), ("Proof", "@p")):
+                       ("Family", "=f"), ("Req ID", "+r"), ("Referral", "-ref"), ("Proof", "@p")):
         assert app[name].value == want and app[name].data_type == "s", (name, app[name].value, app[name].data_type)
-    assert app["URL"].hyperlink is None, "file: URL must not become a hyperlink"
+    assert app["URL"].value is None and app["URL"].hyperlink is None
     assert app["Referral URL"].hyperlink is None
     ws = wb["Applications"]
-    url3 = [c for c in ws[4] if c.value == "https://web.example/j/1"][0]
+    url3 = [c for c in ws[3] if c.value == "https://web.example/j/1"][0]
     assert url3.hyperlink is not None and url3.hyperlink.target == "https://web.example/j/1"
-    assert [c for c in ws[3] if c.value == "javascript:alert(1)"][0].hyperlink is None
+    assert not [c for row in ws.iter_rows() for c in row if c.value == "javascript:alert(1)"]
     assert [c for c in ws[3] if c.value == evil][0].data_type == "s"
     assert [c for c in ws[3] if c.value == "=1"][0].data_type == "s"  # leading CR stripped
     log = cells(wb["Email log"])
@@ -752,11 +757,29 @@ def test_referral_urls():
     root = new_root()
     run(root, "referral-add", "--contact", "Pat Lee", "--company", "Pine Labs", "--job-key", "greenhouse:71",
         "--status", "Sent", "--referral-url", "https://job-boards.greenhouse.io/pine/jobs/71?gh_src=ref1")
-    run(root, "add", "--company", "Oak Bio", "--role", "R", "--job-key", "lever:x",
-        "--referral-url", "javascript:alert(1)")
+    out = run(root, "add", "--company", "Oak Bio", "--role", "R", "--job-key", "lever:x",
+              "--referral-url", "javascript:alert(1)", code=1)
+    assert out.startswith("ERROR --referral-url refused"), out
+    # R1: a link an older version stored is used only when netfetch.web_refusal passes it
+    bad_links = {"lever:y": "https://user@pine.example/r", "lever:z": "https://10.0.0.5/r",
+                 "lever:w": "https://localhost/r"}
+    for key in bad_links:
+        run(root, "add", "--company", "Oak Bio", "--role", "R " + key, "--job-key", key)
+    wb = openpyxl.load_workbook(root / "applications.xlsx")
+    ws = wb["Applications"]
+    heads = [c.value for c in ws[1]]
+    kcol, ucol = heads.index("Job key") + 1, heads.index("Referral URL") + 1
+    for r in range(2, ws.max_row + 1):
+        if ws.cell(r, kcol).value in bad_links:
+            ws.cell(r, ucol).value = bad_links[ws.cell(r, kcol).value]
+    wb.save(root / "applications.xlsx")
     tr = tracker.Tracker(root)
     tr.load()
     assert tracker.referral_urls(tr) == {"greenhouse:71": "https://job-boards.greenhouse.io/pine/jobs/71?gh_src=ref1"}
+    assert tracker.clickable("https://pine.example/r")
+    # a job board's posting link may be stored as the row's URL (linkedin.md), never hyperlinked
+    assert not any(tracker.clickable(u) for u in list(bad_links.values()) + [
+        "javascript:alert(1)", "file:///C:/x", "https://www.linkedin.com/jobs/view/1"])
 
 
 def test_auto_transport():

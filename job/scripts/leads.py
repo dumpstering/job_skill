@@ -140,7 +140,7 @@ def validate(raw_text, source, seen, salt_value="", emit=print):
     of messages with zero cards. Raises Refused for linkedin.com input."""
     if "linkedin.com" in raw_text.lower():
         raise Refused("REFUSED linkedin.com in input")
-    data = json.loads(raw_text)
+    data = jobfs.loads_json(raw_text)  # R3: nesting over 64 is refused before parsing (BadJson, a ValueError)
     leads, dropped, failures, ids = [], 0, [], set()
     for m in messages_of(data):
         m = m if isinstance(m, dict) else {}

@@ -48,20 +48,41 @@ active rows, never makes a list call for R3 or lead-only rows, and updates
 state/board_health.csv: errors count once a day, a run where no board
 answered counts none, a crawl-delay skip is noted (last_error) and counts
 nothing, and a Workday tenant that lists 0 jobs on 3 polls becomes check_site
-(polled on the weekly day, like paused). Exit codes: 0 ok (fetch: OK or
-EMPTY), 1 bad input, 3 nothing usable (GONE or ERROR), 7 DENY.
+(polled on the weekly day, like paused). A board whose list call failed on
+the network itself (a timeout, a reset or refused connection, a name that did
+not resolve, HTTP 502 or 504, a robots.txt that did not answer) is read once
+more after the other boards, at least 30 s after it failed, and prints a
+second line:
+    RETRY BOARD <ats>:<board> OK <n> postings ... | ERROR <why> | ...
+Only the retry's result counts (an answer then is no strike); error_lines()
+names the boards still in error for status.json. Exit codes: 0 ok (fetch: OK
+or EMPTY), 1 bad input, 3 nothing usable (GONE or ERROR), 7 DENY.
+
+Career-site readers on an employer's own host (the row's host column; its
+careers_url must be on that host, which is how the unattended policy allows
+it): successfactors (SAP SuccessFactors career sites: the /search/ results
+page, table or tile layout, newest first, one search per extra location=
+place), talentbrew (Radancy TalentBrew sites such as Kaiser Permanente's,
+whose jobs live in Taleo behind a login: the sitemap's job links, filtered to
+the home places by the city in the link, then each job page's JSON-LD) and
+selectminds (Oracle Taleo Social Sourcing sites such as jobs.lbl.gov: the
+newest jobs on each extra pages= landing page; its search pages answer 403).
 Stdlib only.
 """
 import argparse
 import csv
 import html
+import http.client
 import json
 import re
+import socket
 import sys
+import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
+from urllib.error import URLError
 from urllib.parse import quote, urljoin, urlparse
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -85,6 +106,13 @@ LEVER_PAGE = 100
 TEAMTAILOR_PAGE = 100
 PHENOM_MAX = 200          # job URLs per Phenom board per day (3.2)
 SITEMAP_CHILDREN = 5
+TALENTBREW_MAX = 1000     # job links in the home places per TalentBrew site per day, newest id first
+CSB_ROWS = 200            # rows read from one SuccessFactors results page
+SELECTMINDS_ROWS = 50     # rows read from one SelectMinds landing page
+ROW_CHUNK = 30_000        # characters of one result row that are read (bounded parsing)
+DESC_MAX = 400_000        # characters of a job page's description block that are read
+RETRY_GAP = 30.0          # seconds between a board's failed list call and its one retry at the end of the poll
+RETRY_STATUSES = (502, 504)  # HTTP answers that mean the site's gateway timed out or lost its upstream
 
 # R3: these ATSs are lead-only. No list call ever, whatever the row says (3.3).
 LEAD_ONLY_ATS = {"smartrecruiters", "icims", "ukg", "paycom", "clearcompany", "paycor", "neogov", "other"}
@@ -189,6 +217,7 @@ class BoardResult:
     readings: list = field(default_factory=list)
     detail_errors: list = field(default_factory=list)
     total: object = None           # the tenant's own job count when the reader learned it
+    retry: bool = False            # ERROR from a timeout or a connection error: worth one more try (L3-01)
 
     def line(self):
         lab = f"BOARD {self.spec.label}"
@@ -224,6 +253,7 @@ class Ctx:
         self.stop = ""
         self.total = None
         self.seen = set()
+        self.notes = []  # a part of the board that did not answer (one landing page of several): WARN lines
 
     def get(self, url, accept=None, headers=None):
         self.pages += 1
@@ -354,15 +384,17 @@ PAGE_LINK = re.compile(r'<a\b[^<>]{0,300}?href="([^"<>]{1,1000})"[^<>]{0,300}>(.
 
 
 def web_link(url):
-    """url (stripped) when it is an http(s) link whose host netfetch accepts,
-    else ''. Every link a reader takes from a response passes here (to_reading),
-    so a file://, javascript: or lookalike-host link never reaches the queue."""
+    """url (stripped) unless netfetch.web_refusal refuses it (R1), else ''.
+    Every link a reader takes from a response passes here (to_reading), so a
+    file://, javascript:, userinfo, IP-literal, private or lookalike-host link
+    never reaches the queue. A job-board link is kept here only so that G1
+    or G12 discards the posting by that board's name (never fetched, never
+    queued)."""
     if not isinstance(url, str):
         return ""
     u = url.strip()
-    if not u or len(u) > 2000 or not re.match(r"https?://", u, re.I) or re.search(r"\s", u):
-        return ""
-    return u if netfetch.host_or_blank(u) else ""
+    why = netfetch.web_refusal(u)
+    return u if not why or why.startswith("job-board ") else ""
 
 
 def page_links(page, pattern, base):
@@ -1313,6 +1345,308 @@ def read_hireology(ctx):
     return items
 
 
+# ---------- career sites on an employer's own host: SuccessFactors, TalentBrew, SelectMinds ----------
+# Every pattern below starts with a literal and has bounded parts over
+# character classes that exclude its own terminator, and each row is read
+# from a slice of at most ROW_CHUNK characters, so a hostile page is parsed in
+# linear time. Links must be http(s) on the row's own host (web_link + host).
+
+MONTHS = ("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+MDY = re.compile(r"\b([A-Za-z]{3})[A-Za-z]{0,6}\.?[ \t]{1,3}(\d{1,2}),?[ \t]{1,3}"
+                 r"(?:\d{1,2}:\d{2}:\d{2}[ \t]{1,3}[A-Za-z]{1,5}[ \t]{1,3})?(\d{4})\b")
+
+
+def month_day_year(text):
+    """'Oct 29, 2026' (a results row) or 'Fri Nov 06 02:01:00 UTC 2026' (a
+    job page's datePosted) as '2026-10-29'; an ISO date passes; else ''."""
+    t = posting.one_line(text if isinstance(text, str) else "")[:120]
+    if not t:
+        return ""
+    if re.match(r"\d{4}-\d{2}-\d{2}", t):
+        return iso_day(t)
+    m = MDY.search(t)
+    if not m or m.group(1).lower() not in MONTHS:
+        return ""
+    try:
+        return date(int(m.group(3)), MONTHS.index(m.group(1).lower()) + 1, int(m.group(2))).isoformat()
+    except ValueError:
+        return ""
+
+
+def chunks(page, marker, limit):
+    """The slices of page that start at each marker (one result row each), at
+    most ROW_CHUNK characters apiece and at most limit of them."""
+    out, i = [], page.find(marker)
+    while i >= 0 and len(out) < limit:
+        j = page.find(marker, i + len(marker))
+        out.append(page[i:min(j if j >= 0 else len(page), i + ROW_CHUNK)])
+        i = j
+    return out
+
+
+def first_text(rx, text):
+    """The first non-empty group of rx's first match, HTML entities decoded, on one line."""
+    m = rx.search(text or "")
+    if not m:
+        return ""
+    return posting.one_line(html.unescape(next((g for g in m.groups() if g), "")))
+
+
+def own_link(href, host):
+    """An absolute http(s) link on host from an href (relative or absolute), else ''."""
+    url = web_link(urljoin(f"https://{host}/", html.unescape(href or "")))
+    return url if url and netfetch.host_or_blank(url) == host else ""
+
+
+def page_block(page, starts, ends, limit=DESC_MAX):
+    """The part of a job page from the first start marker's tag to the first
+    end marker after it (at most limit characters), else ''."""
+    for marker in starts:
+        i = page.find(marker)
+        if i < 0:
+            continue
+        i = max(0, page.rfind("<", max(0, i - 2000), i))
+        stops = [j for j in (page.find(e, i + 1, i + limit) for e in ends) if j > i]
+        if not stops:
+            return page[i:i + limit]
+        j = min(stops)
+        tag = page.rfind("<", max(i + 1, j - 2000), j)  # end before the tag that holds the end marker
+        return page[i:tag if tag > i else j]
+    return ""
+
+
+def detail_block(ctx, it, starts, ends, date_rx=None):
+    """A job page read for its description block (else its visible text) and,
+    with date_rx, its posting date; the list's title, place and company stand."""
+    r = ctx.f.get(it.url, accept="text/html")
+    r.check()
+    page = r.text()
+    text = html_text(page_block(page, starts, ends), it)
+    if not text:
+        text = posting.parse_html(page, it.url, it.report).get("description", "")
+    it.p["description"] = text
+    day = month_day_year(first_text(date_rx, page)) if date_rx else ""
+    if day:
+        set_posted(it.p, day, "datePosted")
+
+
+def state_names(codes):
+    """['California'] for {'CA'}: what a free-text location search understands."""
+    names = {v: k for k, v in posting.US_STATE_NAMES.items()}
+    return [names[c].title() for c in sorted(codes or ()) if c in names]
+
+
+CSB_HREF = re.compile(r'(?:href|data-url)="(/job/[^"<>\s]{1,600})"')
+CSB_TITLE = re.compile(r'class="jobTitle-link[^"<>]{0,200}"[^<>]{0,800}>([^<]{1,500})</a>')
+CSB_PLACE = re.compile(r'class="jobLocation">([^<]{1,400})<|-section-location-value">([^<]{1,400})<')
+CSB_DATE = re.compile(r'class="jobDate">([^<]{1,80})<|-section-date-value">([^<]{1,80})<')
+CSB_ID = re.compile(r"/(\d{3,15})/?$")
+CSB_TOTAL = re.compile(r'paginationLabel[^<>]{0,300}>[^<]{0,80}<b>[^<]{0,40}</b>[^<]{0,40}<b>[ \t]{0,5}([\d,]{1,9})'
+                       r'|jobRecordsFound:[ \t]{0,5}parseInt\("(\d{1,9})"\)')
+CSB_POSTED = re.compile(r'itemprop="datePosted"[ \t\r\n]{1,5}content="([^"<>]{1,80})"')
+CSB_DESC_START = ('class="jobdescription"', 'itemprop="description"')
+CSB_DESC_END = ('itemprop="industry"', 'class="job-location"', 'class="jobsegments"', 'class="social-apply-button')
+
+
+def csb_search_url(host, search, where, start):
+    url = (f"https://{host}/search/?q={quote(search or '')}&locationsearch={quote(where or '')}"
+           "&sortColumn=referencedate&sortDirection=desc")
+    return url + (f"&startrow={start}" if start else "")
+
+
+def csb_rows(page, host):
+    """(id, url, title, location, posted) per result row of a SuccessFactors
+    search page, table layout (tr.data-row) or tile layout (li.job-tile)."""
+    marker = '<tr class="data-row' if '<tr class="data-row' in page else '<li class="job-tile'
+    out = []
+    for chunk in chunks(page, marker, CSB_ROWS):
+        m = CSB_HREF.search(chunk)
+        url = own_link(m.group(1), host) if m else ""
+        jid = CSB_ID.search(urlparse(url).path) if url else None
+        if jid:
+            out.append((jid.group(1), url, first_text(CSB_TITLE, chunk), first_text(CSB_PLACE, chunk),
+                        month_day_year(first_text(CSB_DATE, chunk))))
+    return out
+
+
+def read_successfactors(ctx):
+    """SAP SuccessFactors career sites (jobs.bayer.com, jobs.boehringer-
+    ingelheim.com): /search/ sorted newest first, one search per extra
+    location= place ('Berkeley|San Francisco'; default: the home states'
+    names), paged with startrow up to the board's own total. robots.txt on
+    these sites disallows /services/ (the RSS and JSON routes), never /search/
+    or /job/."""
+    s = ctx.spec
+    host = s.host
+    if not host:
+        raise ValueError("successfactors needs the career site's host (board@host)")
+    wheres = [w.strip() for w in s.extra.get("location", "").split("|") if w.strip()][:5]
+    wheres = wheres or state_names(ctx.home_states) or [""]
+    items = []
+    for search in ctx.searches:
+        for where in wheres:
+            start, total = 0, None
+            while not ctx.capped():
+                r = ctx.get(csb_search_url(host, search, where, start), accept="text/html")
+                check_gone(r, "successfactors", host)
+                r.check()
+                page = r.text()
+                if total is None:  # of this place's search only: never the site's size (check_site is Workday's)
+                    found = first_text(CSB_TOTAL, page).replace(",", "")
+                    total = int(found) if found.isdigit() else None
+                rows = csb_rows(page, host)
+                new = [row for row in rows if ctx.fresh(row[0])]
+                for jid, url, title, where_, day in new:
+                    it = new_item(s, url, "successfactors", title, where_)
+                    set_posted(it.p, day, "jobDate")
+                    it.data = {"id": jid}
+                    it.detail = detail_successfactors
+                    items.append(it)
+                if not rows:
+                    ctx.stop = "empty"
+                    break
+                if not new:
+                    ctx.stop = "seen-ids"
+                    break
+                start += len(rows)
+                if total is not None and start >= total:
+                    ctx.stop = "total"
+                    break
+            if ctx.stop == "page-cap":
+                return items
+    return items
+
+
+def detail_successfactors(ctx, it):
+    """The job page: its jobdescription block and its datePosted microdata
+    ('Fri Nov 06 02:01:00 UTC 2026'), which wins over the results row's date."""
+    detail_block(ctx, it, CSB_DESC_START, CSB_DESC_END, CSB_POSTED)
+
+
+TB_JOB = re.compile(r"/job/([a-z0-9-]{1,80})/([a-z0-9%-]{1,300})/(\d{1,12})/(\d{3,20})/?", re.I)
+ROMAN = {"i", "ii", "iii", "iv", "v", "vi", "vii"}
+
+
+def slug(text):
+    return re.sub(r"[^a-z0-9]+", "-", str(text or "").lower()).strip("-")
+
+
+def deslug(text):
+    """'research-specialist-ii-research-support' -> 'Research Specialist II Research Support'."""
+    words = re.sub(r"%[0-9a-f]{2}", " ", str(text or ""), flags=re.I).replace("-", " ").split()
+    return " ".join(w.upper() if w.lower() in ROMAN else w.capitalize() for w in words)[:200]
+
+
+def read_talentbrew(ctx):
+    """Radancy TalentBrew sites (www.kaiserpermanentejobs.org): sitemap.xml
+    lists every job as /job/<city>/<title>/<org>/<id>. Only the jobs whose
+    city is a home place are listed (newest id first, at most
+    TALENTBREW_MAX), with the title and city from the link for the list
+    gates; each job page then gives its JSON-LD JobPosting (date, place,
+    text). robots.txt there disallows /search-jobs/, never /job/ or the
+    sitemap."""
+    s = ctx.spec
+    host = s.host
+    if not host:
+        raise ValueError("talentbrew needs the career site's host (board@host)")
+    r = ctx.get(f"https://{host}/sitemap.xml", accept="application/xml,text/xml")
+    check_gone(r, "talentbrew", host)
+    r.check()
+    kind, rows = sitemap_entries(r.body)
+    if kind == "sitemapindex":
+        children = [loc for loc, _ in rows if own_link(loc, host)]
+        rows = []
+        for child in ([c for c in children if re.search(r"job", c, re.I)] or children)[:SITEMAP_CHILDREN]:
+            if ctx.capped():
+                break
+            c = ctx.get(child, accept="application/xml,text/xml")
+            c.check()
+            rows += sitemap_entries(c.body)[1]
+    wanted = {slug(p) for p in ctx.places if slug(p)}
+    words = [slug(x).split("-") for x in ctx.searches if slug(x)] if not ctx.walk else []
+    jobs, far = [], 0
+    for loc, _ in rows:
+        url = own_link(loc, host)
+        m = TB_JOB.fullmatch(urlparse(url).path) if url else None
+        if not m:
+            continue
+        city, title = m.group(1).lower(), m.group(2).lower()
+        if wanted and city not in wanted:
+            far += 1
+            continue
+        if words and not any(all(w in title.split("-") for w in ws) for ws in words):
+            continue
+        jobs.append((int(m.group(4)), url, city, title))
+    if not jobs and far:
+        ctx.stop = "no-local"  # jobs elsewhere, none in a home place
+        return []
+    items = []
+    for jid, url, city, title in sorted(jobs, reverse=True)[:TALENTBREW_MAX]:
+        if ctx.fresh(jid):
+            it = new_item(s, url, "talentbrew", deslug(title), deslug(city))
+            it.detail = detail_page
+            items.append(it)
+    ctx.stop = "one-call"
+    return items
+
+
+SM_MARK = '<div id="job_list_'
+SM_LINK = re.compile(r'href="([^"<>\s]{1,800})"[ \t]{1,5}class="job_link[^"<>]{0,100}"[^<>]{0,300}>([^<]{1,400})</a>')
+SM_JOB = re.compile(r"/jobs/[a-z0-9%-]{0,400}-(\d{1,12})/?", re.I)
+SM_PLACE = re.compile(r'class="location jTooltip"[^<>]{0,400}>(?:<span[^<>]{0,200}>[^<]{0,40}</span>)?([^<]{1,300})</a>')
+SM_REQ = re.compile(r'job_external_id"><span class="field_value">([^<]{1,40})<')
+SM_DESC_START = ('<div class="job_description"',)
+SM_DESC_END = ('id="jJobInsideInfo"', 'id="right_bar"', 'id="similar_listings"', 'id="footer_modular"')
+
+
+def read_selectminds(ctx):
+    """Oracle Taleo Social Sourcing (SelectMinds) sites such as jobs.lbl.gov,
+    where the Taleo career section itself redirects: each extra pages=
+    landing page ('postdoctoral-fellow-opportunities-at-lbl-12|...'; none:
+    the home page) lists its newest jobs with title, place and requisition
+    number; the search pages answer 403, so the backlog beyond them is not
+    read. A landing page that is gone is a WARN line; the board is GONE only
+    when all are. Post dates are relative ('14 hours ago'), never read as a
+    date (3.10)."""
+    s = ctx.spec
+    host = s.host
+    if not host:
+        raise ValueError("selectminds needs the career site's host (board@host)")
+    names = [p.strip() for p in s.extra.get("pages", "").split("|") if re.fullmatch(r"[A-Za-z0-9-]{1,150}", p.strip())]
+    paths = [f"/landingpages/{name}" for name in names[:10]] or ["/"]  # no pages=: the home page's newest jobs
+    items, answered, missing = [], 0, []
+    for path in paths:
+        if ctx.capped():
+            break
+        r = ctx.get(f"https://{host}{path}", accept="text/html")
+        if r.status in (404, 410):
+            missing.append(f"landing page {path}: HTTP {r.status}")
+            continue
+        check_gone(r, "selectminds", host)
+        r.check()
+        answered += 1
+        for chunk in chunks(r.text(), SM_MARK, SELECTMINDS_ROWS):
+            m = SM_LINK.search(chunk)
+            url = own_link(m.group(1), host) if m else ""
+            jid = SM_JOB.fullmatch(urlparse(url).path) if url else None
+            if not jid or not ctx.fresh(jid.group(1)):
+                continue
+            it = new_item(s, url, "selectminds", posting.one_line(html.unescape(m.group(2))),
+                          first_text(SM_PLACE, chunk), first_text(SM_REQ, chunk))
+            it.data = {"id": jid.group(1)}
+            it.detail = detail_selectminds
+            items.append(it)
+    if missing and not answered:
+        raise Gone(missing[0])
+    ctx.notes += missing
+    ctx.stop = ctx.stop or "one-call"
+    return items
+
+
+def detail_selectminds(ctx, it):
+    detail_block(ctx, it, SM_DESC_START, SM_DESC_END)
+
+
 READERS = {
     "greenhouse": read_greenhouse, "lever": read_lever, "lever_eu": read_lever, "ashby": read_ashby,
     "workday": read_workday, "bamboohr": read_bamboohr, "breezy": read_breezy, "workable": read_workable,
@@ -1320,8 +1654,11 @@ READERS = {
     "personio": read_personio, "recruitee": read_recruitee, "adp": read_adp, "oracle": read_oracle,
     "paylocity": read_paylocity, "dayforce": read_dayforce, "jobvite": read_jobvite, "jazzhr": read_jazzhr,
     "phenom": read_phenom, "comeet": read_comeet, "manatal": read_manatal, "hireology": read_hireology,
+    "successfactors": read_successfactors, "talentbrew": read_talentbrew, "selectminds": read_selectminds,
 }
-RECORD_ATS = {"lever_eu": "lever"}
+# The record's ats is where the user applies: TalentBrew and SelectMinds sites
+# hand the apply over to the employer's Taleo (one account per tenant).
+RECORD_ATS = {"lever_eu": "lever", "talentbrew": "taleo", "selectminds": "taleo"}
 
 
 # ---------- records ----------
@@ -1433,12 +1770,15 @@ def read_board(spec, fetcher, *, searches=(), places=(), keep=None, details=True
             res.status, res.why = "GONE", f"redirect {(e.reason.split() + [''])[-1]}"
         else:
             res.status, res.why = "DENY", e.reason
+            res.retry = e.reason.startswith("robots-unreachable")  # its robots.txt did not answer: a network failure
     except FetchError as e:  # network trouble: the reason says it (HTTP 500 from host, a timeout)
         res.status, res.why = "ERROR", str(e)[:200]
+        res.retry = transient(e)
     except Exception as e:  # noqa: BLE001  a board's odd answer ({"jobs": [null]}) is that board's error only
         res.status, res.why = "ERROR", f"unreadable answer ({type(e).__name__}: {str(e)[:120]})"
     if ctx is not None:
         res.pages, res.stop, res.total = ctx.pages, ctx.stop, ctx.total
+        res.detail_errors += ctx.notes[:5]
     if res.status != "OK":
         return res
     if not items:
@@ -1524,6 +1864,38 @@ def no_network(results):
     had no network, so nothing is wrong with the boards."""
     tried = [r for r in results if r.status != "SKIP"]
     return len(tried) >= 2 and all(no_answer(r) for r in tried)
+
+
+# What a list call that failed on the network itself raises somewhere in its
+# cause chain: a read or connect timeout (also the 60 s fetch deadline), a
+# reset, refused or aborted connection, a name that did not resolve, a body cut
+# off mid-way. An HTTP error page, a policy refusal or an odd answer is not one.
+TRANSIENT = (TimeoutError, ConnectionError, socket.gaierror, http.client.IncompleteRead)
+TRANSIENT_TEXT = re.compile(r"\btimed out\b|\bno complete answer within\b|\bconnection (?:reset|refused|aborted)\b"
+                            r"|\bremote end closed\b|\bcannot resolve\b|\bgetaddrinfo failed\b", re.I)
+
+
+def transient(e):
+    """True when a FetchError comes from a timeout or a connection error (L3-01):
+    the board is worth one more try at the end of the poll. Reads the cause
+    chain (at most 8 links), then the message, which is all an offline fixture's
+    error gives."""
+    if isinstance(e, Denied):
+        return False
+    if getattr(e, "status", None) in RETRY_STATUSES:
+        return True
+    x, seen = e, 0
+    while x is not None and seen < 8:
+        if isinstance(x, TRANSIENT) or (isinstance(x, URLError) and isinstance(x.reason, TRANSIENT)):
+            return True
+        x, seen = x.__cause__ or x.__context__, seen + 1
+    return bool(TRANSIENT_TEXT.search(str(e)[:300]))
+
+
+def error_lines(results):
+    """'<board key>: <why>' for every board whose last read today ended in
+    ERROR (after its retry): what status.json lists as boards still in error."""
+    return [f"board {r.spec.key}: {netfetch.shown(r.why, 160)}" for r in results if r.status == "ERROR"]
 
 
 def whole(v):
@@ -1667,6 +2039,33 @@ def poll_skip(spec, health, settings, today, root):
     return ""
 
 
+def retry_failed(results, failed, read, fetcher, emit, gap=RETRY_GAP, clock=time.monotonic):
+    """L3-01: each board whose list call failed on a timeout or a connection
+    error is read once more, in the order they failed, at least `gap` seconds
+    after its failure (the wait is skipped with an offline fixture), and its
+    result replaces the first one: an answer now takes no strike, a second
+    failure counts as that day's one strike. A robots.txt that did not answer
+    (DENY robots-unreachable) is asked again: the fetcher keeps that outcome
+    in memory only, never on disk, and it is dropped here once. Prints RETRY
+    <the board line>."""
+    sleep = getattr(fetcher, "sleep", time.sleep)
+    mem = getattr(getattr(fetcher, "robots", None), "mem", None)
+    if isinstance(mem, dict):
+        for host in [h for h, e in mem.items() if isinstance(e, dict) and e.get("status") == "unreachable"]:
+            mem.pop(host, None)
+    for index, failed_at in failed:
+        spec = results[index].spec
+        wait = gap - (clock() - failed_at)
+        if wait > 0 and not getattr(fetcher, "offline", None):
+            sleep(min(wait, gap))
+        res = read(spec)
+        res.retry = False  # one retry a day, never more
+        emit(f"RETRY {res.line()}")
+        for err in res.detail_errors[:3]:
+            emit(f"WARN detail {err}")
+        results[index] = res
+
+
 def poll(root, fetcher=None, offline=None, keep=None, details=True, max_pages=MAX_PAGES, emit=print):
     """Poll every active watch-list board. Returns the BoardResults and writes
     state/board_health.csv. The runner passes keep (the list gates). Fail
@@ -1685,22 +2084,28 @@ def poll(root, fetcher=None, offline=None, keep=None, details=True, max_pages=MA
         emit(f"ERROR poll search profile: {type(e).__name__}")
         fallback, places, state, remote = [], [], (), False
     health = load_health(root)
-    results = []
-    for spec in watchlist_rows(root):
+    results, failed = [], []
+
+    def read(spec, skip=False):
         try:
-            why = poll_skip(spec, health, settings, today, root)
+            why = poll_skip(spec, health, settings, today, root) if skip else ""
             if why:
-                res = BoardResult(spec, "SKIP", why)
-            else:
-                res = read_board(spec, fetcher, places=places, keep=keep, details=details, max_pages=max_pages,
-                                 first_seen=today.isoformat(), fallback=fallback, home_states=state,
-                                 remote_us=remote)
+                return BoardResult(spec, "SKIP", why)
+            return read_board(spec, fetcher, places=places, keep=keep, details=details, max_pages=max_pages,
+                              first_seen=today.isoformat(), fallback=fallback, home_states=state, remote_us=remote)
         except Exception as e:  # noqa: BLE001  never let one board stop the daily
-            res = BoardResult(spec, "ERROR", f"reader failed ({type(e).__name__}: {netfetch.shown(e, 120)})")
+            return BoardResult(spec, "ERROR", f"reader failed ({type(e).__name__}: {netfetch.shown(e, 120)})")
+
+    for spec in watchlist_rows(root):
+        res = read(spec, skip=True)
         emit(res.line())
         for err in res.detail_errors[:3]:
             emit(f"WARN detail {err}")
+        if res.status in ("ERROR", "DENY") and res.retry:
+            failed.append((len(results), time.monotonic()))
         results.append(res)
+    if failed and not no_network(results):  # with no network at all the tick's offline retry takes over
+        retry_failed(results, failed, read, fetcher, emit)
     counted = not no_network(results)
     if not counted:
         emit(f"WARN offline: no board answered ({sum(1 for r in results if r.status != 'SKIP')} tried); "

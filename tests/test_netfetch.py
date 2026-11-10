@@ -12,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from urllib.parse import urlparse
 
 HERE = Path(__file__).resolve().parent
 ROBOTS_FIX = HERE / "fixtures" / "robots"
@@ -91,13 +92,13 @@ def test_policy_rules():
     assert p.reason("https://www.recruitingbypaycor.com/career/x") == "r3-list www.recruitingbypaycor.com"
     assert p.reason("https://recruiting.ultipro.com/ACME/JobBoard/abc/OpportunityDetail?opportunityId=1") is None
     for bad in ("ftp://example.com/x", "http://user@evil.example/job", "file:///etc/passwd"):
-        assert p.reason(bad) == "bad-url", bad
+        assert p.reason(bad).startswith("bad-url "), bad
     for private in ("http://127.0.0.1/", "http://localhost/x", "http://printer.local/",
                     "http://169.254.169.254/latest/meta-data"):
         assert p.reason(private).startswith("non-public "), private
-    # an IP literal in brackets holds ':' (not a host character): refused before any lookup
+    # an IP literal in brackets: refused before any lookup (non-public, or bad-url ip-address)
     for v6 in ("http://[::1]/", "http://[64:ff9b::a00:1]/", "http://[::127.0.0.1]/"):
-        assert p.reason(v6).startswith("bad-url"), v6
+        assert p.reason(v6).startswith(("bad-url ip-address", "non-public [")), v6
     # attended (a pasted link): hard deny and public only, any host and http
     a = netfetch.Policy(unattended=False)
     assert a.reason("http://careers.acme.example/jobs") is None
@@ -149,8 +150,8 @@ def test_public_address_guard():
         assert connected == [("93.184.216.34", 443)] and calls == ["rebind.example"], (connected, calls)
         netfetch.connect_public("rebind.example", 443, 5)  # second lookup now says 127.0.0.1
         raise AssertionError("private answer not refused")
-    except netfetch.FetchError as e:
-        assert "non-public" in str(e) and connected == [("93.184.216.34", 443)], (e, connected)
+    except netfetch.Denied as e:  # R1: a refusal (Denied), not a fetch failure
+        assert e.reason == "non-public rebind.example" and connected == [("93.184.216.34", 443)], (e, connected)
     finally:
         socket.getaddrinfo, socket.socket = real
     # one public and one private address in a single answer: refused before connecting
@@ -160,8 +161,8 @@ def test_public_address_guard():
     try:
         netfetch.connect_public("mixed.example", 443, 5)
         raise AssertionError("mixed answer not refused")
-    except netfetch.FetchError as e:
-        assert "10.0.0.5" in str(e), e
+    except netfetch.Denied as e:
+        assert e.reason == "non-public mixed.example", e.reason
     finally:
         socket.getaddrinfo = real[0]
         netfetch.DeadlineSocket = real_cls
@@ -362,7 +363,7 @@ def test_lookalike_hosts():
         except netfetch.Denied as e:
             assert e.reason.startswith("bad-url"), e.reason
     odd = "https://exam" + shy + "ple.com/jobs/1"
-    assert netfetch.hard_deny(odd) == "bad-url host exam\\xadple.com", netfetch.hard_deny(odd)
+    assert netfetch.hard_deny(odd) == "bad-url space or control character in the link", netfetch.hard_deny(odd)
     f, _ = offline_fetcher(robots=False, unattended=False)
     try:
         f.get(odd)
@@ -530,9 +531,9 @@ def test_fetch_deadline():
         threading.Thread(target=serve, daemon=True).start()
         return srv
 
-    saved = (netfetch.check_public, netfetch.FETCH_DEADLINE, socket.getaddrinfo)
+    saved = (netfetch.web_refusal, netfetch.FETCH_DEADLINE, socket.getaddrinfo)
     real_gai = socket.getaddrinfo
-    netfetch.check_public = lambda url: None
+    netfetch.web_refusal = lambda url: None  # the drip server listens on another port (R1 refuses one)
     netfetch.FETCH_DEADLINE = 1.0
     try:
         for headers_first in (True, False):
@@ -556,7 +557,7 @@ def test_fetch_deadline():
                 socket.getaddrinfo = real_gai
                 srv.close()
     finally:
-        netfetch.check_public, netfetch.FETCH_DEADLINE, socket.getaddrinfo = saved
+        netfetch.web_refusal, netfetch.FETCH_DEADLINE, socket.getaddrinfo = saved
     assert netfetch.FETCH_DEADLINE == 60.0 and netfetch.TIMEOUT == 20
 
 
@@ -643,11 +644,223 @@ def test_robots_redirect_loop():
         assert e.reason == "job-board linkedin.com", e.reason
 
 
+BS = chr(92)
+# (label, link, kind): kind is the web_refusal kind every call site must agree on
+# ("job-board", "bad-url", "non-public") or None for a link that passes. Round 3's
+# 50 spellings (r3/V/v_hosts.py) plus R1's forms.
+LINK_MATRIX = [
+    ("plain board", "https://www.linkedin.com/jobs/view/1", "job-board"),
+    ("backslash before @ (browser host is the board)", "https://www.linkedin.com" + BS + "@careers.example-bio.com/jobs/1",
+     "job-board"),
+    ("backslash after @", "https://careers.example-bio.com" + BS + "@www.linkedin.com/jobs/1", "job-board"),
+    ("backslash before @, no board", "https://careers.example-bio.com" + BS + "@jobs.example-two.com/x", "bad-url"),
+    ("backslashes for slashes", "https:" + BS + BS + "www.linkedin.com/jobs/view/1", "job-board"),
+    ("backslash in the path", "https://careers.example-bio.com/jobs" + BS + "1", "bad-url"),
+    ("one slash", "https:/www.linkedin.com/jobs/view/1", "job-board"),
+    ("one slash, employer", "https:/careers.example-bio.com/jobs/1", "bad-url"),
+    ("no slash", "https:www.linkedin.com/jobs/view/1", "job-board"),
+    ("three slashes", "https:///careers.example-bio.com/jobs/1", "bad-url"),
+    ("scheme-relative", "//www.linkedin.com/jobs/view/1", "bad-url"),
+    ("tab inside host", "https://www.linked\tin.com/jobs/view/1", "job-board"),
+    ("CR LF inside host", "https://www.linked\r\nin.com/jobs/view/1", "job-board"),
+    ("leading space", "  https://careers.example-bio.com/jobs/1", "bad-url"),
+    ("trailing newline", "https://careers.example-bio.com/jobs/1\n", "bad-url"),
+    ("space in the path", "https://careers.example-bio.com/jobs/a b", "bad-url"),
+    ("no-break space in the path", "https://careers.example-bio.com/jobs/a" + chr(0xA0) + "b", "bad-url"),
+    ("NUL in the path", "https://careers.example-bio.com/jobs/1" + chr(0), "bad-url"),
+    ("DEL in the query", "https://careers.example-bio.com/jobs?x=" + chr(0x7F), "bad-url"),
+    ("bidi override in the path", "https://careers.example-bio.com/" + chr(0x202E) + "x", "bad-url"),
+    ("userinfo, board is the user", "https://www.linkedin.com@careers.example-bio.com/jobs/1", "bad-url"),
+    ("userinfo, board is the host", "https://user:pw@www.linkedin.com/jobs/1", "job-board"),
+    ("userinfo, employer", "https://user@careers.example-bio.com/jobs/1", "bad-url"),
+    ("userinfo with password", "https://a:b@careers.example-bio.com/jobs/1", "bad-url"),
+    ("percent-encoded letter", "https://www.linked%69n.com/jobs/1", "job-board"),
+    ("percent-encoded dot", "https://www.linkedin%2Ecom/jobs/1", "job-board"),
+    ("percent in an employer host", "https://careers.example%2Dbio.com/jobs/1", "bad-url"),
+    ("fullwidth dot", "https://www.linkedin" + chr(0xFF0E) + "com/jobs/1", "job-board"),
+    ("ideographic dot", "https://www.linkedin" + chr(0x3002) + "com/jobs/1", "job-board"),
+    ("halfwidth ideographic dot", "https://www.linkedin" + chr(0xFF61) + "com/jobs/1", "job-board"),
+    ("soft hyphen", "https://www.link" + chr(0xAD) + "edin.com/jobs/1", "job-board"),
+    ("zero-width joiner", "https://www.link" + chr(0x200D) + "edin.com/jobs/1", "job-board"),
+    ("fullwidth letters", "https://www." + "".join(chr(0xFF41 + ord(c) - 97) for c in "linkedin") + ".com/jobs/1",
+     "job-board"),
+    ("non-ASCII employer host", "https://ex" + chr(0xE0) + "mple.com/jobs/1", "bad-url"),
+    ("mixed case trailing dot", "https://WWW.LinkedIn.COM./jobs/1", "job-board"),
+    ("two trailing dots", "https://www.linkedin.com../jobs/1", "job-board"),
+    ("port 443 on a board", "https://www.linkedin.com:443/jobs/1", "job-board"),
+    ("empty port on a board", "https://www.linkedin.com:/jobs/1", "job-board"),
+    ("port 8443", "https://careers.example-bio.com:8443/jobs/1", "bad-url"),
+    ("port 8080 on http", "http://careers.example-bio.com:8080/jobs/1", "bad-url"),
+    ("port 0", "https://careers.example-bio.com:0/jobs/1", "bad-url"),
+    ("port out of range", "https://careers.example-bio.com:99999/jobs/1", "bad-url"),
+    ("port not a number", "https://careers.example-bio.com:x/jobs/1", "bad-url"),
+    ("semicolon in authority", "https://www.linkedin.com;x/jobs/1", "job-board"),
+    ("fragment-at", "https://www.linkedin.com#@careers.example-bio.com/", "job-board"),
+    ("lnkd.in upper", "https://LNKD.IN/abc", "job-board"),
+    ("licdn subdomain", "https://static.licdn.com/x.js", "job-board"),
+    ("indeed long tld", "https://www.indeed.careers/x", "job-board"),
+    ("glassdoor co.uk", "https://www.glassdoor.co.uk/x", "job-board"),
+    ("ziprecruiter subdomain", "https://jobs.ziprecruiter.com/x", "job-board"),
+    ("remotive.io", "https://remotive.io/x", "job-board"),
+    ("simplyhired.ca", "https://www.simplyhired.ca/x", "job-board"),
+    ("underscore", "https://www_linkedin.com/x", "bad-url"),
+    ("empty label", "https://jobs..example-bio.com/x", "bad-url"),
+    ("label over 63", "https://" + "a" * 64 + ".example-bio.com/x", "bad-url"),
+    ("IPv6 literal", "https://[2620:109:c003:104::215]/jobs/1", "bad-url"),
+    ("IPv6 loopback", "http://[::1]/x", "non-public"),
+    ("IPv4-mapped IPv6", "https://[::ffff:13.107.42.14]/jobs/1", "bad-url"),
+    ("unclosed bracket", "https://[::1/x", "bad-url"),
+    ("IPv4 literal (public)", "https://13.107.42.14/jobs/1", "bad-url"),
+    ("IPv4 loopback", "http://127.0.0.1/admin", "non-public"),
+    ("IPv4 private with port", "http://192.168.1.1:8080/", "bad-url"),
+    ("IPv4 link-local", "http://169.254.169.254/latest/meta-data", "non-public"),
+    ("integer IPv4 (public)", "https://218770958/jobs/1", "bad-url"),
+    ("hex IPv4 (public)", "https://0x0d.0x6b.0x2a.0x0e/jobs/1", "bad-url"),
+    ("short hex loopback", "http://0x7f.1/x", "bad-url"),
+    ("octal loopback", "http://0177.0.0.1/x", "bad-url"),
+    ("integer loopback", "http://2130706433/x", "bad-url"),
+    ("short dotted", "http://127.1/x", "bad-url"),
+    ("single label", "https://intranet/jobs", "bad-url"),
+    ("single label with port", "http://printer:631/", "bad-url"),
+    ("localhost", "http://localhost/x", "non-public"),
+    ("localhost trailing dot", "http://localhost./x", "non-public"),
+    ("a .localhost name", "http://app.localhost/x", "non-public"),
+    (".local", "https://router.local/", "non-public"),
+    (".internal", "https://hr.corp.internal/jobs", "non-public"),
+    (".home.arpa", "https://nas.home.arpa/", "non-public"),
+    (".lan", "https://files.lan/x", "non-public"),
+    ("not http", "ftp://careers.example-bio.com/x", "bad-url"),
+    ("file", "file:///etc/passwd", "bad-url"),
+    ("javascript", "javascript:alert(1)", "bad-url"),
+    ("empty", "", "bad-url"),
+    ("R3 UKG list (passes R1; fetch refuses)", "https://recruiting.ultipro.com/ACME/%6aOBBOARDVIEW/x", None),
+    ("percent-escapes in path and query", "https://careers.example-bio.com/jobs/a%20b?q=%3Cx%3E&id=7", None),
+    ("query-at, employer host", "https://careers.example-bio.com?@www.linkedin.com/", None),
+    ("port 443", "https://careers.example-bio.com:443/jobs/1", None),
+    ("empty port", "https://careers.example-bio.com:/jobs/1", None),
+    ("upper case, trailing dot", "HTTPS://Careers.Example-Bio.COM./jobs/1?src=x#top", None),
+    ("non-ASCII letter in the path", "https://careers.example-bio.com/jobs/z" + chr(0xFC) + "rich", None),
+    ("plain employer", "https://careers.example-bio.com/jobs/1", None),
+]
+
+
+def test_one_link_refusal():
+    """R1 regression (round 3's host matrix, 50 spellings at 10 call sites,
+    extended with R1's forms): netfetch.web_refusal is the one refusal, and
+    every check that decides whether a link may be stored, shown, opened or
+    fetched agrees with it: hard_deny and both policies, check_public,
+    posting.link_check and posting.py's exit (4 and no TRY for every refusal),
+    gates.url_refusal (G1, G12), events.url_refusal, jobrunner.check_arg,
+    boards.web_link (which keeps a job-board link only so G1 names it) and
+    today_view.web_link (the OPEN line). No refused spelling reaches
+    getaddrinfo, attended or not."""
+    import argparse
+    import io
+    from contextlib import redirect_stdout
+    import boards
+    import events
+    import gates
+    import jobrunner
+    import posting
+    import today_view
+    asked = []
+
+    def recorder(host, port, *a, **kw):
+        asked.append(host)
+        raise socket.gaierror("recorder: no connection in this test")
+    real_gai = socket.getaddrinfo
+    socket.getaddrinfo = recorder
+    tmp = Path(tempfile.mkdtemp(prefix="netfetch_r1_"))
+    root = tmp / "JobSearch"
+    (root / "applications").mkdir(parents=True)
+    run = argparse.Namespace(root=root.resolve(), folder=jobfs.Folder(root))
+
+    def check_arg(u):
+        try:
+            jobrunner.check_arg(run, "probe_url", "url", "url", u)
+            return None
+        except jobrunner.RequestError as e:
+            return str(e)
+
+    def posting_exit(u):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            try:
+                code = posting.main([u, "--out", str(tmp / "p.md"), "--root", str(root)])
+            except SystemExit as e:
+                code = e.code
+        return code, buf.getvalue().splitlines()
+
+    def kind_of(reason):
+        return reason.split(" ", 1)[0] if reason else None
+    try:
+        for label, u, kind in LINK_MATRIX:
+            why = netfetch.web_refusal(u)
+            assert kind_of(why) == kind, (label, ascii(u), why)
+            deny = netfetch.hard_deny(u)
+            assert deny == why or (kind is None and deny.startswith("r3-list ")), (label, deny)
+            assert netfetch.Policy(unattended=False).reason(u) == deny, label
+            r = netfetch.Policy(unattended=True).reason(u)
+            assert r == deny if deny else (r is None or r.startswith(("host-not-allowed ", "not-https "))), (label, r)
+            if why:
+                try:
+                    netfetch.check_public(u)
+                    raise AssertionError(f"check_public passed {label}")
+                except netfetch.Denied as d:
+                    assert d.reason == why, (label, d.reason)
+            g = gates.url_refusal(u)  # G1 and G12 ('not-web' names another scheme, as before)
+            try:
+                scheme = urlparse(u).scheme.lower()
+            except ValueError:
+                scheme = "unreadable"
+            if scheme == "unreadable":
+                assert g == "bad-url", (label, g)
+            elif scheme not in ("http", "https"):
+                assert g == "not-web", (label, g)
+            else:
+                assert g == ((why.split(" ", 1)[1] if kind == "job-board" else kind) if why else None), (label, g)
+            assert events.url_refusal(u) == why, (label, events.url_refusal(u))
+            # callers that strip the value first judge the stripped value they keep
+            s = u.strip()
+            assert (check_arg(u) is None) == (netfetch.hard_deny(s) is None), (label, check_arg(u))
+            kept = netfetch.web_refusal(s)
+            assert bool(boards.web_link(u)) == (kept is None or kept.startswith("job-board ")), (label, kept)
+            assert bool(today_view.web_link(u)) == (why is None), (label, today_view.web_link(u))
+            if kind is not None and u:
+                code, lines = posting_exit(u)
+                assert not any(ln.startswith("TRY") for ln in lines), (label, lines)
+                if netfetch.SCHEME.match(u):
+                    assert code == 4 and lines[0].startswith("JOB BOARD" if kind == "job-board" else "REFUSED"), \
+                        (label, code, lines[:1])
+                else:  # no scheme at all: an argument error (write the link with https://), no TRY
+                    assert code == 1 and lines[0].startswith("ERROR url must start"), (label, code, lines[:1])
+            for unattended in (False, True):
+                before = len(asked)
+                f = netfetch.Fetcher(unattended=unattended, robots=False, throttle=netfetch.Throttle(enabled=False))
+                try:
+                    f.get(u)
+                except netfetch.Denied as d:
+                    assert d.reason == (deny or d.reason) and (deny or d.reason.startswith(
+                        ("host-not-allowed ", "not-https "))), (label, d.reason)
+                except netfetch.FetchError:
+                    assert why is None, label  # only a link R1 passes may reach the (recording) resolver
+                if why is not None:
+                    assert asked[before:] == [], (label, asked[before:])
+        # a link refused only while connecting (the name resolves to a private address): exit 4, no TRY
+        socket.getaddrinfo = lambda host, port, *a, **k: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.5", port))]
+        code, lines = posting_exit("https://careers.example-bio.com/jobs/2")
+        assert code == 4 and lines[0].startswith("REFUSED non-public careers.example-bio.com"), (code, lines)
+        assert not any(ln.startswith("TRY") for ln in lines), lines
+    finally:
+        socket.getaddrinfo = real_gai
+
+
 def main():
     for t in (test_cli_policy, test_policy_rules, test_public_address_guard, test_proxy_means_no_fetch,
               test_robots_rules, test_robots_fetching_and_cache, test_politeness, test_size_cap,
               test_lookalike_hosts, test_canonical_host, test_encoded_paths, test_robots_bounded,
-              test_fetch_deadline, test_odd_charset, test_crawl_delay_limits, test_robots_redirect_loop):
+              test_fetch_deadline, test_odd_charset, test_crawl_delay_limits, test_robots_redirect_loop,
+              test_one_link_refusal):
         t()
         print("ok", t.__name__)
     if os.environ.get("JOB_SKILL_LIVE") == "1":

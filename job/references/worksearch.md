@@ -36,7 +36,8 @@ never write them anywhere.
    - the columns of spec 6.6, one row per contact, grouped by claim week;
    - employer address, phone and main website from the Employers sheet;
      `posting_url` and `employer_main_website` are separate columns (North
-     Carolina accepts only the main website);
+     Carolina accepts only the main website; a job board's posting link is
+     left blank, and `job_site` names the board);
    - a `.md` block of the strongest rows per week, ready to type into the
      state portal or onto the form.
 3. Show the user the `.md` and the `FLAG` lines. The files are their record; nothing

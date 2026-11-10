@@ -86,7 +86,6 @@ forced restart is ignored.
 import argparse
 import contextlib
 import io
-import json
 import os
 import re
 import secrets
@@ -364,6 +363,33 @@ def check_folder(root, folder):
     return folder
 
 
+CHECKED_LINKS = {"URL": "url", "Referral URL": "referral-url", "Employer site": "employer-site"}
+
+
+def check_link(label, value, board_ok=False):
+    """A link the tracker stores passes netfetch.web_refusal (R1), or the write
+    is refused, writing nothing. A blank value stays blank. Only a job's own
+    URL may be a job board's link (linkedin.md records LinkedIn postings by
+    their link); the board link is stored, never opened."""
+    v = (value or "").strip() if isinstance(value, str) else value
+    if not v:
+        return v
+    import netfetch  # stdlib and jobfs only; loaded only when a link is stored
+    why = netfetch.web_refusal(v)
+    if why and not (board_ok and why.startswith("job-board ")):
+        raise TrackerError(f"--{label} refused ({why}): leave it out, or use the employer's own "
+                           "plain https:// link")
+    return v
+
+
+def clickable(url):
+    """A stored link becomes a hyperlink only when netfetch.web_refusal passes
+    it (R1): a job board's link (linkedin.md: never hyperlinked) and an older
+    row's file:, javascript: or user-name link stay plain text."""
+    import netfetch
+    return netfetch.web_refusal(url) is None
+
+
 def followup_rule(root):
     cfg = jobfs.settings(root).get("followups", {})
     return [str(t).lower() for t in cfg.get("tiers", ["A", "referral"])], int(cfg.get("days", 7))
@@ -453,7 +479,7 @@ class Sheet:
             cell.data_type = "s"
         else:
             cell.value = val
-        if name in LINK_COLS and isinstance(val, str) and re.match(r"https?://", val, re.I):
+        if name in LINK_COLS and isinstance(val, str) and clickable(val):
             cell.hyperlink = str(val)
             cell.font = Font(color="0563C1", underline="single")
         elif name == "Notes":
@@ -1003,7 +1029,7 @@ def folder_fingerprint(folder):
     (the runner's Posting record), else computed from posting.md."""
     folder = Path(folder)
     try:
-        data = json.loads((folder / "posting.json").read_text(encoding="utf-8"))
+        data = jobfs.read_json(folder / "posting.json", jobfs.MAX_FILE)
         if isinstance(data, dict) and re.fullmatch(r"[0-9a-f]{16}", str(data.get("simhash", ""))):
             return {str(x).upper() for x in data.get("req_ids") or []}, data["simhash"]
     except (OSError, ValueError):
@@ -1030,11 +1056,13 @@ def row_fingerprint(root, row):
 
 def referral_urls(store):
     """job_key -> the referral link stored for that job (`ref <n> <url>`: the
-    Referrals sheet's or the row's Referral URL), http(s) only; the
-    Applications row wins over the Referrals sheet."""
+    Referrals sheet's or the row's Referral URL), only links
+    netfetch.web_refusal passes (R1); the Applications row wins over the
+    Referrals sheet."""
     out = {}
     if store is None:
         return out
+    import netfetch  # stdlib and jobfs only
     pairs = []
     if getattr(store, "referrals", None) is not None:
         pairs += [(r.get("Job key"), r.get("Referral URL")) for r in store.referrals.rows()]
@@ -1042,8 +1070,8 @@ def referral_urls(store):
         pairs += [(r.get("Job key"), r.get("Referral URL")) for r in store.app_rows()]
     for key, url in pairs:
         key, url = text(key), text(url)
-        if key and re.fullmatch(r"https?://\S{4,2000}", url, re.I):
-            out[key] = url
+        if key and url and netfetch.web_refusal(url) is None:
+            out[jobkey.safe_key(key)] = url  # R2: an earlier version's key finds today's item
     return out
 
 
@@ -1092,9 +1120,11 @@ def match_row(a, row, ctx):
     key = ctx["key"]
     # A v1.1 row stored a url: fallback key for hosts v1.2 now keys by ID
     # (bamboohr, workable, adp, ...), so its URL is keyed again as well.
-    row_keys = {text(row["Job key"]), jobkey.job_key(text(row["URL"])) if text(row["URL"]) else ""} - {"", None}
+    # R2: both sides through jobkey.safe_key, so a key an earlier version stored still matches.
+    row_keys = {jobkey.safe_key(text(row["Job key"])),
+                jobkey.job_key(text(row["URL"])) if text(row["URL"]) else ""} - {"", None}
     same_company = bool(ctx["company"]) and jobkey.norm_company(text(row["Company"])) == ctx["company"]
-    if key and key in row_keys:
+    if key and jobkey.safe_key(key) in row_keys:
         return 0, f"job key {key}"
     if same_company:
         # The v1.1 rule: read this company's posting text.
@@ -1118,12 +1148,14 @@ def match_row(a, row, ctx):
 
 
 def cmd_check(a):
-    key = a.job_key or jobkey.job_key(a.url)
+    # R2: the key in today's safe form (A-Z a-z 0-9 . _ : / -), so the printed
+    # line can go inline; a key an earlier version stored maps to the same form.
+    key = jobkey.safe_key(a.job_key) or jobkey.job_key(a.url)
     print(f"JOB KEY {key or '(none: no URL)'}")
     now = today(a.root)
     if key:
         for item in queue_items(a.root, now):
-            if item.get("job_key") == key:
+            if jobkey.same_key(item.get("job_key"), key):
                 print(f"IN QUEUE {now.isoformat()} #{item.get('n')}")
     tr = open_tracker(a, quiet=True)
     if tr is None:
@@ -1160,11 +1192,14 @@ def add_values(a):
     if not a.company.strip() or not a.role.strip():
         raise TrackerError("company and role cannot be empty")
     vals.update({"Company": a.company.strip(), "Role": a.role.strip(), "Location": a.location,
-                 "Notes": a.notes, "Folder": check_folder(a.root, a.folder), "URL": a.url.strip(),
+                 "Notes": a.notes, "Folder": check_folder(a.root, a.folder),
+                 "URL": check_link("url", a.url, board_ok=True),
                  "Job key": a.job_key if a.job_key is not None else jobkey.job_key(a.url),
                  "Family": a.family, "Variant": a.variant, "ATS": a.ats, "Found via": a.found_via,
-                 "Req ID": a.req_id, "Referral": a.referral, "Referral URL": a.referral_url.strip(),
-                 "Proof": a.proof, "Block reason": a.block_reason, "Employer site": a.employer_site.strip()})
+                 "Req ID": a.req_id, "Referral": a.referral,
+                 "Referral URL": check_link("referral-url", a.referral_url),
+                 "Proof": a.proof, "Block reason": a.block_reason,
+                 "Employer site": check_link("employer-site", a.employer_site)})
     return vals
 
 
@@ -1259,6 +1294,8 @@ def parse_assign(root, item):
         value = pick(col.lower(), value, CHOICES[col])
     elif col == "Folder":
         value = check_folder(root, value)
+    elif col in CHECKED_LINKS:
+        value = check_link(CHECKED_LINKS[col], value, board_ok=col == "URL")
     elif isinstance(value, str):
         value = value.strip() if col != "Notes" else value
     return col, append, value
@@ -1588,7 +1625,8 @@ def cmd_referral_add(a):
         raise TrackerError("--company cannot be empty")
     vals = {"Channel": opt_pick("channel", a.channel, REF_CHANNELS),
             "Status": opt_pick("status", a.status, REF_STATUSES),
-            "Nudge on": opt_date("nudge-on", a.nudge_on), "Referral URL": (a.referral_url or "").strip(),
+            "Nudge on": opt_date("nudge-on", a.nudge_on),
+            "Referral URL": check_link("referral-url", a.referral_url or ""),
             "Job key": (a.job_key or "").strip(), "Notes": a.notes}
     when = opt_date("date", a.date) or today(a.root)
     if vals["Status"] == "Sent" and not vals["Nudge on"]:
@@ -1857,9 +1895,34 @@ def snapshot_current(root):
     return all(not b.exists() or b.stat().st_mtime <= snap_t for b in books)
 
 
+def screen_events(root, files):
+    """(readable files, files still arriving, files set aside): an event file
+    that cannot be read as JSON (over 64 KB, nested deeper than 64, or not
+    JSON after 3 tries) moves to runner/in/bad/ with one ERROR line, before the
+    workbook is opened, so a bad file never stops a tick (shared decision R3)."""
+    keep, waiting, bad = [], 0, 0
+    for path in files:
+        ev, err, permanent = events.read_file(path)
+        if err is None:
+            keep.append(path)
+            continue
+        if not permanent and (events.is_young(path) or events.note_failure(root, path.name) < events.MAX_TRIES):
+            waiting += 1
+            continue
+        why = err if permanent else f"unreadable after {events.MAX_TRIES} tries: {err}"
+        try:
+            events.set_aside(root, path, why)
+        except OSError as e:  # held open by another program: the next tick moves it
+            print(f"ERROR bad event file {path.name}: {why}; not moved yet ({type(e).__name__})")
+            continue
+        print(f"ERROR bad event file {path.name}: {why}; moved to runner/in/bad/")
+        bad += 1
+    return keep, waiting, bad
+
+
 def cmd_apply_events(a):
     need_openpyxl()
-    files = events.pending_files(a.root)
+    files, waiting, bad = screen_events(a.root, events.pending_files(a.root))
     if not files:
         # An idle tick: refresh the snapshot only when the user edited (and saved) the workbook.
         if not snapshot_current(a.root) and not workbook_locked(a.root):
@@ -1867,7 +1930,7 @@ def cmd_apply_events(a):
             tr.load()
             write_snapshot(tr, a.root)
         update_status(a.root, tracker_locked_since=None)
-        print("APPLIED 0 PENDING 0 REJECTED 0")
+        print(f"APPLIED 0 PENDING {waiting} REJECTED {bad}")
         return 0
     if workbook_locked(a.root):
         return report_locked(a.root)
@@ -1880,7 +1943,7 @@ def cmd_apply_events(a):
         return report_locked(a.root)
     tr.defer = True
     tr.refs.update(journal.refs())
-    done, dups, pending, rejected = [], [], 0, 0
+    done, dups, pending, rejected = [], [], waiting, bad
     for path in files:
         outcome, ev = take_event(a, tr, path, applied_ids)
         if outcome == "locked":

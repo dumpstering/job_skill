@@ -49,7 +49,6 @@ Exit codes: 0 ok (either verdict), 1 bad input (ERROR ...), 2 openpyxl missing
 """
 import argparse
 import csv
-import json
 import re
 import sys
 from datetime import datetime, timedelta
@@ -353,7 +352,7 @@ def entry(root, row):
     url = tracker.text(row.get("URL"))
     e = {"company_norm": jobkey.norm_company(tracker.text(row.get("Company"))),
          "family": tracker.text(row.get("Family")).lower(),
-         "job_key": tracker.text(row.get("Job key")) or jobkey.job_key(url),
+         "job_key": jobkey.safe_key(tracker.text(row.get("Job key"))) or jobkey.job_key(url),  # R2 form
          "host": tracker.url_host(url), "ats": tracker.text(row.get("ATS")).lower(), "status": status,
          "date": applied or tracker.to_date(row.get("Date")), "rejected_on": None,
          "req_ids": set(), "simhash": "", "title": tracker.text(row.get("Role")),
@@ -384,12 +383,10 @@ def open_store(root, transport="auto"):
 
 def queue_states(root):
     """job_key -> the folded queue state record (state/queue_state.json)."""
-    try:
-        data = json.loads(jobfs.Folder(root).queue_state_json.read_text(encoding="utf-8"))
-        items = data.get("items") if isinstance(data, dict) else None
-        return items if isinstance(items, dict) else {}
-    except (OSError, ValueError):
-        return {}
+    # The safe loader (R3): missing is {}; a bad file is {} with one ERROR line.
+    data = jobfs.read_json_or(jobfs.Folder(root).queue_state_json, jobfs.MAX_STATE, {})
+    items = data.get("items")
+    return items if isinstance(items, dict) else {}
 
 
 def not_sent(row, qstate):

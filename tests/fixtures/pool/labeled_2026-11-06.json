@@ -1,5 +1,5 @@
 {
- "about": "Live day 2 (2026-11-06): the 271 postings the round-2 gates pooled from real public job boards, each labeled by the D6 question: could a microbiology PhD, casting a wide net in the Bay Area, plausibly be hired for it? Borderline counts as yes. 'queue' is the item's number in that day's 30-item queue. Company, title and location are as the boards published them (ASCII).",
+ "about": "Live day 2 (2026-11-06): the 271 postings the round-2 gates pooled from real public job boards, each labeled by the D6 question: could a microbiology PhD, casting a wide net in the Bay Area, plausibly be hired for it? Borderline counts as yes. 'queue' is the item's number in that day's 30-item queue. Company, title and location are as the boards published them (ASCII). 'years' (round 4) holds only the requirement lines that ask for years of experience, for the seniority rule; no other posting text.",
  "items": [
   {
    "company": "Nautilus Biotechnology",
@@ -7,7 +7,10 @@
    "location": "San Carlos",
    "family": "academic_staff_research",
    "label": "no",
-   "reason": "protein bioconjugation and mass spec; PhD plus 10 years"
+   "reason": "protein bioconjugation and mass spec; PhD plus 10 years",
+   "years": [
+    "- PhD in biochemistry, chemistry, chemical biology, bioengineering, or a related field with 10+ years of industry experience; or BS/MS with 15+ years in a related field"
+   ]
   },
   {
    "company": "Stanford University",
@@ -15,7 +18,10 @@
    "location": "Stanford, CA, United States",
    "family": "academic_staff_research",
    "label": "no",
-   "reason": "visual neuroscience and large neural datasets (computational)"
+   "reason": "visual neuroscience and large neural datasets (computational)",
+   "years": [
+    "- Two or more years of research experience beyond the Ph.D., for example postdoctoral training, in systems, computational, or experimental neuroscience."
+   ]
   },
   {
    "company": "Stanford University",
@@ -23,7 +29,8 @@
    "location": "Stanford, CA, United States",
    "family": "academic_staff_research",
    "label": "no",
-   "reason": "7T fMRI / MEG brain imaging project"
+   "reason": "7T fMRI / MEG brain imaging project",
+   "years": []
   },
   {
    "company": "Stanford University",
@@ -31,7 +38,8 @@
    "location": "Stanford, CA, United States",
    "family": "academic_staff_research",
    "label": "yes",
-   "reason": "entry research professional in a radiology lab"
+   "reason": "entry research professional in a radiology lab",
+   "years": []
   },
   {
    "company": "Stanford University",
@@ -39,7 +47,8 @@
    "location": "Stanford, CA, United States",
    "family": "academic_staff_research",
    "label": "yes",
-   "reason": "entry lab research professional"
+   "reason": "entry lab research professional",
+   "years": []
   },
   {
    "company": "Stanford University",
@@ -48,7 +57,8 @@
    "family": "academic_staff_research",
    "label": "yes",
    "reason": "entry lab research professional (hematology)",
-   "queue": 14
+   "queue": 14,
+   "years": []
   },
   {
    "company": "Stanford University",
@@ -56,7 +66,8 @@
    "location": "Stanford, CA, United States",
    "family": "academic_staff_research",
    "label": "yes",
-   "reason": "entry lab research professional (cancer lab)"
+   "reason": "entry lab research professional (cancer lab)",
+   "years": []
   },
   {
    "company": "Stanford University",
@@ -65,7 +76,8 @@
    "family": "academic_staff_research",
    "label": "yes",
    "reason": "immunology lab: cell culture, flow, ELISA",
-   "queue": 11
+   "queue": 11,
+   "years": []
   },
   {
    "company": "Stanford University",
@@ -73,7 +85,8 @@
    "location": "Stanford, CA, United States",
    "family": "academic_staff_research",
    "label": "yes",
-   "reason": "entry lab research professional"
+   "reason": "entry lab research professional",
+   "years": []
   },
   {
    "company": "Stanford University",
@@ -82,7 +95,8 @@
    "family": "academic_staff_research",
    "label": "yes",
    "reason": "genetics lab, CRISPR enzymes",
-   "queue": 16
+   "queue": 16,
+   "years": []
   },
   {
    "company": "Stanford University",
@@ -90,7 +104,8 @@
    "location": "Stanford, CA, United States",
    "family": "academic_staff_research",
    "label": "yes",
-   "reason": "genomics of diabetes lab"
+   "reason": "genomics of diabetes lab",
+   "years": []
   },
   {
    "company": "Stanford University",
@@ -98,7 +113,8 @@
    "location": "Stanford, CA, United States",
    "family": "academic_staff_research",
    "label": "no",
-   "reason": "patch-clamp electrophysiology expertise"
+   "reason": "patch-clamp electrophysiology expertise",
+   "years": []
   },
   {
    "company": "Glyphic Biotechnologies",
@@ -107,7 +123,8 @@
    "family": "assay_development",
    "label": "yes",
    "reason": "molecular assay research (borderline: senior)",
-   "queue": 29
+   "queue": 29,
+   "years": []
   },
   {
    "company": "Gordian Biotechnology",
@@ -115,7 +132,11 @@
    "location": "South San Francisco, CA",
    "family": "assay_development",
    "label": "yes",
-   "reason": "lab RA: primary cells, assays"
+   "reason": "lab RA: primary cells, assays",
+   "years": [
+    "You have a BS in biology, biochemistry, or a related life science, and 1-3 years of hands-on lab experience in industry or academia.",
+    "You have a BS in biology, biochemistry, or a related life science, and 1-3 years of hands-on lab experience in industry or academia."
+   ]
   },
   {
    "company": "Natera",
@@ -123,7 +144,10 @@
    "location": "San Carlos, CA",
    "family": "assay_development",
    "label": "yes",
-   "reason": "molecular biology assay development"
+   "reason": "molecular biology assay development",
+   "years": [
+    "- Ph.D. in molecular biology, genomics, biochemistry, or a closely related field, with 2+ years of relevant industry experience, or M.S. with a minimum of 5 years of industry experience in assay development."
+   ]
   },
   {
    "company": "Nautilus Biotechnology",
@@ -131,7 +155,10 @@
    "location": "San Carlos",
    "family": "assay_development",
    "label": "no",
-   "reason": "staff level: PhD plus 10 years industry"
+   "reason": "staff level: PhD plus 10 years industry",
+   "years": [
+    "- PhD in biochemistry, molecular biology, bioengineering, chemistry, or a related field with 10+ years of industry experience; or BS/MS with 15+ years in a related biotechnology or materials science field"
+   ]
   },
   {
    "company": "Plasmidsaurus",
@@ -140,7 +167,8 @@
    "family": "assay_development",
    "label": "yes",
    "reason": "PCR, cell culture, sequencing workflows",
-   "queue": 3
+   "queue": 3,
+   "years": []
   },
   {
    "company": "Thermo Fisher Scientific",
@@ -149,7 +177,11 @@
    "family": "assay_development",
    "label": "no",
    "reason": "business development (sales) role",
-   "queue": 15
+   "queue": 15,
+   "years": [
+    "- Minimum of 5+ years in-depth experience in business development, product management or marketing within the life science, molecular diagnostic or biopharmaceutical industries.",
+    "- Minimum of 5+ years in-depth experience in business development, product management or marketing within the life science, molecular diagnostic or biopharmaceutical industries."
+   ]
   },
   {
    "company": "Xaira Therapeutics",
@@ -157,7 +189,11 @@
    "location": "South San Francisco, California, United States",
    "family": "assay_development",
    "label": "yes",
-   "reason": "single-cell and NGS assay development (borderline: senior)"
+   "reason": "single-cell and NGS assay development (borderline: senior)",
+   "years": [
+    "- PhD in molecular biology, cell biology, bioengineering, biochemistry, immunology, or a related field, with 4+ years of relevant experience, including industry experience in assay or technology development.",
+    "- Candidates with fewer than 4 years of postdoctoral experience, with strong single-cell assay/technology development experience, are encouraged to apply. The title can be adjusted accordingly."
+   ]
   },
   {
    "company": "Arc Institute",
@@ -165,7 +201,10 @@
    "location": "Palo Alto, CA",
    "family": "biosafety",
    "label": "no",
-   "reason": "biosafety manager: 3+ years EH&S required"
+   "reason": "biosafety manager: 3+ years EH&S required",
+   "years": [
+    "- 5+ years of laboratory experience, including 3+ years in Environmental Health & Safety (EH&S) and Biosafety with a strong grounding in virology or microbiological sciences."
+   ]
   },
   {
    "company": "Stanford University",
@@ -173,7 +212,10 @@
    "location": "Stanford, CA, United States",
    "family": "biosafety",
    "label": "yes",
-   "reason": "biosafety specialist; microbiology background fits"
+   "reason": "biosafety specialist; microbiology background fits",
+   "years": [
+    "Three years progressively responsible experience in occupational safety and health, emergency response/management, environmental science, and/or allied/scientific field, or an equivalent combination of education and relevant experience."
+   ]
   },
   {
    "company": "Stanford University",
@@ -181,7 +223,10 @@
    "location": "Stanford, CA, United States | Menlo Park, CA, United States",
    "family": "biosafety",
    "label": "yes",
-   "reason": "biosafety specialist; microbiology background fits"
+   "reason": "biosafety specialist; microbiology background fits",
+   "years": [
+    "Three years progressively responsible experience in occupational safety and health, emergency response/management, environmental science, and/or allied/scientific field, or an equivalent combination of education and relevant experience."
+   ]
   },
   {
    "company": "Abbott",
@@ -189,7 +234,10 @@
    "location": "United States - California - Alameda",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "entry clinical research associate (education may count)"
+   "reason": "entry clinical research associate (education may count)",
+   "years": [
+    "- BS degree in life sciences preferred or equivalent with minimum one (1) year of clinical research experience, or combination of appropriate education and experience."
+   ]
   },
   {
    "company": "Abbott",
@@ -197,7 +245,8 @@
    "location": "United States - California - San Francisco",
    "family": "clinical_research",
    "label": "no",
-   "reason": "field clinical support for cardiac EP devices"
+   "reason": "field clinical support for cardiac EP devices",
+   "years": []
   },
   {
    "company": "Abbott",
@@ -205,7 +254,11 @@
    "location": "United States - California - Alameda",
    "family": "clinical_research",
    "label": "no",
-   "reason": "CRA II: 5 years clinical research, 2 years monitoring"
+   "reason": "CRA II: 5 years clinical research, 2 years monitoring",
+   "years": [
+    "- B.S. degree in life sciences or equivalent with minimum 5 years of clinical research experience.",
+    "- Must have 2+ years of relevant experience in site monitoring."
+   ]
   },
   {
    "company": "BillionToOne",
@@ -213,7 +266,10 @@
    "location": "Menlo Park - Base Building",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "lab research associate: PCR, DNA work"
+   "reason": "lab research associate: PCR, DNA work",
+   "years": [
+    "- 1-2 years of research experience (either during BS/MS or afterwards)"
+   ]
   },
   {
    "company": "CareDx",
@@ -221,7 +277,10 @@
    "location": "Brisbane, CA",
    "family": "clinical_research",
    "label": "no",
-   "reason": "senior CRA: 5+ years clinical research"
+   "reason": "senior CRA: 5+ years clinical research",
+   "years": [
+    "- Experience: 5+ years of experience in clinical research within biotech, pharma, medical device, or academia."
+   ]
   },
   {
    "company": "Ceribell",
@@ -229,7 +288,10 @@
    "location": "Sunnyvale, CA",
    "family": "clinical_research",
    "label": "no",
-   "reason": "manager of clinical research programs"
+   "reason": "manager of clinical research programs",
+   "years": [
+    "- 7+ years of clinical research experience, with 5+ years in the medical device or pharmaceutical industry, and demonstrated success advancing projects from study design and development through execution, analysis, and reporting"
+   ]
   },
   {
    "company": "Eikon Therapeutics",
@@ -237,7 +299,10 @@
    "location": "Jersey City, NJ; Millbrae, CA",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "clinical trial associate; advanced degree without experience accepted"
+   "reason": "clinical trial associate; advanced degree without experience accepted",
+   "years": [
+    "- An Advanced Degree without experience or Bachelor's degree with 2 years of experience in a relevant field (e.g., life sciences, healthcare, or related discipline)"
+   ]
   },
   {
    "company": "Genentech",
@@ -245,7 +310,10 @@
    "location": "South San Francisco",
    "family": "clinical_research",
    "label": "no",
-   "reason": "pharmacovigilance: RN/PharmD/MD and 5-7 years PV"
+   "reason": "pharmacovigilance: RN/PharmD/MD and 5-7 years PV",
+   "years": [
+    "- Bring 5 to 7 years of biopharmaceutical industry experience dedicated to pharmacovigilance, or equivalent clinical experience coupled with a practical mastery of FDA, EMA, and ICH safety regulations and submission pathways."
+   ]
   },
   {
    "company": "Generate Biomedicines",
@@ -253,7 +321,10 @@
    "location": "Remote",
    "family": "clinical_research",
    "label": "no",
-   "reason": "senior clinical trial manager"
+   "reason": "senior clinical trial manager",
+   "years": [
+    "- 8+ years of experience in clinical operations, with at least 4+ years in late stage trial operations with a sponsor company"
+   ]
   },
   {
    "company": "Gilead Sciences",
@@ -261,7 +332,11 @@
    "location": "United States - California - Foster City",
    "family": "clinical_research",
    "label": "no",
-   "reason": "clinical trials manager: years of study leadership"
+   "reason": "clinical trials manager: years of study leadership",
+   "years": [
+    "- BA / BS / RN with 5+ years' relevant clinical or related experience in life sciences.",
+    "- MA / MS / PharmD / PhD with 3+ years' relevant clinical or related experience in life sciences."
+   ]
   },
   {
    "company": "Gilead Sciences",
@@ -269,7 +344,10 @@
    "location": "United States - California - Foster City",
    "family": "clinical_research",
    "label": "no",
-   "reason": "senior clinical trials manager"
+   "reason": "senior clinical trials manager",
+   "years": [
+    "- BA/BS with 6+ years of relevant clinical or related life sciences experience; or MA/MS with 4+ years of relevant clinical or related life sciences"
+   ]
   },
   {
    "company": "IQVIA",
@@ -277,7 +355,10 @@
    "location": "Carlsbad, CA, United States of America | Atlanta, GA | Durham, NC | Boston, MA | San Francisco, CA, United States of America | Sacramento, CA, United States of America | Philadelphia, PA",
    "family": "clinical_research",
    "label": "no",
-   "reason": "CRA needs 1.5 years on-site monitoring"
+   "reason": "CRA needs 1.5 years on-site monitoring",
+   "years": [
+    "- Requires at least 1.5 years of on-site monitoring experience."
+   ]
   },
   {
    "company": "IQVIA",
@@ -285,7 +366,10 @@
    "location": "Durham, North Carolina, United States of America | Aurora, Illinois, United States | San Fernando, California, United States | Clinton, Missouri, United States | Mansfield, Ohio, United States | Santa Cruz, California, United States | Santa Fe, New Mexico, United States | South Shore, Illinois, United States | Elk Grove, California, United States | Hudson, Ohio, United States | Englewood, Colorado, United States | Bellingham, Washington, United States | Marysville, Washington, United States | Overland Park, KS, United States of America | Evanston, Wyoming, United States | La Habra, California, United States | Prescott, Arizona, United States | Westchester, New York, United States | Mount Vernon, Illinois, United States | Warren, Ohio, United States of America | Linden, New Jersey, United States | Fremont, California, United States | Del Mar, California, United States | Lake Tahoe, California, United States | Northfield, New Jersey, United States | Fort Pierce, Florida, United States | Wilkes Barre, Pennsylvania, United States | Camden, New Jersey, United States | Lancaster, California, United States | Clarksville, Tennessee, United States | Adair, Iowa, United States | Fort Collins, Colorado, United States | Breckenridge, Colorado, United States | Littleton, Colorado, United States | Liverpool, New York, United States | Ft Lauderdale, Florida, United States | Springfield, Ohio, United States | Long Island, New York, United States | Gloucester, Virginia, United States | West Point, Virginia, United States | O'Fallon, Illinois, United States | Cheyenne, Wyoming, United States | Manhattan, New York, United States | New City, New York, United States | Parsippany, New Jersey, United States of America | Queens, New York, United States | New York City, New York, United States | Escondido, California, United States | Oak Brook, Illinois, United States | Merritt Island, Florida, United States | El Cajon, California, United States | Ontario, California, United States | Afton, Wyoming, United States | Abilene, Texas, United States | Orangevale, California, United States | Abingdon, Virginia, United States | Orland Park, Illinois, United States | Shenandoah, Texas, United States | Akron, Ohio, United States | Paradise Valley, Arizona, United States | Newark, Delaware, United States | Hollywood, Florida, United States | Port Saint Lucie, Florida, United States | Lawton, Oklahoma, United States | Portland, Oregon, United States | Chino Hills, California, United States | Belmar, New Jersey, United States | Sonora, California, United States | Berkley, California, United States | Springfield, Massachusetts, United States | Springfield, Missouri, United States | San Jose, California, United States | Beverly Hills, California, United States | Melbourne, Florida, United States | Colorado Springs, Colorado, United States | St. Petersburg, Florida, United States | Panama City, Florida, United States | Redondo Beach, California, United States | Crystal Lake, Illinois, United States | Rochester, New York, United States | Ada, Oklahoma, United States | Kansas City, Missouri, United States | Ainsworth, Nebraska, United States | Carlsbad, CA, United States of America | Denver , Colorado, United States",
    "family": "clinical_research",
    "label": "no",
-   "reason": "CRA needs 2 years independent monitoring"
+   "reason": "CRA needs 2 years independent monitoring",
+   "years": [
+    "- Requires at least 2 years of year of independent on-site monitoring experience as a Clinical Research Associate (CRA) in a CRO, sponsor, or similar setting."
+   ]
   },
   {
    "company": "Iovance Biotherapeutics",
@@ -293,7 +377,10 @@
    "location": "Remote",
    "family": "clinical_research",
    "label": "no",
-   "reason": "clinical trial manager"
+   "reason": "clinical trial manager",
+   "years": [
+    "- Bachelor's degree with 5+ years of pharmaceutical or biotech-related/clinical research, oncology or research experience and at least 1 year as CTM"
+   ]
   },
   {
    "company": "Merck (MSD)",
@@ -301,7 +388,14 @@
    "location": "USA - Pennsylvania - West Point | USA - Massachusetts - Boston (MA Parcel B Laboratory) | USA - New Jersey - Rahway | USA - California - South San Francisco (Grand Ave)",
    "family": "clinical_research",
    "label": "no",
-   "reason": "principal scientist: 3+ years Phase 1 trials"
+   "reason": "principal scientist: 3+ years Phase 1 trials",
+   "years": [
+    "- Bachelor's degree and >=11 years related* experience, OR",
+    "- Master's degree and >=8 years related* experience, OR",
+    "- PhD or doctorate degree and >=3 years related* experience.",
+    "- At least 3 years Phase 1 clinical trial experience.",
+    "- At least 3 years Phase 1 clinical trial experience."
+   ]
   },
   {
    "company": "Merck (MSD)",
@@ -309,7 +403,8 @@
    "location": "USA - New Jersey - Rahway | USA - REMOTE - REMOTE",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "clinical trial coordinator (entry, admin)"
+   "reason": "clinical trial coordinator (entry, admin)",
+   "years": []
   },
   {
    "company": "Stanford University",
@@ -317,7 +412,10 @@
    "location": "Redwood City, CA, United States | Stanford, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "entry clinical research coordinator"
+   "reason": "entry clinical research coordinator",
+   "years": [
+    "Two-year college degree and one year of relevant experience or an equivalent combination of experience, education, and training."
+   ]
   },
   {
    "company": "Stanford University",
@@ -325,7 +423,10 @@
    "location": "Stanford, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "entry clinical research coordinator"
+   "reason": "entry clinical research coordinator",
+   "years": [
+    "Two-year college degree and one year of relevant experience or an equivalent combination of experience, education, and training."
+   ]
   },
   {
    "company": "Stanford University",
@@ -333,7 +434,10 @@
    "location": "Stanford, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "clinical research coordinator 2 (borderline)"
+   "reason": "clinical research coordinator 2 (borderline)",
+   "years": [
+    "Bachelor's degree in a related field and two years of experience in clinical research, or an equivalent combination of education and relevant experience."
+   ]
   },
   {
    "company": "Stanford University",
@@ -341,7 +445,8 @@
    "location": "Stanford, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "clinical research coordinator 2 (borderline)"
+   "reason": "clinical research coordinator 2 (borderline)",
+   "years": []
   },
   {
    "company": "Stanford University",
@@ -349,7 +454,10 @@
    "location": "Stanford, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "entry clinical research coordinator"
+   "reason": "entry clinical research coordinator",
+   "years": [
+    "Two-year college degree and two years related work experience or a bachelor's degree in a related field or an equivalent combination of related education and relevant experience."
+   ]
   },
   {
    "company": "Stanford University",
@@ -357,7 +465,10 @@
    "location": "Stanford, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "entry clinical research coordinator"
+   "reason": "entry clinical research coordinator",
+   "years": [
+    "Two-year college degree and two years related work experience or a bachelor's degree in a related field or an equivalent combination of related education and relevant experience."
+   ]
   },
   {
    "company": "Stanford University",
@@ -365,7 +476,10 @@
    "location": "Stanford, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "entry clinical research coordinator"
+   "reason": "entry clinical research coordinator",
+   "years": [
+    "Two-year college degree and two years related work experience or a bachelor's degree in a related field or an equivalent combination of related education and relevant experience."
+   ]
   },
   {
    "company": "Stanford University",
@@ -373,7 +487,10 @@
    "location": "Stanford, CA, United States",
    "family": "clinical_research",
    "label": "no",
-   "reason": "clinical research manager: 5 years clinical research"
+   "reason": "clinical research manager: 5 years clinical research",
+   "years": [
+    "Five years of experience in clinical research, or an equivalent combination of education and relevant experience. Master's degree preferred."
+   ]
   },
   {
    "company": "Stanford University",
@@ -381,7 +498,10 @@
    "location": "Stanford, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "clinical research coordinator 2 (borderline)"
+   "reason": "clinical research coordinator 2 (borderline)",
+   "years": [
+    "Bachelor's degree in a related field and two years of experience in clinical research, or an equivalent combination of education and relevant experience."
+   ]
   },
   {
    "company": "Stanford University",
@@ -389,7 +509,11 @@
    "location": "Stanford, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "clinical research coordinator 2 (borderline)"
+   "reason": "clinical research coordinator 2 (borderline)",
+   "years": [
+    "work under the close direction of the manager (CRM), and principal investigator(s). The CRCII will support industry, federal and grant funded clinical research studies. The CRC II will manage 1-2 CRCAs and will be responsible for training, assigning tasks and reviewing their work. This CRC II position is a full-time position and a commitment of at least two years is required. CRC IIs are expected ",
+    "Bachelor's degree in a related field and two years of experience in clinical research, or an equivalent combination of education and relevant experience."
+   ]
   },
   {
    "company": "Stanford University",
@@ -397,7 +521,10 @@
    "location": "Stanford, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "clinical research coordinator 2 (borderline)"
+   "reason": "clinical research coordinator 2 (borderline)",
+   "years": [
+    "Bachelor's degree in a related field and two years of experience in clinical research, or an equivalent combination of education and relevant experience."
+   ]
   },
   {
    "company": "Stanford University",
@@ -405,7 +532,10 @@
    "location": "Stanford, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "clinical research coordinator 2 (borderline)"
+   "reason": "clinical research coordinator 2 (borderline)",
+   "years": [
+    "Bachelor's degree in a related field and two years of experience in clinical research, or an equivalent combination of education and relevant experience."
+   ]
   },
   {
    "company": "Stanford University",
@@ -413,7 +543,11 @@
    "location": "Redwood City, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "clinical research coordinator 2 (sleep trials desired only)"
+   "reason": "clinical research coordinator 2 (sleep trials desired only)",
+   "years": [
+    "- 3+ years of experience working in Sleep Medicine clinical trials.",
+    "Bachelor's degree in a related field and two years of experience in clinical research, or an equivalent combination of education and relevant experience."
+   ]
   },
   {
    "company": "Stanford University",
@@ -421,7 +555,10 @@
    "location": "Stanford, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "clinical research coordinator 2 (borderline)"
+   "reason": "clinical research coordinator 2 (borderline)",
+   "years": [
+    "Bachelor's degree in a related field and two years of experience in clinical research, or an equivalent combination of education and relevant experience."
+   ]
   },
   {
    "company": "Stanford University",
@@ -429,7 +566,11 @@
    "location": "Stanford, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "clinical research coordinator 2 (borderline)"
+   "reason": "clinical research coordinator 2 (borderline)",
+   "years": [
+    "- Experience working with oncology clinical research studies. Minimum of two (2) years of experience in a clinical research setting.",
+    "Bachelor's degree in a related field and two years of experience in clinical research, or an equivalent combination of education and relevant experience."
+   ]
   },
   {
    "company": "Stanford University",
@@ -437,7 +578,10 @@
    "location": "Stanford, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "entry research coordinator (bilingual asked)"
+   "reason": "entry research coordinator (bilingual asked)",
+   "years": [
+    "Two-year college degree and two years related work experience or a bachelor's degree in a related field or an equivalent combination of related education and relevant experience."
+   ]
   },
   {
    "company": "Stanford University",
@@ -445,7 +589,11 @@
    "location": "Stanford, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "entry clinical research coordinator"
+   "reason": "entry clinical research coordinator",
+   "years": [
+    "- 2+ years of related experience in subject recruitment, assessment, and analysis related to neuroimaging research.",
+    "Two-year college degree and two years related work experience or a bachelor's degree in a related field or an equivalent combination of related education and relevant experience."
+   ]
   },
   {
    "company": "Stanford University",
@@ -453,7 +601,10 @@
    "location": "Stanford, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "entry clinical research coordinator"
+   "reason": "entry clinical research coordinator",
+   "years": [
+    "Two-year college degree and two years related work experience or a bachelor's degree in a related field or an equivalent combination of related education and relevant experience."
+   ]
   },
   {
    "company": "Stanford University",
@@ -461,7 +612,10 @@
    "location": "Stanford, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "entry clinical research coordinator"
+   "reason": "entry clinical research coordinator",
+   "years": [
+    "Two-year college degree and two years related work experience or a bachelor's degree in a related field or an equivalent combination of related education and relevant experience."
+   ]
   },
   {
    "company": "Stanford University",
@@ -469,7 +623,8 @@
    "location": "Stanford, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "entry clinical research coordinator"
+   "reason": "entry clinical research coordinator",
+   "years": []
   },
   {
    "company": "Stanford University",
@@ -477,7 +632,10 @@
    "location": "Stanford, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "entry clinical research coordinator"
+   "reason": "entry clinical research coordinator",
+   "years": [
+    "Two-year college degree and two years related work experience or a bachelor's degree in a related field or an equivalent combination of related education and relevant experience."
+   ]
   },
   {
    "company": "Stanford University",
@@ -485,7 +643,10 @@
    "location": "Stanford, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "entry clinical research coordinator"
+   "reason": "entry clinical research coordinator",
+   "years": [
+    "- Two-year college degree and two years related work experience or a Bachelor's degree and one year of related work experience or an equivalent combination of related education and relevant experience."
+   ]
   },
   {
    "company": "Stanford University",
@@ -493,7 +654,10 @@
    "location": "Stanford, CA, United States",
    "family": "clinical_research",
    "label": "no",
-   "reason": "lead coordinator: 4 years clinical research"
+   "reason": "lead coordinator: 4 years clinical research",
+   "years": [
+    "Four years of experience in clinical research, or an equivalent combination of education and relevant experience."
+   ]
   },
   {
    "company": "Stanford University",
@@ -501,7 +665,11 @@
    "location": "Stanford, CA, United States",
    "family": "clinical_research",
    "label": "no",
-   "reason": "senior program manager: 5 years clinical research"
+   "reason": "senior program manager: 5 years clinical research",
+   "years": [
+    "Bachelor's degree in related field and five years of experience in clinical research, or an equivalent combination of education and relevant experience. Master's degree preferred.",
+    "- Minimum of three years of demonstrated managerial experience."
+   ]
   },
   {
    "company": "Summit Therapeutics",
@@ -509,7 +677,11 @@
    "location": "Remote",
    "family": "clinical_research",
    "label": "no",
-   "reason": "senior clinical trial manager: 8-10 years"
+   "reason": "senior clinical trial manager: 8-10 years",
+   "years": [
+    "- 8-10+ years of clinical operations experience in sponsor pharmaceutical or biotechnology organizations.",
+    "- 7+ years of direct clinical trial management experience overseeing phase II/III international oncology clinical trials"
+   ]
   },
   {
    "company": "Thermo Fisher Scientific",
@@ -517,7 +689,10 @@
    "location": "Remote, California, USA",
    "family": "clinical_research",
    "label": "no",
-   "reason": "clinical operations people manager"
+   "reason": "clinical operations people manager",
+   "years": [
+    "- Previous experience that provides the knowledge, skills, and abilities to perform the job (comparable to 0 to 5 years)."
+   ]
   },
   {
    "company": "Thermo Fisher Scientific",
@@ -525,7 +700,10 @@
    "location": "Remote, California, USA",
    "family": "clinical_research",
    "label": "no",
-   "reason": "experienced CRA: monitoring years"
+   "reason": "experienced CRA: monitoring years",
+   "years": [
+    "- Previous experience that provides the knowledge, skills, and abilities to perform the job (comparable to 1 years as a clinical research monitor) or completion of PPD Drug Development Fellowship."
+   ]
   },
   {
    "company": "Thermo Fisher Scientific",
@@ -533,7 +711,11 @@
    "location": "Remote, Oregon, USA | Remote, Idaho, USA | Remote, Colorado, USA | Remote, California, USA | Remote, Nevada, USA | Remote, Washington, USA | Remote, Utah, USA | Remote, New Mexico, USA | Remote, Arizona, USA | Remote, Montana, USA | Remote, Wyoming, USA",
    "family": "clinical_research",
    "label": "no",
-   "reason": "experienced CRA: monitoring years"
+   "reason": "experienced CRA: monitoring years",
+   "years": [
+    "- Required: Minimum of 1 year of oncology monitoring experience, OR minimum of 2 years of standard monitoring experience with relevant prior clinical experience (e.g., MD, RN, Study Coordinator).",
+    "- Preferred: Ideally candidates will have up to 2 years of monitoring experience, though more experienced candidates can be considered if needed"
+   ]
   },
   {
    "company": "Thermo Fisher Scientific",
@@ -541,7 +723,10 @@
    "location": "Remote, California, USA | Remote, Idaho, USA | Remote, Colorado, USA | Remote, Nevada, USA | Remote, Washington, USA | Remote, Utah, USA | Remote, New Mexico, USA | Remote, Arizona, USA | Remote, Montana, USA | Remote, Oregon, USA | Remote, Wyoming, USA",
    "family": "clinical_research",
    "label": "no",
-   "reason": "experienced CRA: 1-5 years as a monitor"
+   "reason": "experienced CRA: 1-5 years as a monitor",
+   "years": [
+    "Previous experience that provides the knowledge, skills, and abilities to perform the job (comparable to 1-5 years as a clinical research monitor, depending on the level)."
+   ]
   },
   {
    "company": "Thermo Fisher Scientific",
@@ -549,7 +734,10 @@
    "location": "Remote, California, USA",
    "family": "clinical_research",
    "label": "no",
-   "reason": "senior CRA: 3+ years monitoring"
+   "reason": "senior CRA: 3+ years monitoring",
+   "years": [
+    "- Previous experience that provides the knowledge, skills, and abilities to perform the job (comparable to 3+ years)."
+   ]
   },
   {
    "company": "UCSF",
@@ -557,7 +745,8 @@
    "location": "San Francisco, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "entry clinical research coordinator"
+   "reason": "entry clinical research coordinator",
+   "years": []
   },
   {
    "company": "UCSF",
@@ -565,7 +754,10 @@
    "location": "San Francisco, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "clinical research coordinator (entry requirements)"
+   "reason": "clinical research coordinator (entry requirements)",
+   "years": [
+    "- 3-5 years of full-time work experience in a related field."
+   ]
   },
   {
    "company": "UCSF",
@@ -573,7 +765,10 @@
    "location": "San Francisco, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "clinical research coordinator (entry requirements)"
+   "reason": "clinical research coordinator (entry requirements)",
+   "years": [
+    "- >= 2 years of full-time work experience in a related field"
+   ]
   },
   {
    "company": "UCSF",
@@ -581,7 +776,8 @@
    "location": "San Francisco, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "clinical research coordinator (entry requirements)"
+   "reason": "clinical research coordinator (entry requirements)",
+   "years": []
   },
   {
    "company": "UCSF",
@@ -589,7 +785,11 @@
    "location": "San Francisco, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "clinical research coordinator (entry requirements)"
+   "reason": "clinical research coordinator (entry requirements)",
+   "years": [
+    "- 3+ years of experience working with veteran patients at a VA medical facility.",
+    "- 3years of experience working with veterans and/or civilians with history of psychological trauma or PTSD. Level 1 MRI safety training for SFVA researchers."
+   ]
   },
   {
    "company": "UCSF",
@@ -597,7 +797,8 @@
    "location": "San Francisco, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "clinical research coordinator (entry requirements)"
+   "reason": "clinical research coordinator (entry requirements)",
+   "years": []
   },
   {
    "company": "UCSF",
@@ -605,7 +806,8 @@
    "location": "San Francisco, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "clinical research coordinator (language asked)"
+   "reason": "clinical research coordinator (language asked)",
+   "years": []
   },
   {
    "company": "UCSF",
@@ -613,7 +815,8 @@
    "location": "San Francisco, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "clinical research coordinator (entry requirements)"
+   "reason": "clinical research coordinator (entry requirements)",
+   "years": []
   },
   {
    "company": "UCSF",
@@ -621,7 +824,8 @@
    "location": "San Francisco, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "clinical research coordinator with specimen processing"
+   "reason": "clinical research coordinator with specimen processing",
+   "years": []
   },
   {
    "company": "UCSF",
@@ -629,7 +833,8 @@
    "location": "San Francisco, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "clinical research coordinator (entry requirements)"
+   "reason": "clinical research coordinator (entry requirements)",
+   "years": []
   },
   {
    "company": "UCSF",
@@ -637,7 +842,8 @@
    "location": "San Francisco, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "clinical research coordinator with specimen processing"
+   "reason": "clinical research coordinator with specimen processing",
+   "years": []
   },
   {
    "company": "UCSF",
@@ -645,7 +851,10 @@
    "location": "San Francisco, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "clinical research coordinator (entry requirements)"
+   "reason": "clinical research coordinator (entry requirements)",
+   "years": [
+    "- Demonstrated epidemiological or clinical research experience (minimum of one year)"
+   ]
   },
   {
    "company": "UCSF",
@@ -653,7 +862,8 @@
    "location": "San Francisco, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "clinical research coordinator with specimen processing"
+   "reason": "clinical research coordinator with specimen processing",
+   "years": []
   },
   {
    "company": "UCSF",
@@ -661,7 +871,11 @@
    "location": "San Francisco, CA, United States",
    "family": "clinical_research",
    "label": "yes",
-   "reason": "clinical research coordinator (entry requirements)"
+   "reason": "clinical research coordinator (entry requirements)",
+   "years": [
+    "- One year of experience in clinical research that includes sensitive content, or an equivalent combination of education and experience",
+    "- One year of volunteer or professional experience working in a clinic setting or equivalent e.g., community non-profit and interacting with patients / clients and their health care providers"
+   ]
   },
   {
    "company": "UCSF",
@@ -669,7 +883,8 @@
    "location": "San Francisco, CA, United States",
    "family": "clinical_research",
    "label": "no",
-   "reason": "senior coordinator: in-depth trial experience"
+   "reason": "senior coordinator: in-depth trial experience",
+   "years": []
   },
   {
    "company": "UCSF",
@@ -677,7 +892,8 @@
    "location": "San Francisco, CA, United States",
    "family": "clinical_research",
    "label": "no",
-   "reason": "senior coordinator: significant trial management"
+   "reason": "senior coordinator: significant trial management",
+   "years": []
   },
   {
    "company": "UCSF",
@@ -685,7 +901,8 @@
    "location": "San Francisco, CA, United States",
    "family": "clinical_research",
    "label": "no",
-   "reason": "senior coordinator: in-depth trial experience"
+   "reason": "senior coordinator: in-depth trial experience",
+   "years": []
   },
   {
    "company": "UCSF",
@@ -693,7 +910,11 @@
    "location": "San Francisco, CA, United States",
    "family": "clinical_research",
    "label": "no",
-   "reason": "senior coordinator: 3 years as a CRC"
+   "reason": "senior coordinator: 3 years as a CRC",
+   "years": [
+    "- Three years experience as a Clinical Research Coordinator in clinical trials at UCSF or equivalent institution",
+    "- Three years experience as a Clinical Research Coordinator in clinical trials at UCSF or equivalent institution"
+   ]
   },
   {
    "company": "Vera Therapeutics",
@@ -701,7 +922,10 @@
    "location": "Remote",
    "family": "clinical_research",
    "label": "no",
-   "reason": "senior clinical trial manager"
+   "reason": "senior clinical trial manager",
+   "years": [
+    "- 5+ years clinical development experience and progressive experience in clinical research within the pharmaceutical or biotechnology industry."
+   ]
   },
   {
    "company": "Viz.ai",
@@ -709,7 +933,10 @@
    "location": "United States - Remote",
    "family": "clinical_research",
    "label": "no",
-   "reason": "senior clinical study manager: 6 years"
+   "reason": "senior clinical study manager: 6 years",
+   "years": [
+    "At least 6 years of clinical research experience, preferably in the medical device and/or SaaS sector."
+   ]
   },
   {
    "company": "Alamar Biosciences",
@@ -718,7 +945,10 @@
    "family": "field_application_tech_support",
    "label": "yes",
    "reason": "immunoassay application scientist",
-   "queue": 17
+   "queue": 17,
+   "years": [
+    "- 2+ years of experience in immunoassay development, bioanalytical sciences, or technical applications support."
+   ]
   },
   {
    "company": "Danaher",
@@ -726,7 +956,8 @@
    "location": "San Francisco, California, United States",
    "family": "field_application_tech_support",
    "label": "yes",
-   "reason": "application scientist for assay data software (borderline)"
+   "reason": "application scientist for assay data software (borderline)",
+   "years": []
   },
   {
    "company": "Danaher",
@@ -734,7 +965,10 @@
    "location": "San Francisco, California, United States | San Jose, California, United States | Sacramento, California, United States",
    "family": "field_application_tech_support",
    "label": "yes",
-   "reason": "flow cytometry field application scientist"
+   "reason": "flow cytometry field application scientist",
+   "years": [
+    "- Extensive flow cytometry experience (5+ years) in clinical setting including spectral flow cytometry."
+   ]
   },
   {
    "company": "4D Molecular Therapeutics",
@@ -743,7 +977,12 @@
    "family": "industry_rd_scientist",
    "label": "yes",
    "reason": "cell culture, qPCR/ddPCR, bioanalytical assays",
-   "queue": 1
+   "queue": 1,
+   "years": [
+    "- PhD in a relevant scientific discipline with 5+ years of industry experience; OR",
+    "- Master's degree with 7-8+ years of industry or related experience; OR",
+    "- Bachelor's degree with 9-11+ years of industry or related experience"
+   ]
   },
   {
    "company": "Alamar Biosciences",
@@ -751,7 +990,10 @@
    "location": "Fremont, California",
    "family": "industry_rd_scientist",
    "label": "yes",
-   "reason": "immunoassay associate scientist"
+   "reason": "immunoassay associate scientist",
+   "years": [
+    "- Master's degree in Immunology, Neuroscience, Biochemistry, or a related discipline with 1+ years of industrial immunoassay development experience. A B.S. degree with 3+ experience may also be considered."
+   ]
   },
   {
    "company": "Alamar Biosciences",
@@ -759,15 +1001,10 @@
    "location": "Fremont, California",
    "family": "industry_rd_scientist",
    "label": "yes",
-   "reason": "multiplex immunoassays"
-  },
-  {
-   "company": "Alamar Biosciences",
-   "title": "Scientist I, Technology Development",
-   "location": "Fremont, California",
-   "family": "industry_rd_scientist",
-   "label": "yes",
-   "reason": "ELISA and qPCR assay development"
+   "reason": "multiplex immunoassays",
+   "years": [
+    "- Ph.D. in Biochemistry, Molecular Biology, or a related discipline; M.S. with 3+ years of experience OR BA/BS with 5+ years will also be considered."
+   ]
   },
   {
    "company": "Alamar Biosciences",
@@ -776,7 +1013,22 @@
    "family": "industry_rd_scientist",
    "label": "yes",
    "reason": "ELISA and qPCR assay development",
-   "queue": 8
+   "years": [
+    "- PhD degree in Biochemistry, Molecular Biology, or related field; Or MS degree with minimum of 3 years of industrial experience. OR BA/BS with 5+ years of experience.",
+    "- 3+ years of hands-on experience running ELISA, qPCR, or similar, as well as experience in generating, analyzing, and reviewing data from those assays are required."
+   ]
+  },
+  {
+   "company": "Alamar Biosciences",
+   "title": "Scientist I, Technology Development",
+   "location": "Fremont, California",
+   "family": "industry_rd_scientist",
+   "label": "yes",
+   "reason": "ELISA and qPCR assay development",
+   "queue": 8,
+   "years": [
+    "- PhD degree in Biochemistry, Molecular Biology, or related field, Masters with 3+ years or BA with 5+ years of hands-on experience running ELISA, qPCR, or similar, as well as experience in generating, analyzing, and reviewing data from those assays are required."
+   ]
   },
   {
    "company": "Alector",
@@ -785,7 +1037,8 @@
    "family": "industry_rd_scientist",
    "label": "yes",
    "reason": "cell culture, ELISA, flow (neuro focus; borderline)",
-   "queue": 25
+   "queue": 25,
+   "years": []
   },
   {
    "company": "Amgen",
@@ -793,7 +1046,12 @@
    "location": "US - California - South San Francisco",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "computational biology and multi-omics integration"
+   "reason": "computational biology and multi-omics integration",
+   "years": [
+    "MD [and relevant post-doc where applicable] and 3 years of computational biology and multi-omics data integration experience",
+    "Master's degree and 6 years of computational biology and multi-omics data integration experience",
+    "Bachelor's degree and 8 years of computational biology and multi-omics data integration experience."
+   ]
   },
   {
    "company": "Amgen",
@@ -801,7 +1059,12 @@
    "location": "US - California - South San Francisco | US - California - Thousand Oaks",
    "family": "industry_rd_scientist",
    "label": "yes",
-   "reason": "skin biology, PhD plus 3 years (borderline)"
+   "reason": "skin biology, PhD plus 3 years (borderline)",
+   "years": [
+    "MD [and relevant post-doc where applicable] and 3 years of relevant experience",
+    "Master's degree and 6 years of relevant experience",
+    "Bachelor's degree and 8 years of relevant experience"
+   ]
   },
   {
    "company": "BigHat Biosciences",
@@ -809,7 +1072,10 @@
    "location": "San Mateo, CA",
    "family": "industry_rd_scientist",
    "label": "yes",
-   "reason": "phage display libraries, molecular biology"
+   "reason": "phage display libraries, molecular biology",
+   "years": [
+    "- Ph.D. in Biochemistry, Structural Biology, Protein Engineering, or a related field, with up to 2 years of industry research experience; or an M.S. in a related field with 6+ years of relevant industry research experience."
+   ]
   },
   {
    "company": "BigHat Biosciences",
@@ -817,7 +1083,10 @@
    "location": "San Mateo, CA",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "antibody binding biophysics (BLI/SPR)"
+   "reason": "antibody binding biophysics (BLI/SPR)",
+   "years": [
+    "- Ph.D. 2-5 years, or M.Sc with 5+ years of independent research and development experience in an industry setting, including substantial experience with binding assays including BLI, SPR, ELISA/MSD and Flow Cytometry workflows (preferably across Carterra, Cytiva and Sartorius instrumentation)."
+   ]
   },
   {
    "company": "BigHat Biosciences",
@@ -826,7 +1095,10 @@
    "family": "industry_rd_scientist",
    "label": "no",
    "reason": "antibody developability biophysics",
-   "queue": 19
+   "queue": 19,
+   "years": [
+    "- PhD in Biochemistry or relevant discipline with 3+ year(s) of industry experience; exceptional non-PhD candidates with deep bench experience will be considered."
+   ]
   },
   {
    "company": "BigHat Biosciences",
@@ -835,7 +1107,10 @@
    "family": "industry_rd_scientist",
    "label": "no",
    "reason": "antibody developability, chromatography methods",
-   "queue": 21
+   "queue": 21,
+   "years": [
+    "- PhD in Biochemistry or relevant discipline with 5+ year(s) of industry experience; exceptional non-PhD candidates with deep bench experience will be considered."
+   ]
   },
   {
    "company": "Calico Life Sciences",
@@ -843,7 +1118,10 @@
    "location": "South San Francisco, CA",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "6-8 years of in vivo physiology required"
+   "reason": "6-8 years of in vivo physiology required",
+   "years": [
+    "- BS/MS degree in physiology, biology, genetics, neuroscience or a related field, with 8+ years (BS) or 6+ years (MS) of extensive experience with in vivo mammalian model systems"
+   ]
   },
   {
    "company": "Chai Discovery",
@@ -852,7 +1130,8 @@
    "family": "industry_rd_scientist",
    "label": "no",
    "reason": "machine learning research",
-   "queue": 2
+   "queue": 2,
+   "years": []
   },
   {
    "company": "Chai Discovery",
@@ -860,7 +1139,8 @@
    "location": "San Francisco office",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "machine learning pre-training research"
+   "reason": "machine learning pre-training research",
+   "years": []
   },
   {
    "company": "Clorox",
@@ -868,7 +1148,10 @@
    "location": "Pleasanton, CA - USA",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "consumer packaging R&D"
+   "reason": "consumer packaging R&D",
+   "years": [
+    "- 3+ years of experience within consumer packaged goods (CPG) in packaging development, product development, process development, or other related technical fields."
+   ]
   },
   {
    "company": "Clorox",
@@ -876,7 +1159,8 @@
    "location": "Pleasanton, CA - USA",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "consumer packaging R&D"
+   "reason": "consumer packaging R&D",
+   "years": []
   },
   {
    "company": "Codexis",
@@ -885,7 +1169,10 @@
    "family": "industry_rd_scientist",
    "label": "yes",
    "reason": "analytical biochemistry with ELISA (borderline)",
-   "queue": 6
+   "queue": 6,
+   "years": [
+    "- Minimum of 6 years of relevant industrial/academic experience in a laboratory environment."
+   ]
   },
   {
    "company": "Cytokinetics",
@@ -893,7 +1180,10 @@
    "location": "South San Francisco, California",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "computational biology, GWAS, 6+ years"
+   "reason": "computational biology, GWAS, 6+ years",
+   "years": [
+    "- Ph.D. in Computational Biology, Human Genetics, Bioinformatics, or a related field with 6+ years of post-doctoral or industry experience"
+   ]
   },
   {
    "company": "Cytokinetics",
@@ -901,7 +1191,10 @@
    "location": "South San Francisco, California",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "small-molecule analytical chemistry"
+   "reason": "small-molecule analytical chemistry",
+   "years": [
+    "- 5+ years of pharmaceutical industry experience in analytical development, quality control, or related analytical laboratory environments."
+   ]
   },
   {
    "company": "Denali Therapeutics",
@@ -909,7 +1202,10 @@
    "location": "South San Francisco",
    "family": "industry_rd_scientist",
    "label": "yes",
-   "reason": "CHO cell culture, cell line development"
+   "reason": "CHO cell culture, cell line development",
+   "years": [
+    "- 2+ years of experience working in a laboratory environment"
+   ]
   },
   {
    "company": "Denali Therapeutics",
@@ -917,7 +1213,10 @@
    "location": "South San Francisco",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "principal analytical chemist, 10+ years"
+   "reason": "principal analytical chemist, 10+ years",
+   "years": [
+    "- BS/MS/PhD in Chemistry, Chemical Engineering, Analytical Chemistry, Biochemistry, or related scientific discipline (PhD with 10+ years or MS/BS with 14+ years of relevant industry experience)"
+   ]
   },
   {
    "company": "Denali Therapeutics",
@@ -925,7 +1224,10 @@
    "location": "South San Francisco",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "senior principal, 12+ years"
+   "reason": "senior principal, 12+ years",
+   "years": [
+    "- Typically requires a PhD in a relevant scientific discipline (e.g., biochemistry, neurobiology, molecular biology, pharmacology) with 12+ years of industry and/or academic experience"
+   ]
   },
   {
    "company": "Eikon Therapeutics",
@@ -934,7 +1236,10 @@
    "family": "industry_rd_scientist",
    "label": "yes",
    "reason": "cell-based assays, HTS",
-   "queue": 9
+   "queue": 9,
+   "years": [
+    "- Ph.D. or Master's plus 10 years of relevant experience or Bachelor's degree plus 12 years of relevant experience in Biology, Bioengineering, Biotechnology, or related field."
+   ]
   },
   {
    "company": "Exelixis",
@@ -942,7 +1247,8 @@
    "location": "Alameda, CA",
    "family": "industry_rd_scientist",
    "label": "yes",
-   "reason": "cell-based bioassays"
+   "reason": "cell-based bioassays",
+   "years": []
   },
   {
    "company": "Exelixis",
@@ -950,7 +1256,12 @@
    "location": "Alameda, CA",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "small-molecule process chemistry"
+   "reason": "small-molecule process chemistry",
+   "years": [
+    "- Bachelor's degree in Organic Chemistry, Chemical Engineering, Pharmaceutical Science, or a related field, with at least 9 years of relevant experience in the biotechnology or pharmaceutical industry; or",
+    "- Master's degree in Organic Chemistry, Chemical Engineering, Pharmaceutical Science, or a related field, with at least 7 years of relevant experience in the biotechnology or pharmaceutical industry; or",
+    "- PhD in Organic Chemistry, Chemical Engineering, Pharmaceutical Science, or a related field, with at least 2 years of relevant experience in the biotechnology or pharmaceutical industry; or"
+   ]
   },
   {
    "company": "Frontage",
@@ -958,7 +1269,8 @@
    "location": "Hayward, CA",
    "family": "industry_rd_scientist",
    "label": "yes",
-   "reason": "biomarker immunoassay development"
+   "reason": "biomarker immunoassay development",
+   "years": []
   },
   {
    "company": "GeneFab",
@@ -967,7 +1279,10 @@
    "family": "industry_rd_scientist",
    "label": "yes",
    "reason": "qPCR, ELISA, flow assays for cell and gene therapy",
-   "queue": 23
+   "queue": 23,
+   "years": [
+    "- BS or Ph.D. in a relevant scientific discipline (e.g., Biochemistry, Molecular Biology), with a minimum of 7+ years of relevant experience (BS) or 2+ years of relevant experience (Ph.D.) in analytical development and testing in the cell and gene therapy field."
+   ]
   },
   {
    "company": "Genentech",
@@ -975,7 +1290,10 @@
    "location": "South San Francisco",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "principal; advanced computational analysis essential"
+   "reason": "principal; advanced computational analysis essential",
+   "years": [
+    "- 3-5 years of experience with translational research approaches including molecular profiling, multi-omic analyses, spatial biology, single-cell technologies, and/or functional immune assays is preferred."
+   ]
   },
   {
    "company": "Genentech",
@@ -983,7 +1301,10 @@
    "location": "South San Francisco",
    "family": "industry_rd_scientist",
    "label": "yes",
-   "reason": "PhD biology, wet lab plus analysis"
+   "reason": "PhD biology, wet lab plus analysis",
+   "years": [
+    "- A PhD in Biological Sciences (including neuroscience, immunology, cell biology, or a related field) with 0-4 years of relevant post-graduate experience. Exceptional candidates without a PhD but with an equivalent track record of rigorous scientific experience are also encouraged to apply. While clinical or translational experience in retinal biology is preferred, it is not required. We welcome a"
+   ]
   },
   {
    "company": "Genentech",
@@ -991,7 +1312,10 @@
    "location": "South San Francisco",
    "family": "industry_rd_scientist",
    "label": "yes",
-   "reason": "cell culture, ELISA, molecular biology"
+   "reason": "cell culture, ELISA, molecular biology",
+   "years": [
+    "- A PhD in Biological Sciences and 0-6 years of experience in a post-doc or industry setting with wet lab and bioinformatics experience demonstrated in high-impact publications. Past experience with human/clinical research or a deep understanding of metabolism or metabolic diseases is a plus, but not required."
+   ]
   },
   {
    "company": "Genentech",
@@ -999,7 +1323,8 @@
    "location": "South San Francisco",
    "family": "industry_rd_scientist",
    "label": "yes",
-   "reason": "hands-on lab biology (cancer focus; borderline)"
+   "reason": "hands-on lab biology (cancer focus; borderline)",
+   "years": []
   },
   {
    "company": "Genentech",
@@ -1007,7 +1332,10 @@
    "location": "South San Francisco",
    "family": "industry_rd_scientist",
    "label": "yes",
-   "reason": "iPSC and immune cell assays (borderline)"
+   "reason": "iPSC and immune cell assays (borderline)",
+   "years": [
+    "- PhD in Immunology, Stem Cell Biology, Cell & Molecular Biology, or related field with at least 3 years of relevant experience."
+   ]
   },
   {
    "company": "Genentech",
@@ -1015,7 +1343,8 @@
    "location": "South San Francisco",
    "family": "industry_rd_scientist",
    "label": "yes",
-   "reason": "lung biology incl. host-microbe interactions"
+   "reason": "lung biology incl. host-microbe interactions",
+   "years": []
   },
   {
    "company": "Genentech",
@@ -1023,7 +1352,10 @@
    "location": "South San Francisco",
    "family": "industry_rd_scientist",
    "label": "yes",
-   "reason": "microscopy specialist (borderline)"
+   "reason": "microscopy specialist (borderline)",
+   "years": [
+    "- You hold Ph.D. in a scientific discipline utilizing advanced optical microscopy as a primary research methodology with 3+ years of dedicated, hands-on microscopy core or shared resource experience will also be considered. Masters level candidates with 5+ years relevant experience may be considered."
+   ]
   },
   {
    "company": "Genentech",
@@ -1031,7 +1363,8 @@
    "location": "South San Francisco",
    "family": "industry_rd_scientist",
    "label": "yes",
-   "reason": "single-cell CRISPR screens, NGS (borderline)"
+   "reason": "single-cell CRISPR screens, NGS (borderline)",
+   "years": []
   },
   {
    "company": "Genentech",
@@ -1039,7 +1372,10 @@
    "location": "South San Francisco",
    "family": "industry_rd_scientist",
    "label": "yes",
-   "reason": "iPSC and organoid cell culture (borderline)"
+   "reason": "iPSC and organoid cell culture (borderline)",
+   "years": [
+    "- BS/MS in Stem Cell Biology, Cell Biology, Molecular Biology, Bioengineering, Toxicology, or a related discipline, with relevant research experience in industry or academia. For the Scientist 3 level, a Bachelor's or Master's degree with 6+ years of relevant research experience and for the Scientist 4 level, a Bachelor's or Master's degree with 12+ years of relevant research experience is require"
+   ]
   },
   {
    "company": "Genentech",
@@ -1047,7 +1383,10 @@
    "location": "South San Francisco",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "LC-MS metabolomics and lipidomics"
+   "reason": "LC-MS metabolomics and lipidomics",
+   "years": [
+    "- Education & Industry Experience: Bachelor's or Master's degree in biological, chemical, pharmaceutical sciences, or a related field, accompanied by at least 5 years ( Bachelor's) or at least 3 years (Master's) of direct experience in the biotechnology or pharmaceutical industry."
+   ]
   },
   {
    "company": "Genentech",
@@ -1055,7 +1394,10 @@
    "location": "South San Francisco",
    "family": "industry_rd_scientist",
    "label": "yes",
-   "reason": "immunology translational scientist (borderline)"
+   "reason": "immunology translational scientist (borderline)",
+   "years": [
+    "- Candidates must have a PhD in Neuroscience and/or Immunology, or a related field with at least 3 years post-doctoral experience in basic or translational research either in an academic and/or industry setting."
+   ]
   },
   {
    "company": "Genentech",
@@ -1063,7 +1405,10 @@
    "location": "South San Francisco",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "veterinary pathologist (DVM, ACVP)"
+   "reason": "veterinary pathologist (DVM, ACVP)",
+   "years": [
+    "- DVM/VMD or equivalent veterinary degree and board certification by the American College of Veterinary Pathology (ACVP), European College of Veterinary Pathologists (ECVP), or equivalent recognized board with 5+ years of direct drug-development experience in the pharmaceutical or biotechnology industry, with sufficient breadth and depth to independently support active programs from the time of hi"
+   ]
   },
   {
    "company": "Genentech",
@@ -1071,7 +1416,10 @@
    "location": "South San Francisco",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "translational PKPD modeling"
+   "reason": "translational PKPD modeling",
+   "years": [
+    "- 1-2 years of relevant industry experience in translational PKPD/pharmacology or equivalent Postdoctoral experience is preferred"
+   ]
   },
   {
    "company": "Genentech",
@@ -1079,7 +1427,10 @@
    "location": "South San Francisco",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "mass spectrometry characterization lead"
+   "reason": "mass spectrometry characterization lead",
+   "years": [
+    "- You hold a Ph.D. with 4-6+ years of relevant experience, or an M.S./B.S. with 6-10+ years of experience in Analytical Chemistry, Biochemistry, Chemical Engineering, or a related field."
+   ]
   },
   {
    "company": "Gilead Sciences",
@@ -1087,7 +1438,10 @@
    "location": "United States - California - Foster City",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "formulation and drug product development"
+   "reason": "formulation and drug product development",
+   "years": [
+    "- Ph.D. in Pharmaceutical Sciences, Chemistry, Biochemistry, Chemical Engineering, or a related scientific field with 0+ years of experience"
+   ]
   },
   {
    "company": "Gilead Sciences",
@@ -1095,7 +1449,11 @@
    "location": "United States - California - Foster City",
    "family": "industry_rd_scientist",
    "label": "yes",
-   "reason": "RNA production, molecular biology, QC assays"
+   "reason": "RNA production, molecular biology, QC assays",
+   "years": [
+    "Master's degree in a relevant scientific discipline with 4+ years of relevant experience",
+    "Bachelor's degree in a relevant scientific discipline with 6+ years of relevant experience."
+   ]
   },
   {
    "company": "Gilead Sciences",
@@ -1103,7 +1461,10 @@
    "location": "United States - California - Foster City",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "biologics purification scale-up (bioprocess engineering)"
+   "reason": "biologics purification scale-up (bioprocess engineering)",
+   "years": [
+    "- B.S. in Chemical Engineering, Bio-engineering, Biochemical Engineering, Biochemistry or related field with 5+ years (or Master's with 3 years) of industrial experience in biologics purification development and/or scaleup operations."
+   ]
   },
   {
    "company": "Gilead Sciences",
@@ -1111,7 +1472,13 @@
    "location": "United States - California - Foster City",
    "family": "industry_rd_scientist",
    "label": "yes",
-   "reason": "QC analytical oversight (quality; borderline)"
+   "reason": "QC analytical oversight (quality; borderline)",
+   "years": [
+    "- BS degree in Chemistry, Biochemistry or related field with 5+ years of relevant experience OR",
+    "- MS degree in Chemistry, Biochemistry or related field with 3+ years of relevant experience",
+    "- BS degree in Chemistry, Biochemistry or related field with 5+ years of relevant experience OR",
+    "- MS degree in Chemistry, Biochemistry or related field with 3+ years of relevant experience"
+   ]
   },
   {
    "company": "Gilead Sciences",
@@ -1119,7 +1486,12 @@
    "location": "United States - California - Foster City",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "separation-based analytical chemistry"
+   "reason": "separation-based analytical chemistry",
+   "years": [
+    "Bachelor's degree and 8+ years of relevant experience",
+    "Master's degree and 6+ years of relevant experience",
+    "PhD and 0+ years of relevant experience"
+   ]
   },
   {
    "company": "Gilead Sciences",
@@ -1127,7 +1499,12 @@
    "location": "United States - California - Foster City",
    "family": "industry_rd_scientist",
    "label": "yes",
-   "reason": "potency methods: ELISA and cell-based bioassays"
+   "reason": "potency methods: ELISA and cell-based bioassays",
+   "years": [
+    "Bachelor's degree and 8+ years of relevant experience",
+    "Master's degree and 6+ years of relevant experience",
+    "PhD and 0+ years of relevant experience"
+   ]
   },
   {
    "company": "Gilead Sciences",
@@ -1135,7 +1512,12 @@
    "location": "United States - California - Foster City",
    "family": "industry_rd_scientist",
    "label": "yes",
-   "reason": "HIV virology"
+   "reason": "HIV virology",
+   "years": [
+    "- Bachelors in a relevant life science discipline (virology, infectious disease, immunology, cellular and molecular biology) and 8+ years of experience required OR",
+    "- Masters in a relevant life science discipline (virology, infectious disease, immunology, cellular and molecular biology)and 6+ years of experience required OR",
+    "- PhD in a relevant life science discipline (virology, infectious disease, immunology, cellular and molecular biology) and 2+ years of post-PhD industry experience, ideally focused on innovative research in virology, viral immunology, biologics, drug development, and/or cell therapy"
+   ]
   },
   {
    "company": "Gilead Sciences",
@@ -1143,7 +1525,13 @@
    "location": "United States - California - Foster City",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "ADC LC-MS characterization"
+   "reason": "ADC LC-MS characterization",
+   "years": [
+    "Bachelor's Degree and 8 Years' Experience",
+    "Master's Degree and 6 Years' Experience",
+    "PhD and 2 Years' Experience",
+    "- Preferred experience: 15+ years with a bachelor's degree; 12+ years with a master's degree; or 3+ years with a PhD, including postdoctoral training."
+   ]
   },
   {
    "company": "Gilead Sciences",
@@ -1151,7 +1539,10 @@
    "location": "United States - California - Foster City",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "formulation and drug product development"
+   "reason": "formulation and drug product development",
+   "years": [
+    "- MS/MA with 4+ years, or BS/BA with 6+ years of industrial experience in biologics CMC development."
+   ]
   },
   {
    "company": "Gilead Sciences",
@@ -1159,7 +1550,11 @@
    "location": "United States - California - Foster City",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "formulation and drug product development"
+   "reason": "formulation and drug product development",
+   "years": [
+    "- 5+ years of experience with BS degree in related scientific discipline.",
+    "- 3+ years of experience with MS degree in related scientific discipline."
+   ]
   },
   {
    "company": "Glyphic Biotechnologies",
@@ -1168,7 +1563,10 @@
    "family": "industry_rd_scientist",
    "label": "yes",
    "reason": "sequencing library prep, molecular biology",
-   "queue": 28
+   "queue": 28,
+   "years": [
+    "- PhD in Molecular Biology, Biochemistry, Bioengineering, Chemical Biology, or a related field, with 1+ years of industry experience. Alternatively, an MS with 5+ years of relevant experience."
+   ]
   },
   {
    "company": "Gordian Biotechnology",
@@ -1176,7 +1574,10 @@
    "location": "South San Francisco, CA",
    "family": "industry_rd_scientist",
    "label": "yes",
-   "reason": "in vitro pharmacology assays (borderline)"
+   "reason": "in vitro pharmacology assays (borderline)",
+   "years": [
+    "You have built small molecule programs. You have a Ph.D. in pharmacology, biochemistry, cell biology, physiology or a related field and 5+ years in industry small molecule drug discovery (an M.S. with 10+ years of directly relevant industry experience will also be considered). You have designed or owned a screening cascade from hit identification through lead optimization or candidate nomination, "
+   ]
   },
   {
    "company": "Illumina",
@@ -1184,7 +1585,8 @@
    "location": "US - Bay Area - Foster City",
    "family": "industry_rd_scientist",
    "label": "yes",
-   "reason": "CRISPR, single cell, cell culture (borderline: senior)"
+   "reason": "CRISPR, single cell, cell culture (borderline: senior)",
+   "years": []
   },
   {
    "company": "Merck (MSD)",
@@ -1192,7 +1594,10 @@
    "location": "USA - California - South San Francisco (Grand Ave)",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "leads lab automation across programs"
+   "reason": "leads lab automation across programs",
+   "years": [
+    "- Bachelor's (with 10+ years), Master's (with 6+ years) or Ph.D. (with 4+ years) in a relevant biological science or related field and relevant experience."
+   ]
   },
   {
    "company": "Merck (MSD)",
@@ -1200,7 +1605,8 @@
    "location": "USA - California - South San Francisco (Grand Ave)",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "principal: leads vaccine discovery programs"
+   "reason": "principal: leads vaccine discovery programs",
+   "years": []
   },
   {
    "company": "Merck (MSD)",
@@ -1208,7 +1614,8 @@
    "location": "USA - California - South San Francisco (Grand Ave)",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "laboratory animal resources scientist"
+   "reason": "laboratory animal resources scientist",
+   "years": []
   },
   {
    "company": "Natera",
@@ -1217,7 +1624,10 @@
    "family": "industry_rd_scientist",
    "label": "yes",
    "reason": "NGS and molecular biology (cancer focus; borderline)",
-   "queue": 4
+   "queue": 4,
+   "years": [
+    "- Plus ONE of the following: (a) at least 1 year of relevant industry experience (biotech, pharma,"
+   ]
   },
   {
    "company": "Natera",
@@ -1225,7 +1635,10 @@
    "location": "San Carlos, CA",
    "family": "industry_rd_scientist",
    "label": "yes",
-   "reason": "NGS and molecular biology (borderline: senior)"
+   "reason": "NGS and molecular biology (borderline: senior)",
+   "years": [
+    "- Minimum of 5 - 8 years of industry experience or 2+ years post-doctoral research and 3+ years of industry experience"
+   ]
   },
   {
    "company": "Natera",
@@ -1233,7 +1646,10 @@
    "location": "San Carlos, CA",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "staff level: 8 years industry"
+   "reason": "staff level: 8 years industry",
+   "years": [
+    "- Minimum of 8 years of industry experience or 2+ years of post-doctoral research and 6+ years of industry experience"
+   ]
   },
   {
    "company": "NewLimit",
@@ -1242,7 +1658,10 @@
    "family": "industry_rd_scientist",
    "label": "yes",
    "reason": "qPCR/ELISA assay development, PhD 0-3 years",
-   "queue": 22
+   "queue": 22,
+   "years": [
+    "- Ph.D. in analytical chemistry, biochemistry, molecular biology, chemical engineering, or a related field with 0-3 years of relevant industry experience, or an M.S. with 5+ years or B.S. with 7+ years of relevant industry experience"
+   ]
   },
   {
    "company": "NewLimit",
@@ -1251,7 +1670,10 @@
    "family": "industry_rd_scientist",
    "label": "no",
    "reason": "LNP formulation and conjugation chemistry",
-   "queue": 30
+   "queue": 30,
+   "years": [
+    "- PhD in Pharmaceutical Sciences, Pharmaceutical Chemistry and Biochemistry or a related discipline, plus 1-2 years of relevant work; or an MS with 5 years of focused tLNP design experience for liposomal or lipid nanoparticle applications."
+   ]
   },
   {
    "company": "Nurix Therapeutics",
@@ -1260,7 +1682,10 @@
    "family": "industry_rd_scientist",
    "label": "no",
    "reason": "LC-MS/MS bioanalysis",
-   "queue": 27
+   "queue": 27,
+   "years": [
+    "- BS or equivalent with 10 or more years' relevant experience, or MS with 6 or more years' relevant experience, or PhD with up to 4 years' relevant experience working in a discovery setting using quantitative LC-MS/MS within a pharmaceutical or biotechnology company"
+   ]
   },
   {
    "company": "Nurix Therapeutics",
@@ -1269,7 +1694,10 @@
    "family": "industry_rd_scientist",
    "label": "no",
    "reason": "5+ years industry protein degradation, biophysics",
-   "queue": 5
+   "queue": 5,
+   "years": [
+    "- 5+ years of relevant industry drug discovery experience, including significant direct work on induced proximity modalities (targeted protein degradation, molecular glues, bifunctional degraders, or similar)"
+   ]
   },
   {
    "company": "Profluent Bio",
@@ -1278,7 +1706,10 @@
    "family": "industry_rd_scientist",
    "label": "yes",
    "reason": "bacterial and mammalian culture, genome editing",
-   "queue": 26
+   "queue": 26,
+   "years": [
+    "- PhD in Molecular Biology, Biochemistry, Cell Biology, or a related field and 2+ years of relevant industry experience, or MS in a related field and 10+ years of relevant industry experience"
+   ]
   },
   {
    "company": "Prolific Machines",
@@ -1287,7 +1718,10 @@
    "family": "industry_rd_scientist",
    "label": "no",
    "reason": "analytical chemistry team: chromatography, LC-MS",
-   "queue": 10
+   "queue": 10,
+   "years": [
+    "- Hold a PhD in Analytical Chemistry, Biochemistry, Chemistry, Pharmaceutical Sciences, or a related field with 5+ years of biologics industry experience, or an MS/BS with equivalent relevant industry experience."
+   ]
   },
   {
    "company": "Retro Biosciences",
@@ -1296,7 +1730,11 @@
    "family": "industry_rd_scientist",
    "label": "yes",
    "reason": "in vitro and in vivo models (neuro focus; borderline)",
-   "queue": 18
+   "queue": 18,
+   "years": [
+    "- Have a Ph.D. in Neuroscience, Biology, or related field and at least 3 years of relevant post-degree experience in academia or industry.",
+    "- Have at least 3 years of hands-on experience in Alzheimer's disease research, including designing and using in vitro and in vivo disease models."
+   ]
   },
   {
    "company": "SLAC National Accelerator Laboratory",
@@ -1304,7 +1742,10 @@
    "location": "Menlo Park, CA, United States",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "X-ray beamline physics"
+   "reason": "X-ray beamline physics",
+   "years": [
+    "- Ph.D. in physics, applied physics, materials science, or a related discipline, with a minimum of two years of post-PhD research experience."
+   ]
   },
   {
    "company": "Stanford Health Care",
@@ -1312,7 +1753,12 @@
    "location": "3375 Hillview - Clinical - PALO ALTO",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "clinical variant interpretation; CLIA lab years"
+   "reason": "clinical variant interpretation; CLIA lab years",
+   "years": [
+    "- Four (4) or more years of work experience in the field of genetics or cancer genetics, or combination of relevant experiences.",
+    "- One (1) year or more of work experience in a CLIA-certified clinical laboratory performing diagnostic testing.",
+    "- Of the above, at least one (1) year experience must be with NGS-based tests and at least one (1) year experience in germline or cancer diagnostic testing."
+   ]
   },
   {
    "company": "Thermo Fisher Scientific",
@@ -1320,7 +1766,10 @@
    "location": "South San Francisco, California, USA",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "solid dosage pharmaceutics"
+   "reason": "solid dosage pharmaceutics",
+   "years": [
+    "- Previous experience that provides the knowledge, skills, and abilities to perform the job (comparable to 0 to 1 years)."
+   ]
   },
   {
    "company": "Thermo Fisher Scientific",
@@ -1329,7 +1778,10 @@
    "family": "industry_rd_scientist",
    "label": "no",
    "reason": "pharmaceutical formulation",
-   "queue": 12
+   "queue": 12,
+   "years": [
+    "- Scientist: Previous experience that provides the knowledge, skills, and abilities to perform the job (comparable to 2-4 years)"
+   ]
   },
   {
    "company": "Thermo Fisher Scientific",
@@ -1337,7 +1789,11 @@
    "location": "Sunnyvale, California, USA | San Jose, California, USA | San Francisco, California, USA",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "mass spectrometry and chromatography instruments"
+   "reason": "mass spectrometry and chromatography instruments",
+   "years": [
+    "- PhD in Chemistry, Analytical Chemistry, Biochemistry, or a related scientific discipline with 8+ years of relevant experience; or",
+    "- Master's degree in a related scientific discipline with 10+ years of relevant experience."
+   ]
   },
   {
    "company": "Until Labs",
@@ -1345,7 +1801,10 @@
    "location": "Bay Area",
    "family": "industry_rd_scientist",
    "label": "yes",
-   "reason": "iPSC and 3D-model screening (borderline)"
+   "reason": "iPSC and 3D-model screening (borderline)",
+   "years": [
+    "- Trained at the PhD level in Toxicology, Pharmacology, Cell Biology, Physiology, Bioengineering, Chemical Engineering, Tissue Engineering, or a related field, or bring equivalent expertise through at least four years of relevant experience managing research projects end to end."
+   ]
   },
   {
    "company": "Vaxcyte",
@@ -1354,7 +1813,10 @@
    "family": "industry_rd_scientist",
    "label": "yes",
    "reason": "vaccine analytical development: plate assays, ELISA, PCR",
-   "queue": 7
+   "queue": 7,
+   "years": [
+    "- PhD, MS or Bachelor's degree in Chemistry, Biochemistry, Biology, Pharmaceutical Sciences, or a related scientific discipline. PhD with 2-5 years; MS with 7+ years; BS with 10+ years of relevant industry experience in analytical development, QC, or related field."
+   ]
   },
   {
    "company": "Xaira Therapeutics",
@@ -1362,7 +1824,10 @@
    "location": "South San Francisco, California, United States",
    "family": "industry_rd_scientist",
    "label": "no",
-   "reason": "principal: target and portfolio strategy"
+   "reason": "principal: target and portfolio strategy",
+   "years": [
+    "- PhD in immunology or a related field with 6+ years of industry experience in drug discovery, target discovery, preclinical drug development, or translational drug development."
+   ]
   },
   {
    "company": "Xaira Therapeutics",
@@ -1370,7 +1835,10 @@
    "location": "South San Francisco, California, United States",
    "family": "industry_rd_scientist",
    "label": "yes",
-   "reason": "protein expression and purification (borderline)"
+   "reason": "protein expression and purification (borderline)",
+   "years": [
+    "- BS/MS in Biochemistry, Molecular Biology, or a related field with 5+ years of experience in protein expression and purification."
+   ]
   },
   {
    "company": "Xaira Therapeutics",
@@ -1379,7 +1847,10 @@
    "family": "industry_rd_scientist",
    "label": "no",
    "reason": "antibody biophysics (BLI/SPR)",
-   "queue": 20
+   "queue": 20,
+   "years": [
+    "- PhD degree in a relevant discipline with 5+ years of industry experience or a BS/MS degree with 10+ years of industry experience in biophysics, biochemistry, structural biology, or a related discipline"
+   ]
   },
   {
    "company": "Xaira Therapeutics",
@@ -1388,7 +1859,10 @@
    "family": "industry_rd_scientist",
    "label": "yes",
    "reason": "molecular biology, library construction, NGS",
-   "queue": 24
+   "queue": 24,
+   "years": [
+    "- Ph.D. in Immunology, Molecular Biology, Cell Biology, Biochemistry, Functional Genomics, or a related field, with 4+ years of postdoctoral or industry experience."
+   ]
   },
   {
    "company": "Amgen",
@@ -1396,7 +1870,13 @@
    "location": "US - California - San Jose",
    "family": "medical_science_liaison",
    "label": "yes",
-   "reason": "MSL; doctorate is the basic qualification"
+   "reason": "MSL; doctorate is the basic qualification",
+   "years": [
+    "- - Master's degree and 3 years of Medical Affairs experience",
+    "- - Bachelor's degree and 5 years of Medical Affairs experience",
+    "- 1+ years Medical Affairs experience",
+    "- 4 or more years in a medically related field, including 1 year focused on clinical practice, clinical research, or medical research. Experience in a medically related field can include post-doctoral training (i.e., residencies and/or fellowships)"
+   ]
   },
   {
    "company": "Amgen",
@@ -1404,7 +1884,14 @@
    "location": "US - California - San Jose",
    "family": "medical_science_liaison",
    "label": "no",
-   "reason": "senior MSL: 2+ years as an MSL"
+   "reason": "senior MSL: 2+ years as an MSL",
+   "years": [
+    "- Doctorate degree & 2 years of Medical Affairs experience",
+    "- Master's degree & 6 years of Medical Affairs experience",
+    "- Bachelor's degree & 8 years of Medical Affairs experience",
+    "- Seven or more years in a medically related field, including 1 year focused on clinical practice, clinical research, or medical research. Experience in a medically related field can include post-doctoral training (i.e., residencies and/or fellowships)",
+    "- 2 + years in a medical science liaison role in a biotech or pharmaceutical company Current experience in Scientific Affairs or Medical Affairs at a biotech or pharmaceutical company"
+   ]
   },
   {
    "company": "BillionToOne",
@@ -1412,7 +1899,10 @@
    "location": "Remote (US)",
    "family": "medical_science_liaison",
    "label": "no",
-   "reason": "needs a genetic counseling degree and board certification"
+   "reason": "needs a genetic counseling degree and board certification",
+   "years": [
+    "- 3-5 years of prenatal clinical and/or industry experience in related field required"
+   ]
   },
   {
    "company": "Gilead Sciences",
@@ -1420,7 +1910,8 @@
    "location": "United States - California - Foster City",
    "family": "medical_science_liaison",
    "label": "yes",
-   "reason": "medical affairs manager; PhD qualifies (borderline)"
+   "reason": "medical affairs manager; PhD qualifies (borderline)",
+   "years": []
   },
   {
    "company": "Illumina",
@@ -1428,7 +1919,11 @@
    "location": "US - Remote | US - Washington - Remote | US - California - Southern - Remote | US - California - Northern - Remote | US - Idaho - Remote | US - Oregon - Remote | US - Arizona - Remote | US - Texas - Remote | US - Utah - Remote | US - Nevada - Remote | US - Colorado - Remote",
    "family": "medical_science_liaison",
    "label": "yes",
-   "reason": "MSL; PhD and 5 years research meet the minimum (borderline)"
+   "reason": "MSL; PhD and 5 years research meet the minimum (borderline)",
+   "years": [
+    "- Greater than or equal to 5 years of clinical, scientific/research, or industry related experience or equivalent required.",
+    "- At least 3 years of MSL experience or equivalent in genomics."
+   ]
   },
   {
    "company": "Natera",
@@ -1436,7 +1931,8 @@
    "location": "US Remote",
    "family": "medical_science_liaison",
    "label": "yes",
-   "reason": "MSL; advanced scientific degree"
+   "reason": "MSL; advanced scientific degree",
+   "years": []
   },
   {
    "company": "Rezolute",
@@ -1444,7 +1940,10 @@
    "location": "Remote",
    "family": "medical_science_liaison",
    "label": "no",
-   "reason": "5 years as an MSL required"
+   "reason": "5 years as an MSL required",
+   "years": [
+    "- A minimum of 5 years' experience as a MSL or comparable industry or clinical role, preferably in oncology or endocrinology, is required, with a minimum of 2 years' experience in rare disease"
+   ]
   },
   {
    "company": "Rezolute",
@@ -1452,7 +1951,10 @@
    "location": "Remote",
    "family": "medical_science_liaison",
    "label": "no",
-   "reason": "5 years as an MSL required"
+   "reason": "5 years as an MSL required",
+   "years": [
+    "- A minimum of 5 years' experience as a MSL or comparable industry or clinical role, preferably in endocrinology, is required, with a minimum of 2 years' experience in rare disease."
+   ]
   },
   {
    "company": "Veracyte",
@@ -1460,7 +1962,11 @@
    "location": "Remote",
    "family": "medical_science_liaison",
    "label": "no",
-   "reason": "5 years clinical experience required"
+   "reason": "5 years clinical experience required",
+   "years": [
+    "- At least 5 years of clinical experience - preferably urology/radiation oncology-focused",
+    "- At least 5 years of clinical experience - preferably urology/radiation oncology-focused"
+   ]
   },
   {
    "company": "Abbott",
@@ -1468,7 +1974,8 @@
    "location": "United States - California - Santa Clara | United States - Minnesota - St. Paul",
    "family": "medical_scientific_writing",
    "label": "no",
-   "reason": "EU MDR clinical evaluation expertise, senior"
+   "reason": "EU MDR clinical evaluation expertise, senior",
+   "years": []
   },
   {
    "company": "Rezolute",
@@ -1476,7 +1983,10 @@
    "location": "Redwood City",
    "family": "medical_scientific_writing",
    "label": "yes",
-   "reason": "medical writer II (borderline)"
+   "reason": "medical writer II (borderline)",
+   "years": [
+    "- 1-2 years of experience as a medical writer, with a focus on clinical, regulatory, or scientific writing in the pharmaceutical, biotechnology, or healthcare industries."
+   ]
   },
   {
    "company": "Rezolute",
@@ -1484,7 +1994,8 @@
    "location": "Redwood City",
    "family": "medical_scientific_writing",
    "label": "no",
-   "reason": "senior manager, 5+ years medical communications"
+   "reason": "senior manager, 5+ years medical communications",
+   "years": []
   },
   {
    "company": "Stanford University",
@@ -1492,7 +2003,10 @@
    "location": "Stanford, CA, United States",
    "family": "medical_scientific_writing",
    "label": "yes",
-   "reason": "research development and grant writing"
+   "reason": "research development and grant writing",
+   "years": [
+    "Bachelor's degree and three years of relevant experience or combination of education, training, and relevant experience. Advanced degree may be required for some programs. For jobs with financial responsibilities, experience managing a budget and developing financial plans."
+   ]
   },
   {
    "company": "Summit Therapeutics",
@@ -1500,7 +2014,10 @@
    "location": "Palo Alto, California, United States",
    "family": "medical_scientific_writing",
    "label": "no",
-   "reason": "6+ years medical writing"
+   "reason": "6+ years medical writing",
+   "years": [
+    "- 6+ years of relevant experience in medical writing, scientific communications, publications, Medical Affairs, or a related role within the pharmaceutical, biotechnology, academic, or medical communications environment."
+   ]
   },
   {
    "company": "Labcorp",
@@ -1509,7 +2026,8 @@
    "family": "microbiologist",
    "label": "no",
    "reason": "Dublin, Ohio; high-school lab assistant",
-   "queue": 13
+   "queue": 13,
+   "years": []
   },
   {
    "company": "Denali Therapeutics",
@@ -1517,7 +2035,10 @@
    "location": "South San Francisco",
    "family": "postdoc",
    "label": "yes",
-   "reason": "cell biology postdoc"
+   "reason": "cell biology postdoc",
+   "years": [
+    "- Ph.D. in Cell Biology, Biochemistry, Neuroscience, or related fields with minimum of 0-2 years related experience"
+   ]
   },
   {
    "company": "Genentech",
@@ -1525,7 +2046,8 @@
    "location": "South San Francisco",
    "family": "postdoc",
    "label": "yes",
-   "reason": "single-cell genomics postdoc"
+   "reason": "single-cell genomics postdoc",
+   "years": []
   },
   {
    "company": "Gladstone Institutes",
@@ -1533,7 +2055,8 @@
    "location": "San Francisco",
    "family": "postdoc",
    "label": "yes",
-   "reason": "molecular biology and cell culture postdoc"
+   "reason": "molecular biology and cell culture postdoc",
+   "years": []
   },
   {
    "company": "Merck (MSD)",
@@ -1541,7 +2064,8 @@
    "location": "USA - California - South San Francisco (Gateway Blvd)",
    "family": "postdoc",
    "label": "no",
-   "reason": "MRI physics postdoc"
+   "reason": "MRI physics postdoc",
+   "years": []
   },
   {
    "company": "Bionova Scientific",
@@ -1549,7 +2073,10 @@
    "location": "Fremont, CA",
    "family": "process_dev_fermentation",
    "label": "yes",
-   "reason": "MSAT engineer; fermentation equipment, PhD accepted (borderline)"
+   "reason": "MSAT engineer; fermentation equipment, PhD accepted (borderline)",
+   "years": [
+    "- BS, MS, or PhD in Engineering, Life Sciences, or related discipline with 3-5 years (Engineer 1) and 5-10 years (Sr. Engineer) of relevant experience, or combination of experience and relevant advanced degree, preferably in biopharma manufacturing role."
+   ]
   },
   {
    "company": "GeneFab",
@@ -1557,7 +2084,8 @@
    "location": "Alameda, CA",
    "family": "process_dev_fermentation",
    "label": "no",
-   "reason": "manufacturing technician: 3-4 years GMP manufacturing"
+   "reason": "manufacturing technician: 3-4 years GMP manufacturing",
+   "years": []
   },
   {
    "company": "GeneFab",
@@ -1565,7 +2093,10 @@
    "location": "Alameda, CA",
    "family": "process_dev_fermentation",
    "label": "no",
-   "reason": "process engineer: cell therapy manufacturing years"
+   "reason": "process engineer: cell therapy manufacturing years",
+   "years": [
+    "- Process Engineer II: 3-5 years of relevant industry experience with a BS, or 1-3 years with an MS. Process Engineer III: 5-8 years with a BS, or 3-6 years with an MS."
+   ]
   },
   {
    "company": "Gilead Sciences",
@@ -1573,7 +2104,12 @@
    "location": "United States - California - Foster City",
    "family": "process_dev_fermentation",
    "label": "no",
-   "reason": "purification process engineering"
+   "reason": "purification process engineering",
+   "years": [
+    "- PhD in Chemical Engineering, Biochemical Engineering, Bioengineering, Biochemistry, or a related scientific discipline with 2 or more years of relevant experience;",
+    "- MS in a relevant scientific or engineering discipline with 6 or more years of relevant experience; or",
+    "- BS in a relevant scientific or engineering discipline with 8 or more years of relevant experience."
+   ]
   },
   {
    "company": "NewLimit",
@@ -1581,7 +2117,10 @@
    "location": "South San Francisco",
    "family": "process_dev_fermentation",
    "label": "yes",
-   "reason": "nucleic acid purification (borderline)"
+   "reason": "nucleic acid purification (borderline)",
+   "years": [
+    "- Ph.D. in analytical chemistry, biochemistry, molecular biology, chemical engineering, or a related field with 0-3 years of relevant industry experience, or an M.S. with 5+ years or B.S. with 7+ years of relevant industry experience"
+   ]
   },
   {
    "company": "Abbott",
@@ -1589,7 +2128,10 @@
    "location": "United States - California - Alameda",
    "family": "quality_validation",
    "label": "yes",
-   "reason": "entry quality specialist"
+   "reason": "entry quality specialist",
+   "years": [
+    "- 0-2 years of experience in a combination of internship, co-op or equivalent experience."
+   ]
   },
   {
    "company": "Bionova Scientific",
@@ -1597,7 +2139,11 @@
    "location": "Fremont, CA",
    "family": "quality_validation",
    "label": "yes",
-   "reason": "QA associate"
+   "reason": "QA associate",
+   "years": [
+    "- Associate's degree and/or 2+ years of related experience",
+    "- Requires at least 2 years of pharmaceutical or life-sciences experience."
+   ]
   },
   {
    "company": "Cytokinetics",
@@ -1605,7 +2151,10 @@
    "location": "South San Francisco, California",
    "family": "quality_validation",
    "label": "no",
-   "reason": "senior QA: 5 years, oral solid dose"
+   "reason": "senior QA: 5 years, oral solid dose",
+   "years": [
+    "- Minimum of 5 years of experience within the biopharmaceutical or pharmaceutical industry, with at least 3 years in GMP Quality Assurance."
+   ]
   },
   {
    "company": "Denali Therapeutics",
@@ -1613,7 +2162,10 @@
    "location": "South San Francisco",
    "family": "quality_validation",
    "label": "no",
-   "reason": "senior QA: 5+ years cGMP QA"
+   "reason": "senior QA: 5+ years cGMP QA",
+   "years": [
+    "- BS in a scientific discipline with 5+ years of cGMP experience in Pharmaceutical Quality Assurance"
+   ]
   },
   {
    "company": "Gator Bio",
@@ -1621,7 +2173,10 @@
    "location": "Palo Alto, CA",
    "family": "quality_validation",
    "label": "yes",
-   "reason": "QA specialist (borderline)"
+   "reason": "QA specialist (borderline)",
+   "years": [
+    "- 2+ years of experience in Quality Assurance in a life science, biotechnology, diagnostics, medical device, or other regulated environment."
+   ]
   },
   {
    "company": "GeneFab",
@@ -1629,7 +2184,10 @@
    "location": "Alameda, CA",
    "family": "quality_validation",
    "label": "no",
-   "reason": "senior QC analyst: 5+ years GMP QC"
+   "reason": "senior QC analyst: 5+ years GMP QC",
+   "years": [
+    "- Minimum of 5+ years of GMP/QC Laboratory experience in Cell Therapy, Gene Therapy."
+   ]
   },
   {
    "company": "Gilead Sciences",
@@ -1637,7 +2195,15 @@
    "location": "United States - California - Foster City",
    "family": "quality_validation",
    "label": "no",
-   "reason": "senior QC scientist: commercial QC experience"
+   "reason": "senior QC scientist: commercial QC experience",
+   "years": [
+    "- BS in Chemistry, Biochemistry, or related field and 8+ years of relevant experience OR",
+    "- MS in Chemistry, Biochemistry, or related field and 6+ years of relevant experience OR",
+    "- PhD in Chemistry, Biochemistry, or related field and 2+ years of relevant experience",
+    "- BS in Chemistry, Biochemistry, or related field and 8+ years of relevant experience OR",
+    "- MS in Chemistry, Biochemistry, or related field and 6+ years of relevant experience OR",
+    "- PhD in Chemistry, Biochemistry, or related field and 2+ years of relevant experience"
+   ]
   },
   {
    "company": "Gilead Sciences",
@@ -1645,7 +2211,11 @@
    "location": "United States - California - Foster City",
    "family": "quality_validation",
    "label": "no",
-   "reason": "senior QA: 6+ years GMP"
+   "reason": "senior QA: 6+ years GMP",
+   "years": [
+    "- 6+ years of relevant experience in a GMP environment related field and a BS or BA OR",
+    "- 4+ years of relevant experience and a MS."
+   ]
   },
   {
    "company": "Thermo Fisher Scientific",
@@ -1653,7 +2223,10 @@
    "location": "Foster City, California, USA",
    "family": "quality_validation",
    "label": "yes",
-   "reason": "QC data reviewer (borderline)"
+   "reason": "QC data reviewer (borderline)",
+   "years": [
+    "- Previous experience that provides the knowledge, skills, and abilities to perform the job (comparable to 2-5 years')"
+   ]
   },
   {
    "company": "Thermo Fisher Scientific",
@@ -1661,7 +2234,10 @@
    "location": "Foster City, California, USA",
    "family": "quality_validation",
    "label": "yes",
-   "reason": "QC stability specialist; equivalency accepted (borderline)"
+   "reason": "QC stability specialist; equivalency accepted (borderline)",
+   "years": [
+    "- Previous experience that provides the knowledge, skills, and abilities to perform the job (comparable to 5+ years')"
+   ]
   },
   {
    "company": "Thermo Fisher Scientific",
@@ -1669,7 +2245,11 @@
    "location": "Foster City, California, USA",
    "family": "quality_validation",
    "label": "no",
-   "reason": "raw materials and supplier quality: 5 years"
+   "reason": "raw materials and supplier quality: 5 years",
+   "years": [
+    "- Previous experience that provides the knowledge, skills, and abilities to perform the job (comparable to 5+ years')",
+    "- Minimum 5 years of experience in biologics, biotechnology, pharmaceutical manufacturing, quality control, quality systems, supplier quality, or raw materials management."
+   ]
   },
   {
    "company": "4D Molecular Therapeutics",
@@ -1677,7 +2257,11 @@
    "location": "Emeryville, California",
    "family": "regulatory_affairs",
    "label": "yes",
-   "reason": "regulatory affairs associate"
+   "reason": "regulatory affairs associate",
+   "years": [
+    "- 1+ years of drug development experience in regulatory, clinical research/operations, clinical quality assurance, and/or medical writing.",
+    "- 1+ years of drug development experience in regulatory, clinical research/operations, clinical quality assurance, and/or medical writing."
+   ]
   },
   {
    "company": "Abbott",
@@ -1685,7 +2269,8 @@
    "location": "United States - California - Alameda",
    "family": "regulatory_affairs",
    "label": "no",
-   "reason": "principal RA specialist: 5 years devices"
+   "reason": "principal RA specialist: 5 years devices",
+   "years": []
   },
   {
    "company": "Abbott",
@@ -1693,7 +2278,8 @@
    "location": "United States - California - Santa Clara | United States - California - Temecula",
    "family": "regulatory_affairs",
    "label": "no",
-   "reason": "principal RA specialist: 6-8 years devices"
+   "reason": "principal RA specialist: 6-8 years devices",
+   "years": []
   },
   {
    "company": "Abbott",
@@ -1701,7 +2287,10 @@
    "location": "United States - California - Alameda",
    "family": "regulatory_affairs",
    "label": "no",
-   "reason": "RA manager"
+   "reason": "RA manager",
+   "years": [
+    "- 4-5 years' experience in a regulated industry (e.g., medical products, nutritionals). 2-5 years of experience in regulatory preferred but may consider quality assurance, research and development/support, scientific affairs, operations, or related area."
+   ]
   },
   {
    "company": "Abbott",
@@ -1709,7 +2298,10 @@
    "location": "United States - California - Alameda | United States > Texas > Austin : 12501B Research Boulevard | United States - California - Milpitas",
    "family": "regulatory_affairs",
    "label": "no",
-   "reason": "RA manager"
+   "reason": "RA manager",
+   "years": [
+    "- Minimum 4 years' experience in a regulated industry (e.g., medical products, nutritionals). 2-5 years of experience in regulatory preferred but may consider quality assurance, research and development/support, scientific affairs, operations, or related area. Note: Higher education may compensate for years of experience."
+   ]
   },
   {
    "company": "Abbott",
@@ -1717,7 +2309,10 @@
    "location": "United States - California - Alameda",
    "family": "regulatory_affairs",
    "label": "yes",
-   "reason": "RA specialist II; R&D experience counts (borderline)"
+   "reason": "RA specialist II; R&D experience counts (borderline)",
+   "years": [
+    "- 2-3 years' experience in a regulated industry (e.g., medical products, nutritionals). Regulatory area is preferred but may consider quality assurance, research and development/support, scientific affairs, operations, or related area. Note: Higher education may compensate for years of experience."
+   ]
   },
   {
    "company": "Abbott",
@@ -1725,7 +2320,10 @@
    "location": "United States - California - Santa Clara",
    "family": "regulatory_affairs",
    "label": "no",
-   "reason": "needs 2 years regulatory experience"
+   "reason": "needs 2 years regulatory experience",
+   "years": [
+    "- Minimum 3 years' related experience, including a minimum of two years regulatory experience"
+   ]
   },
   {
    "company": "Abbott",
@@ -1733,7 +2331,10 @@
    "location": "United States - California - Alameda",
    "family": "regulatory_affairs",
    "label": "no",
-   "reason": "senior RA specialist"
+   "reason": "senior RA specialist",
+   "years": [
+    "- Minimum 2 yrs. regulatory experience and or 2 years relevant industrial experience typically with a quality; product-development/support; scientific affairs function."
+   ]
   },
   {
    "company": "Amgen",
@@ -1741,7 +2342,13 @@
    "location": "United States - Remote",
    "family": "regulatory_affairs",
    "label": "no",
-   "reason": "senior manager, 5+ years writing"
+   "reason": "senior manager, 5+ years writing",
+   "years": [
+    "Doctorate degree and 2 years of directly related experience",
+    "Master's degree and 6 years of directly related experience",
+    "Bachelor's degree and 8 years of directly related experience",
+    "Associate's degree and 10 years of directly related experience"
+   ]
   },
   {
    "company": "Corcept Therapeutics",
@@ -1749,7 +2356,10 @@
    "location": "Redwood City, California, United States",
    "family": "regulatory_affairs",
    "label": "yes",
-   "reason": "entry regulatory affairs associate"
+   "reason": "entry regulatory affairs associate",
+   "years": [
+    "- Minimum of 1-2 years of clinical regulatory experience"
+   ]
   },
   {
    "company": "Gilead Sciences",
@@ -1757,7 +2367,8 @@
    "location": "United States - California - Foster City",
    "family": "regulatory_affairs",
    "label": "no",
-   "reason": "manager, regulatory data"
+   "reason": "manager, regulatory data",
+   "years": []
   },
   {
    "company": "Gilead Sciences",
@@ -1765,7 +2376,14 @@
    "location": "United States - California - Santa Monica | United States - California - Foster City | United States - California - Thousand Oaks | United States - California - El Segundo",
    "family": "regulatory_affairs",
    "label": "no",
-   "reason": "senior manager RA CMC"
+   "reason": "senior manager RA CMC",
+   "years": [
+    "Bachelor's degree and Eight Years' Experience",
+    "Master's degree and Six Year's Experience",
+    "PhD and Two Year's Experience",
+    "- Degree in a scientific discipline and 8+ years of relevant experience; or a degree in life sciences, biotechnology, pharmaceutical sciences, chemistry, biochemical/chemical engineering, or a related field.",
+    "- PharmD or PhD in a scientific discipline and 2+ years of relevant experience."
+   ]
   },
   {
    "company": "Johnson & Johnson",
@@ -1773,7 +2391,10 @@
    "location": "Santa Clara, California, United States of America | Remote (US)",
    "family": "regulatory_affairs",
    "label": "no",
-   "reason": "senior RA program lead, 6+ years"
+   "reason": "senior RA program lead, 6+ years",
+   "years": [
+    "- At least 6+ years of regulatory affairs experience in medical devices including experience with software-enabled systems."
+   ]
   },
   {
    "company": "Revolution Medicines",
@@ -1781,7 +2402,10 @@
    "location": "Remote (United States)",
    "family": "regulatory_affairs",
    "label": "no",
-   "reason": "senior manager RA labeling, 7+ years"
+   "reason": "senior manager RA labeling, 7+ years",
+   "years": [
+    "- At least 7+ years of pharmaceutical or biotechnology industry experience supporting regulatory labeling in at least two or more major geographic areas."
+   ]
   },
   {
    "company": "Vera Therapeutics",
@@ -1789,7 +2413,10 @@
    "location": "Remote",
    "family": "regulatory_affairs",
    "label": "no",
-   "reason": "manager regulatory operations, 5-6 years"
+   "reason": "manager regulatory operations, 5-6 years",
+   "years": [
+    "- Bachelor's degree and 5-6 years of experience in Regulatory Operations with specialized skills in electronic submissions."
+   ]
   },
   {
    "company": "Vir Biotechnology",
@@ -1797,7 +2424,10 @@
    "location": "San Francisco, California, United States",
    "family": "regulatory_affairs",
    "label": "no",
-   "reason": "senior vice president"
+   "reason": "senior vice president",
+   "years": [
+    "- 15+ years of Regulatory Affairs experience with a proven track record of leadership and organizational impact across the biotechnology and/or pharmaceutical industry"
+   ]
   },
   {
    "company": "Altos Labs",
@@ -1805,7 +2435,12 @@
    "location": "San Francisco Bay Area, CA",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "scientific lab manager (borderline)"
+   "reason": "scientific lab manager (borderline)",
+   "years": [
+    "- A Bachelor's degree in life sciences with at least 3 years of lab management experience.",
+    "- A Master in the life sciences with 3-5 years of department/lab/project management post-grad experience",
+    "- A Bachelor's degree in life sciences with at least 3 years of lab management experience."
+   ]
   },
   {
    "company": "Arc Institute",
@@ -1813,7 +2448,10 @@
    "location": "Palo Alto, CA",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "lab operations assistant (overqualified, plausible)"
+   "reason": "lab operations assistant (overqualified, plausible)",
+   "years": [
+    "- 1+ years of experience in a lab operations or research setting; BS degree or partial coursework in laboratory sciences preferred"
+   ]
   },
   {
    "company": "Arc Institute",
@@ -1821,7 +2459,10 @@
    "location": "Palo Alto, CA",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "molecular biology research associate"
+   "reason": "molecular biology research associate",
+   "years": [
+    "- 2+ years of relevant experience in an academic or industry setting (including independent lab work during your undergraduate studies)."
+   ]
   },
   {
    "company": "Arc Institute",
@@ -1829,7 +2470,10 @@
    "location": "Palo Alto, CA",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "stem cell culture and flow"
+   "reason": "stem cell culture and flow",
+   "years": [
+    "- BS degree in relevant field with 4+ years of relevant experience, or MS degree in relevant field with 2+ years of relevant postgraduate experience. Industry experience is desirable but not required."
+   ]
   },
   {
    "company": "Arc Institute",
@@ -1837,7 +2481,10 @@
    "location": "Palo Alto, CA",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "lentivirus production, cell culture"
+   "reason": "lentivirus production, cell culture",
+   "years": [
+    "- BS degree in relevant field with 4+ years of relevant experience, or MS degree in relevant field with 2+ years of relevant postgraduate experience. Industry or core-facility experience in viral production is strongly preferred."
+   ]
   },
   {
    "company": "BigHat Biosciences",
@@ -1845,7 +2492,8 @@
    "location": "San Mateo, CA",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "lab operations assistant (overqualified, plausible)"
+   "reason": "lab operations assistant (overqualified, plausible)",
+   "years": []
   },
   {
    "company": "BigHat Biosciences",
@@ -1853,7 +2501,10 @@
    "location": "San Mateo, CA",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "DNA prep and protein expression"
+   "reason": "DNA prep and protein expression",
+   "years": [
+    "- BS in Biology or Chemistry, with 1+ year(s) of industry experience"
+   ]
   },
   {
    "company": "BigHat Biosciences",
@@ -1861,7 +2512,10 @@
    "location": "San Mateo, CA",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "DNA prep and protein expression"
+   "reason": "DNA prep and protein expression",
+   "years": [
+    "- BS in Biology or Chemistry, with 2+ year(s) of industry experience"
+   ]
   },
   {
    "company": "BillionToOne",
@@ -1869,7 +2523,8 @@
    "location": "Union City",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "clinical laboratory associate, BS biology"
+   "reason": "clinical laboratory associate, BS biology",
+   "years": []
   },
   {
    "company": "BillionToOne",
@@ -1877,7 +2532,8 @@
    "location": "Union City",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "clinical laboratory associate, BS biology"
+   "reason": "clinical laboratory associate, BS biology",
+   "years": []
   },
   {
    "company": "Calico Life Sciences",
@@ -1885,7 +2541,10 @@
    "location": "South San Francisco, CA",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "lab operations specialist"
+   "reason": "lab operations specialist",
+   "years": [
+    "- 3+ years of experience in Operations in a laboratory environment, prior people/team management preferred"
+   ]
   },
   {
    "company": "Gladstone Institutes",
@@ -1893,7 +2552,10 @@
    "location": "San Francisco",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "research associate"
+   "reason": "research associate",
+   "years": [
+    "- Associate's degree and 2+ years of relevant experience"
+   ]
   },
   {
    "company": "Labcorp",
@@ -1901,7 +2563,8 @@
    "location": "South San Francisco CA",
    "family": "research_associate_lab_tech",
    "label": "no",
-   "reason": "requires current or prior Labcorp employment"
+   "reason": "requires current or prior Labcorp employment",
+   "years": []
   },
   {
    "company": "Labcorp",
@@ -1909,7 +2572,8 @@
    "location": "Dublin OH",
    "family": "research_associate_lab_tech",
    "label": "no",
-   "reason": "Dublin, Ohio"
+   "reason": "Dublin, Ohio",
+   "years": []
   },
   {
    "company": "Maze Therapeutics",
@@ -1917,7 +2581,10 @@
    "location": "South San Francisco, CA",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "compound and sample management RA"
+   "reason": "compound and sample management RA",
+   "years": [
+    "- Minimum of a BS degree in Biological or Chemical Sciences with 3+ years of experience in small molecule compound handling and processing."
+   ]
   },
   {
    "company": "Natera",
@@ -1925,7 +2592,10 @@
    "location": "San Carlos, CA",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "lab assistant (overqualified, plausible)"
+   "reason": "lab assistant (overqualified, plausible)",
+   "years": [
+    "- Less than 1 year industry related experience preferred"
+   ]
   },
   {
    "company": "Natera",
@@ -1933,7 +2603,10 @@
    "location": "San Carlos, CA",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "lab support associate"
+   "reason": "lab support associate",
+   "years": [
+    "Experience: Minimum of 1 year of hands-on experience working in a laboratory setting."
+   ]
   },
   {
    "company": "NewLimit",
@@ -1941,7 +2614,10 @@
    "location": "South San Francisco",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "molecular biology RA"
+   "reason": "molecular biology RA",
+   "years": [
+    "- B.S. in Life Sciences, Chemistry, Engineering, or a related field with 1-2 years of relevant full-time industry or academic research experience, or M.S. in Life Sciences"
+   ]
   },
   {
    "company": "Nurix Therapeutics",
@@ -1949,7 +2625,10 @@
    "location": "Brisbane, California",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "in vivo pharmacology RA (borderline)"
+   "reason": "in vivo pharmacology RA (borderline)",
+   "years": [
+    "- BS/MS in Biology, Pharmacology, Immunology, Cancer Biology, or a related field, with a BS or equivalent plus 8 or more years of relevant experience, or an MS plus 4 or more years of relevant experience"
+   ]
   },
   {
    "company": "Oxford BioTherapeutics",
@@ -1957,7 +2636,10 @@
    "location": "San Jose, California",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "antibody binding and cytotoxicity cell assays"
+   "reason": "antibody binding and cytotoxicity cell assays",
+   "years": [
+    "- B.S. with 4+ years or M.S. with 2+ years of industry experience in Immunology, Cell Biology, Biochemistry, Bioengineering, or related discipline."
+   ]
   },
   {
    "company": "Pacific Biosciences",
@@ -1965,7 +2647,8 @@
    "location": "US - California - Menlo Park",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "molecular biology sample prep"
+   "reason": "molecular biology sample prep",
+   "years": []
   },
   {
    "company": "Pendulum Therapeutics",
@@ -1973,7 +2656,10 @@
    "location": "San Francisco, CA",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "microbiome research associate"
+   "reason": "microbiome research associate",
+   "years": [
+    "- B.S. with 4+ years experience post graduation or MS graduate"
+   ]
   },
   {
    "company": "Prolific Machines",
@@ -1981,7 +2667,10 @@
    "location": "Emeryville, California",
    "family": "research_associate_lab_tech",
    "label": "no",
-   "reason": "analytical chemistry RA"
+   "reason": "analytical chemistry RA",
+   "years": [
+    "- Hold a Bachelor's degree in Chemistry, Biology, Biochemistry or closely related field, with between 0-2 years of industry experience. Candidates without a degree but with similar industry experience are encouraged to apply. Additional industry experience is required at the Research Associate II level."
+   ]
   },
   {
    "company": "Prolific Machines",
@@ -1989,7 +2678,10 @@
    "location": "Emeryville, California",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "cell line development RA"
+   "reason": "cell line development RA",
+   "years": [
+    "- Education & Experience: A Bachelor's degree with 2-5+ years of relevant industry experience or a Master's degree with 1-4+ years of relevant experience is expected for an RA II position. Additional experience and increased independence expected at the Sr. RA level."
+   ]
   },
   {
    "company": "Revolution Medicines",
@@ -1997,7 +2689,10 @@
    "location": "Redwood City, California, United States",
    "family": "research_associate_lab_tech",
    "label": "no",
-   "reason": "SPR/BLI biophysics RA"
+   "reason": "SPR/BLI biophysics RA",
+   "years": [
+    "- BSc or MS in biological sciences or a related scientific discipline, with 5+ years of industry experience for BSc holders or 3+ years for MSc holders."
+   ]
   },
   {
    "company": "Sapho Bio",
@@ -2005,7 +2700,8 @@
    "location": "San Carlos, California",
    "family": "research_associate_lab_tech",
    "label": "no",
-   "reason": "HPLC analytical chemistry RA"
+   "reason": "HPLC analytical chemistry RA",
+   "years": []
   },
   {
    "company": "Stanford Health Care",
@@ -2013,7 +2709,10 @@
    "location": "2465 Faber - PALO ALTO",
    "family": "research_associate_lab_tech",
    "label": "no",
-   "reason": "procurement category manager"
+   "reason": "procurement category manager",
+   "years": [
+    "- Five (5) years of related work experience in Value Analysis, Contract Administration, Vendor Management or Purchasing."
+   ]
   },
   {
    "company": "Stanford Health Care",
@@ -2021,7 +2720,10 @@
    "location": "211 Quarry - Hoover Pavilion - STANFORD",
    "family": "research_associate_lab_tech",
    "label": "no",
-   "reason": "phlebotomy duties"
+   "reason": "phlebotomy duties",
+   "years": [
+    "- 1 year of directly related experience"
+   ]
   },
   {
    "company": "Stanford Health Care",
@@ -2029,7 +2731,10 @@
    "location": "321 Middlefield Rd - MENLO PARK",
    "family": "research_associate_lab_tech",
    "label": "no",
-   "reason": "phlebotomy duties"
+   "reason": "phlebotomy duties",
+   "years": [
+    "- 1 year of directly related experience"
+   ]
   },
   {
    "company": "Stanford University",
@@ -2037,7 +2742,8 @@
    "location": "Stanford, CA, United States",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "bioengineering lab assistant (cell culture, ELISA)"
+   "reason": "bioengineering lab assistant (cell culture, ELISA)",
+   "years": []
   },
   {
    "company": "Stanford University",
@@ -2045,7 +2751,10 @@
    "location": "Stanford, CA, United States",
    "family": "research_associate_lab_tech",
    "label": "no",
-   "reason": "nanofabrication cleanroom operations"
+   "reason": "nanofabrication cleanroom operations",
+   "years": [
+    "Associate Degree or certificate of completion in a related engineering or related scientific discipline and three years of relevant experience; or a combination of education and relevant experience"
+   ]
   },
   {
    "company": "Stanford University",
@@ -2053,7 +2762,11 @@
    "location": "Stanford, CA, United States",
    "family": "research_associate_lab_tech",
    "label": "no",
-   "reason": "lab facilities and operations manager"
+   "reason": "lab facilities and operations manager",
+   "years": [
+    "3+ years of progressively responsible project and operations management experience, including in research and academic environments.",
+    "Bachelor's degree and two years of relevant experience, or combination of education and relevant experience."
+   ]
   },
   {
    "company": "Stanford University",
@@ -2061,7 +2774,11 @@
    "location": "Stanford, CA, United States",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "lab research professional / lab manager"
+   "reason": "lab research professional / lab manager",
+   "years": [
+    "- Minimum 2 years research and/or lab management experience preferable.",
+    "Bachelor's degree in related scientific field and two years of relevant work experience; or Master's degree in a related scientific field."
+   ]
   },
   {
    "company": "Stanford University",
@@ -2069,7 +2786,8 @@
    "location": "Stanford, CA, United States",
    "family": "research_associate_lab_tech",
    "label": "no",
-   "reason": "social science research"
+   "reason": "social science research",
+   "years": []
   },
   {
    "company": "Synthego",
@@ -2077,7 +2795,10 @@
    "location": "Redwood City, CA",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "CRISPR production lab associate"
+   "reason": "CRISPR production lab associate",
+   "years": [
+    "- 1+ year of industry experience within a manufacturing, production, or laboratory environment"
+   ]
   },
   {
    "company": "UCSF",
@@ -2085,7 +2806,10 @@
    "location": "CA, United States",
    "family": "research_associate_lab_tech",
    "label": "no",
-   "reason": "ECG technician training and CPR/BLS"
+   "reason": "ECG technician training and CPR/BLS",
+   "years": [
+    "- Min 3 years of experience as a Stress Testing or related cardiovascular medical technician"
+   ]
   },
   {
    "company": "UCSF",
@@ -2093,7 +2817,13 @@
    "location": "San Francisco, CA, United States",
    "family": "research_associate_lab_tech",
    "label": "no",
-   "reason": "CPT phlebotomy license required"
+   "reason": "CPT phlebotomy license required",
+   "years": [
+    "- Graduation from college with a major in an applicable natural science with coursework in biology or chemistry; or two years of college courses in the natural sciences with coursework in biology or chemistry plus two years of applicable experience; or an equivalent combination of education and experience",
+    "- One year of appropriate clinical laboratory experience",
+    "- One year of appropriate clinical laboratory experience",
+    "- Graduation from college with a major in an applicable natural science with coursework in biology or chemistry; or two years of college courses in the natural sciences with coursework in biology or chemistry plus two years of applicable experience; or an equivalent combination of education and experience"
+   ]
   },
   {
    "company": "UCSF",
@@ -2101,7 +2831,11 @@
    "location": "San Francisco, CA, United States",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "clinical lab specimen processing (borderline)"
+   "reason": "clinical lab specimen processing (borderline)",
+   "years": [
+    "Graduation from high school or a General Education Diploma and two years of laboratory experience or two years of college including courses in the natural, physical, or social sciences, and one year of laboratory experience, or an equivalent combination of education and experience, and knowledge and abilities essential to the successful performance of the duties assigned to the position",
+    "Graduation from high school or a General Education Diploma and two years of laboratory experience or two years of college including courses in the natural, physical, or social sciences, and one year of laboratory experience, or an equivalent combination of education and experience, and knowledge and abilities essential to the successful performance of the duties assigned to the position"
+   ]
   },
   {
    "company": "UCSF",
@@ -2109,7 +2843,8 @@
    "location": "San Francisco, CA, United States",
    "family": "research_associate_lab_tech",
    "label": "no",
-   "reason": "third-year medical knowledge required"
+   "reason": "third-year medical knowledge required",
+   "years": []
   },
   {
    "company": "UCSF",
@@ -2117,7 +2852,8 @@
    "location": "San Francisco, CA, United States",
    "family": "research_associate_lab_tech",
    "label": "no",
-   "reason": "third-year medical knowledge required"
+   "reason": "third-year medical knowledge required",
+   "years": []
   },
   {
    "company": "UCSF",
@@ -2125,7 +2861,11 @@
    "location": "San Francisco, CA, United States",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "lab assistant"
+   "reason": "lab assistant",
+   "years": [
+    "- Graduation from high school or a General Education Diploma (GED), plus one year of laboratory experience, or an equivalent combination of education and experience.",
+    "- Graduation from high school or a General Education Diploma (GED), plus one year of laboratory experience, or an equivalent combination of education and experience."
+   ]
   },
   {
    "company": "UCSF",
@@ -2133,7 +2873,8 @@
    "location": "San Francisco, CA, United States",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "fungal culture and cell biology"
+   "reason": "fungal culture and cell biology",
+   "years": []
   },
   {
    "company": "UCSF",
@@ -2141,7 +2882,8 @@
    "location": "San Francisco, CA, United States",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "mouse lung biology RA"
+   "reason": "mouse lung biology RA",
+   "years": []
   },
   {
    "company": "UCSF",
@@ -2149,7 +2891,8 @@
    "location": "San Francisco, CA, United States",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "immunology research assistant"
+   "reason": "immunology research assistant",
+   "years": []
   },
   {
    "company": "UCSF",
@@ -2157,7 +2900,11 @@
    "location": "San Francisco, CA, United States",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "rodent in vivo imaging RA (borderline)"
+   "reason": "rodent in vivo imaging RA (borderline)",
+   "years": [
+    "- BA/BS in a related science and one or more years of recent, directly related work experience following degree completion utilizing techniques or methods relevant to the position; an equivalent combination of education and experience; or, for candidates without a BA/BS, three or more years of relevant experience.",
+    "- BA/BS in a related science and one or more years of recent, directly related work experience following degree completion utilizing techniques or methods relevant to the position; an equivalent combination of education and experience; or, for candidates without a BA/BS, three or more years of relevant experience."
+   ]
   },
   {
    "company": "UCSF",
@@ -2165,7 +2912,8 @@
    "location": "San Francisco, CA, United States",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "gut histology RA"
+   "reason": "gut histology RA",
+   "years": []
   },
   {
    "company": "UCSF",
@@ -2173,7 +2921,8 @@
    "location": "San Francisco, CA, United States",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "imaging study RA (borderline)"
+   "reason": "imaging study RA (borderline)",
+   "years": []
   },
   {
    "company": "UCSF",
@@ -2181,7 +2930,11 @@
    "location": "United States",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "cell culture RA"
+   "reason": "cell culture RA",
+   "years": [
+    "- SRA II: BA/BS in Biology, Chemistry, Anatomy, or related science, including one year of related work experience; or an equivalent combination of education and experience",
+    "- SRA II: BA/BS in Biology, Chemistry, Anatomy, or related science, including one year of related work experience; or an equivalent combination of education and experience"
+   ]
   },
   {
    "company": "UCSF",
@@ -2189,7 +2942,10 @@
    "location": "San Francisco, CA, United States",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "molecular and microbiology lab manager"
+   "reason": "molecular and microbiology lab manager",
+   "years": [
+    "- BA/BS with a degree in a related science and two or more years of recent, directly related work experience, utilizing the techniques or methods required by the position and demonstrating technical expertise in these areas; and/or equivalent experience/training."
+   ]
   },
   {
    "company": "Verily",
@@ -2197,7 +2953,11 @@
    "location": "South San Francisco - EGA2",
    "family": "research_associate_lab_tech",
    "label": "yes",
-   "reason": "lab testing program operations (borderline)"
+   "reason": "lab testing program operations (borderline)",
+   "years": [
+    "- 2-3 years of relevant industry experience managing cross-functional programs and working with internal and external stakeholders",
+    "- 2-3 years of relevant industry experience managing cross-functional programs and working with internal and external stakeholders"
+   ]
   }
  ]
 }

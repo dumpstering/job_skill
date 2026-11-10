@@ -20,7 +20,9 @@ printed.
    wait for the user to say "apply" again. The files to attach are the ones
    `final.json` in the job folder names (`<Name> Resume.pdf`, or `<Name>
    CV.pdf` in cv mode, and the letter); with no `final.json`, no strict
-   build has passed yet, so build again first.
+   build has passed yet, so build again first. After the user corrects a
+   library entry the resume cites, that `final.json` no longer counts:
+   rewrite the lines citing it and build again first.
 2. Gather what you will enter: `profile.md`, `answers.md`, the tailored
    resume (.txt), `notes.md`, and Block B's screening answers. If
    `posting.md` has an "Application questions" section, run `answers.py

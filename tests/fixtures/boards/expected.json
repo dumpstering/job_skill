@@ -82,6 +82,24 @@
   "first_posted": null,
   "n": 3
  },
+ "selectminds:lbl": {
+  "first_posted": "",
+  "host": "jobs.lbl.gov",
+  "n": 3
+ },
+ "successfactors:bayer": {
+  "first_posted": "2026-10-29",
+  "n": 3
+ },
+ "successfactors:boehringer": {
+  "first_posted": "2026-11-06",
+  "n": 2
+ },
+ "talentbrew:kp": {
+  "first_posted": "2026-10-13",
+  "host": "www.kaiserpermanentejobs.org",
+  "n": 3
+ },
  "teamtailor:career": {
   "first_posted": "2026-11-03",
   "host": "career.teamtailor.com",

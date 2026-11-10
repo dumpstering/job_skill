@@ -13,7 +13,14 @@ Usage:
 
 emit prints EVENT <id>. J is the payload object, or an object holding
 "payload" plus any of job_key, n, date, session. emit writes every type but
-`added`, which only add writes.
+`added`, which only add writes. --json-file F names a file under
+<root>/claude/ (like --args-file: at most 64 KB, read once, then removed).
+
+A file in runner/in/events that cannot be read as JSON (over 64 KB, nested
+deeper than 64, not UTF-8, or not JSON after 3 tries) never stops a reader:
+the readers skip it, and the runner's tracker.py apply-events moves it to
+runner/in/bad/ (with <name>.reason.txt) and prints one line
+    ERROR bad event file <name>: <why>; moved to runner/in/bad/
 
 add puts one job folder from a link into today's list (spec 5.11,
 addendum_user): an `added` event holding the whole queue item, numbered
@@ -217,6 +224,8 @@ def check_added_payload(ev, p, root):
         v = it.get(k, [])
         if not isinstance(v, list) or not all(isinstance(x, str) and len(x) <= 80 for x in v):
             return f"payload.item.{k} must be a list of short strings"
+    if it.get("posted") not in (None, "") and posted_value(it["posted"]) != it["posted"]:
+        return "payload.item.posted must be a YYYY-MM-DD date or \"undated\""
     folder = str(it.get("folder", "")).replace("\\", "/")
     if not folder.startswith("applications/") or not _inside(root, folder):
         return "payload.item.folder must be a job folder under applications/"
@@ -236,6 +245,19 @@ def check_added_payload(ev, p, root):
     return None
 
 
+def posted_value(value):
+    """A posting's posted value as stored or printed (shared decision R2): a
+    real YYYY-MM-DD date, else "undated"."""
+    s = str(value or "").strip()[:10]
+    if DAY_RE.match(s):
+        try:
+            datetime.strptime(s, "%Y-%m-%d")
+            return s
+        except ValueError:
+            pass
+    return "undated"
+
+
 UPLOAD_RE = re.compile(r"^upload/(\d{2,3})[cw]?_[A-Za-z0-9]{1,30}_(?:Resume|Cover)_[A-Za-z0-9]{1,12}\.(?:pdf|docx)$")
 
 
@@ -249,19 +271,9 @@ def upload_fits(upload, n):
 def url_refusal(url):
     """Why a link may not join today's list (shared decision 1), else None:
     a host that is not a plain web address (bad-url), a job board, or a
-    private or local address, judged on netfetch's canonical host."""
+    private or local address: netfetch.web_refusal, the one link refusal (R1)."""
     import netfetch  # stdlib and jobfs only
-    reason = netfetch.hard_deny(url) or ""
-    if reason.split(" ", 1)[0] in ("bad-url", "job-board", "host-not-ascii"):
-        return reason
-    try:
-        host = netfetch.host_of(url)
-        netfetch.check_public(url)
-    except netfetch.Denied as e:
-        return e.reason
-    except netfetch.FetchError:
-        return f"non-public {host}"
-    return None if host else "bad-url (no host)"
+    return netfetch.web_refusal(url)
 
 
 def validate(ev, root, name=None):
@@ -339,19 +351,36 @@ def emit(root, ev_type, payload, job_key="", n=None, day=None, session=None):
 # ---------- reading ----------
 
 def read_file(path):
-    """(event, error, permanent). A file that does not parse yet is not permanent:
-    it may still be arriving, so it is retried."""
+    """(event, error, permanent), through the safe loader (shared decision R3).
+    A file over 64 KB or nested deeper than 64 is permanent; one that does not
+    parse yet is not: it may still be arriving, so it is retried."""
     try:
-        raw = Path(path).read_bytes()
+        ev = jobfs.read_json(path, MAX_BYTES)
     except OSError as e:
         return None, f"unreadable: {e}", False
-    if len(raw) > MAX_BYTES:
-        return None, "event over 64 KB", True
-    try:
-        ev = json.loads(raw.decode("utf-8-sig"))
-    except (UnicodeDecodeError, ValueError) as e:
-        return None, f"not JSON: {e}", False
+    except jobfs.BadJson as e:
+        if e.kind == "size":
+            return None, "event over 64 KB", True
+        return None, (f"not JSON: {e}" if e.kind != "json" else str(e)), e.permanent
     return ev, None, False
+
+
+def bad_dir(root):
+    """runner/in/bad/: event and request files that cannot be read as JSON."""
+    return jobfs.Folder(root).runner_in / "bad"
+
+
+def set_aside(root, path, reason):
+    """Move a file that cannot be read as JSON to runner/in/bad/ with
+    <name>.reason.txt beside it (never deleted). Returns the destination."""
+    dest = bad_dir(root)
+    dest.mkdir(parents=True, exist_ok=True)
+    target = dest / Path(path).name
+    os.replace(path, target)
+    line = re.sub(r"[\r\n]+", " ", str(reason))[:500]
+    jobfs.atomic_write_text(dest / (Path(path).name + ".reason.txt"), f"{line}\n")
+    clear_failure(root, [Path(path).name])
+    return target
 
 
 def is_young(path, now=None):
@@ -401,11 +430,7 @@ def _retries_path(root):
 
 
 def _read_retries(root):
-    try:
-        data = json.loads(_retries_path(root).read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else {}
-    except (OSError, ValueError):
-        return {}
+    return jobfs.read_json_or(_retries_path(root), jobfs.MAX_FILE, {})
 
 
 def note_failure(root, name):
@@ -441,20 +466,26 @@ def reject(root, path, reason):
 
 
 def rejected_list(root, days=14):
-    """[{file, reason}] for files rejected in the last `days` days."""
-    dest = jobfs.Folder(root).events_rejected
-    if not dest.exists():
-        return []
+    """[{file, reason}] for event files rejected in the last `days` days: those
+    in runner/out/events_rejected/ and the unreadable ones set aside in
+    runner/in/bad/ (request files there are not events and are left out)."""
     cutoff = time.time() - days * 86400
     out = []
-    for p in sorted(dest.glob("*.reason.txt")):
-        try:
-            if p.stat().st_mtime < cutoff:
-                continue
-            reason = p.read_text(encoding="utf-8", errors="replace").strip()
-        except OSError:
+    for dest in (jobfs.Folder(root).events_rejected, bad_dir(root)):
+        if not dest.exists():
             continue
-        out.append({"file": p.name[: -len(".reason.txt")], "reason": reason})
+        for p in sorted(dest.glob("*.reason.txt")):
+            name = p.name[: -len(".reason.txt")]
+            m = NAME_RE.match(name)
+            if dest != jobfs.Folder(root).events_rejected and not (m and m.group(2) in TYPES):
+                continue
+            try:
+                if p.stat().st_mtime < cutoff:
+                    continue
+                reason = p.read_text(encoding="utf-8", errors="replace").strip()
+            except OSError:
+                continue
+            out.append({"file": name, "reason": reason})
     return out
 
 
@@ -486,10 +517,7 @@ def runner_given(root, day):
     for p in [qd / "queue.json"] + sorted(qd.glob("addendum_*.json")):
         if p.name == "addendum_user.json" or p.name.endswith(".prev.json") or not p.exists():
             continue
-        try:
-            data = json.loads(p.read_text(encoding="utf-8-sig"))
-        except (OSError, ValueError):
-            continue
+        data = jobfs.read_json_or(p, jobfs.MAX_STATE, {})
         for it in (data.get("items") or []) if isinstance(data, dict) else []:
             if isinstance(it, dict):
                 keys.add(it.get("job_key"))
@@ -539,8 +567,21 @@ def overlay(root, day=None):
             "rejected": rejected_list(root), "usage": usage, "answers_used": used}
 
 
+KEY_REFUSED = "(key refused: it holds characters a command line must not carry)"
+
+
+def shown_key(key):
+    """A job key as printed for Claude to put inline in a command (shared
+    decision R2): the key when it holds only A-Z a-z 0-9 . _ : / - (at most
+    200), else one plain refusal in its place."""
+    import jobkey
+    if not key:
+        return "-"
+    return key if jobkey.inline_ok(key) and len(str(key)) <= jobkey.KEY_MAX else KEY_REFUSED
+
+
 def item_line(it):
-    parts = [f"ITEM #{it['n'] if it['n'] is not None else '-'}", it["job_key"] or "-", it["state"]]
+    parts = [f"ITEM #{it['n'] if it['n'] is not None else '-'}", shown_key(it["job_key"]), it["state"]]
     if it.get("reason"):
         parts.append(f"reason={it['reason']}")
     if it.get("question_ids"):
@@ -558,7 +599,7 @@ def print_overlay(view):
     if not items:
         print("ITEMS none")
     for it in view.get("added") or []:
-        print(f"ADDED #{it['n']} {it['job_key']} {it['added_by']}")
+        print(f"ADDED #{it['n']} {shown_key(it['job_key'])} {it['added_by']}")
     print(f"TRACKER PENDING {len(view['tracker_pending'])}")
     print(f"TRACKER REJECTED {len(view['rejected'])}")
     for u in view["usage"]:
@@ -595,7 +636,8 @@ def add(root, folder, via, family="", day=None, session=None):
     day = jobfs.iso_date(day) if day else jobfs.today(root).isoformat()
     rel = job_folder_rel(root, folder)
     head = jobqueue.posting_head(root / rel)
-    key = head.get("Job key") or jobkey.job_key(head.get("URL", ""))
+    # R2: an earlier version's (or a hand-edited) Job key line in today's safe form
+    key = jobkey.safe_key(head.get("Job key")) or jobkey.job_key(head.get("URL", ""))
     if not key:
         raise EventError("posting.md has no Job key or URL line")
     why = url_refusal(head["URL"]) if head.get("URL") else None
@@ -610,23 +652,34 @@ def add(root, folder, via, family="", day=None, session=None):
     if not jobfs.Folder(root).queue_json(day).exists():
         return f"NO LIST {day} (no list built yet): the tracker row is the record", None
     items = jobqueue.day_items(root, day)
-    same = next((it for it in items if it.get("job_key") == key), None)
+    same = next((it for it in items if jobkey.same_key(it.get("job_key"), key)), None)  # R2: an earlier key too
     if same is not None:
         return f"IN QUEUE {day} #{same.get('n')}", None
     n = max([int(it.get("n") or 0) for it in items] + [0]) + 1
     it = jobqueue.user_item(root, n, key, rel, via, family)
     payload = {"via": via, "item": {k: v for k, v in it.items() if k in ADDED_TEXT + ("needs", "sensitive", "posted")}}
+    if "posted" in payload["item"]:  # R2: a YYYY-MM-DD date or "undated", wherever it is stored or printed
+        payload["item"]["posted"] = posted_value(payload["item"]["posted"])
     ev, _ = emit(root, "added", payload, job_key=key, n=n, day=day, session=session)
-    return f"ADDED #{n} {key} (addendum_user)", ev
+    return f"ADDED #{n} {shown_key(key)} (addendum_user)", ev
 
 
 # ---------- CLI ----------
 
 def load_json_arg(a):
-    raw = Path(a.json_file).read_text(encoding="utf-8-sig") if a.json_file else a.json
+    """The --json object, or the --json-file one: a file under <root>/claude/,
+    at most 64 KB, read once and then removed (argfile.load, like --args-file)."""
+    if a.json_file:
+        try:
+            obj = argfile.load(a.json_file, a.root)
+        except argfile.ArgfileError as e:
+            raise EventError(f"--json-file {e}")
+        return obj
+    if len(a.json.encode("utf-8", "replace")) > MAX_BYTES:
+        raise EventError("--json is over 64 KB")
     try:
-        obj = json.loads(raw)
-    except ValueError as e:
+        obj = jobfs.loads_json(a.json)
+    except jobfs.BadJson as e:
         raise EventError(f"--json is not JSON: {e}")
     if not isinstance(obj, dict):
         raise EventError("--json must be a JSON object")
@@ -667,20 +720,21 @@ def cmd_add(a):
 
 
 def build_parser():
-    ap = Parser(prog="events.py", description="Event files for the runner (spec 2.5).")
+    ap = Parser(prog="events.py", description="Event files for the runner (spec 2.5).", allow_abbrev=False)
     sub = ap.add_subparsers(dest="cmd", required=True, metavar="command")
-    p = sub.add_parser("emit", help="Write one create-only event file; prints EVENT <id>.")
+    p = sub.add_parser("emit", help="Write one create-only event file; prints EVENT <id>.", allow_abbrev=False)
     p.add_argument("--root", required=True)
     p.add_argument("--type", required=True, choices=EMIT_TYPES)
     src = p.add_mutually_exclusive_group(required=True)
     src.add_argument("--json", help="the payload, or {payload, job_key, n, date, session}")
-    src.add_argument("--json-file", help="the same JSON from a file")
+    src.add_argument("--json-file", help="the same JSON from a file under <root>/claude/ (read once, then removed)")
     p.add_argument("--job-key", default="")
     p.add_argument("--n", type=int)
     p.add_argument("--date")
     p.add_argument("--session")
     p.set_defaults(func=cmd_emit)
-    p = sub.add_parser("add", help="Put one job folder from a link into today's list (addendum_user).")
+    p = sub.add_parser("add", help="Put one job folder from a link into today's list (addendum_user).",
+                       allow_abbrev=False)
     p.add_argument("--root", required=True)
     p.add_argument("--folder", required=True, help="the job folder (applications/<date> <Company> - <Role>)")
     p.add_argument("--via", required=True, choices=VIAS, help="pasted (/job <link>) or add (/job add <link>)")
@@ -688,7 +742,7 @@ def build_parser():
     p.add_argument("--date")
     p.add_argument("--session")
     p.set_defaults(func=cmd_add)
-    p = sub.add_parser("overlay", help="Print the merged view of the day's events.")
+    p = sub.add_parser("overlay", help="Print the merged view of the day's events.", allow_abbrev=False)
     p.add_argument("--root", required=True)
     p.add_argument("--date")
     p.set_defaults(func=cmd_overlay)

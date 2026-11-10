@@ -33,6 +33,15 @@ The gates (list stage G1-G5 decide whether a detail call is made at all):
     G9 title      no require_any word in the requirements, or more avoid_any words
                   (another field's training: chemistry, formulation, biophysics,
                   LC-MS, machine learning) than require_any words, at least 2
+    G9 seniority  judged against the user (R6): their years and title levels
+                  from the achievement library's role headings, or [experience]
+                  in settings.toml. Clearly beyond (a principal-level title two
+                  steps over the user's, unless the text asks only a modest bar
+                  the user meets; or BEYOND_YEARS more years than the user has):
+                  discard, reason seniority. Asking more (a higher title, more
+                  years, or DOMAIN_YEARS of a field the library never names):
+                  kept as borderline, which the queue lists after the rest.
+                  Industry-mode families only.
     G10 location  remote but not open to the US
     G11 AI text   text addressed to an AI: parked as needs-you, never queued
     G12 apply     no apply URL, or one G1 would refuse: discard; chat apply:
@@ -43,17 +52,21 @@ A posting that fails to gate is skipped with one ERROR line (D2).
 fit (the queue's order): 0.5 x overlap + 0.2 x title match + 0.15 x level +
 0.075, where overlap counts the user's terms the posting names (each
 techniques.md technique, hands-on 1 and familiar 0.5, and each family term,
-1 when the achievement library names it and 0.5 when not), FIT_TERMS of
-them being 1.0. The queue lists the day's picks by fit, best first.
+1 when the achievement library names it and 0.5 when not, then half of that
+for a technique's general form alone: 'PCR' for 'real-time PCR'), FIT_TERMS
+of them being 1.0. The queue lists the day's picks by fit, best first.
 
 Title terms (title_any, title_none, require_any, exclude_title_words) match whole
 words of the normalized title (jobkey.norm_title), so "capa" never hits
 "Capacity". "stem*" also matches longer words (microbiolog* -> microbiology),
 "a+b" needs every part, and "a|b" inside a part is either. An exclude word
 written in capitals of three letters or fewer ("IT", "HR", "VP") matches the
-title's own capitals only. Families are tried in file order and the first that
-matches wins, so specific families go before general ones; for academic,
-institute and government employers a cv-mode family goes first.
+title's own capitals only, never right after a number ('08-HR' is a shift).
+Of the families that match, the closest core or adjacent title wins (an
+exact one first), then file order, so specific families go before general
+ones; for academic, institute and government employers a cv-mode family
+goes first. G3: a remote list naming only states outside home is regional
+('Remote Michigan | Remote United States' is out).
 
 Every discard writes one line to queue/<date>/discards.csv and a seen record
 (state/seen/<YYYY-MM>.jsonl). Filter discards (location, title, stale,
@@ -88,6 +101,10 @@ REQ_SECTIONS_MAX = 20   # and at most this many requirements headings
 AVOID_MIN = 2           # G9: this many avoid_any words (and more than require_any words) mark another field's job
 FIT_TERMS = 6           # fit: this many of the user's terms named by a posting is a full overlap
 FIT_TEXT_MAX = 60_000   # fit reads at most this much of a posting
+# fit: a technique's last word that is a method on its own (general_forms)
+GENERAL_METHODS = {"pcr", "sequencing", "microscopy", "cytometry", "chromatography", "electrophoresis",
+                   "spectrometry", "cloning", "immunoassay", "immunoassays", "blot", "blotting",
+                   "transfection", "mutagenesis", "crispr"}
 WEB_SCHEMES = ("http", "https")
 SITE_WORDS = re.compile(r"\b(lab|labs|laboratory|laboratories|campus|building|bldg|floor|suite|hq|headquarters)\b",
                         re.I)
@@ -99,7 +116,7 @@ DUP_TITLE_SIM = 0.85      # the v1.1 SIMILAR ROLE threshold
 REPOST_BITS = 3
 BANDS = [(3, "0-3", 40), (7, "4-7", 25), (14, "8-14", 15), (30, "15-30", 5)]
 UNDATED = ("undated", 5)       # an undated posting the board has not shown to be new
-FILTER_REASONS = ("location", "title", "stale", "knockout")
+FILTER_REASONS = ("location", "title", "stale", "knockout", "seniority")
 DISCARD_COLUMNS = ["date", "lane", "company", "role", "location", "host", "job_key", "gate", "reason",
                    "profile_hash"]
 ACADEMIC = {"academic", "institute", "government"}
@@ -114,6 +131,7 @@ PREFERRED_WORDS = re.compile(r"\b(preferred|a plus|desir(?:ed|able)|nice to have
 REQ_HEADING = re.compile(r"^[ \t]*(?:#+[ \t]*)?(?:minimum |basic |required |preferred )?(?:requirements|qualifications|"
                          r"what you(?:'ll)? (?:bring|need)|who you are|you have|must have|skills|experience)\b.*$",
                          re.I | re.M)
+PREFERRED_HEADING = re.compile(r"(?i)\b(preferred|desired|desirable|nice to have|bonus|a plus)\b")
 ANY_HEADING = re.compile(r"^[ \t]*#+[ \t]+\S.*$|^[A-Z][A-Za-z ,'&/-]{2,60}:?[ \t]*$", re.M)
 NO_SPONSOR = re.compile(r"(unable|not able|cannot|can ?not|will not|won't|does not|do not|no)\s+(to\s+)?"
                         r"(provide\s+|offer\s+)?(visa\s+)?sponsor(ship)?", re.I)
@@ -167,8 +185,11 @@ def caps_word(word):
 
 
 def exclude_hit(word, raw, title_words):
+    """A global exclude word in a title. A word in capitals ("HR", "IT") is
+    matched in the title's own capitals, and never right after a number with
+    an optional '-' or space: '08-HR', '8 HR' and '(08HR)' are shift lengths."""
     if caps_word(word):
-        return re.search(rf"(?<![A-Za-z0-9]){re.escape(word)}(?![A-Za-z0-9])", raw or "") is not None
+        return re.search(rf"(?<![A-Za-z0-9])(?<!\d-)(?<!\d ){re.escape(word)}(?![A-Za-z0-9])", raw or "") is not None
     return term_hits(word.lower(), title_words)
 
 
@@ -185,6 +206,15 @@ def to_date(v):
         return datetime.strptime(str(v or "")[:10], "%Y-%m-%d").date()
     except ValueError:
         return None
+
+
+def posted_value(v):
+    """A posted value as it may be stored or printed (R2): 'YYYY-MM-DD' when
+    it holds a date, None when blank, else 'undated'."""
+    d = to_date(v)
+    if d:
+        return d.isoformat()
+    return "undated" if str(v or "").strip() else None
 
 
 def band_of(age):
@@ -238,7 +268,7 @@ def employers(root):
 def widen_steps(root):
     """Widen steps switched on by the queue builder (state/queue_state.json)."""
     try:
-        data = json.loads(jobfs.Folder(root).queue_state_json.read_text(encoding="utf-8"))
+        data = jobfs.read_json(jobfs.Folder(root).queue_state_json, jobfs.MAX_STATE)  # R3: the safe loader
         return sorted(set((data.get("widen") or {}).get("on") or []))
     except (OSError, ValueError, AttributeError):
         return []
@@ -281,6 +311,10 @@ class Rules:
         self.families = [f for f in self.profile.get("family") or [] if self.family_on(f)]
         self.knockouts = [k for k in self.profile.get("knockout") or [] if k.get("id")]
         self.employers = employers(root)
+        try:  # R6: seniority is judged against the user
+            self.experience = experience(root, today)
+        except Exception:  # noqa: BLE001  a library or settings the reader cannot use: no seniority judged (D2)
+            self.experience = None
         self.hash = self.make_hash()
 
     def family_on(self, fam):
@@ -292,8 +326,11 @@ class Rules:
         return all(norm_license(x) in self.me["held"] for x in fam.get("needs_license") or [])
 
     def make_hash(self):
+        me = self.experience
         body = {"profile": dict(self.profile), "held": sorted(self.me["held"]),
                 "sponsorship": self.me["sponsorship"], "widen": self.widen}
+        if me is not None:  # a seniority discard is judged again when the user's whole years or titles change
+            body["experience"] = [int(me.years), int(me.industry_years), me.level, me.doctorate]
         canon = json.dumps(body, sort_keys=True, default=str, separators=(",", ":"))
         return hashlib.sha256(canon.encode("utf-8")).hexdigest()[:12]
 
@@ -344,7 +381,8 @@ class Seen:
                         self._index(rec)
 
     def _index(self, rec):
-        key = rec["job_key"]
+        key = jobkey.safe_key(rec["job_key"])  # R2: a key an earlier version stored, in today's form
+        rec = rec if key == rec["job_key"] else dict(rec, job_key=key)
         old = self.by_key.get(key)
         if old:
             rec = dict(rec, first_seen=min(old.get("first_seen") or rec.get("first_seen") or "",
@@ -469,29 +507,30 @@ def host_text(url):
 
 def url_refusal(url):
     """Why a posting or apply URL may never be pooled or handed to the user,
-    else None. Every answer comes from netfetch's one canonical host (D1):
-    'not-web' for a scheme other than http or https (a file:// or smb:// link
-    makes Windows connect to that host when the browser opens it), 'bad-url'
-    for a host netfetch refuses (a soft hyphen, a fullwidth letter, an empty
-    label) or a URL with no host, else the job-board domain the host belongs to."""
+    else None. 'not-web' for a scheme other than http or https (a file:// or
+    smb:// link makes Windows connect to that host when the browser opens
+    it); otherwise netfetch.web_refusal decides (R1): the job-board domain,
+    'bad-url' (a lookalike host, userinfo, a backslash, whitespace, an odd
+    port, an IP literal, a single-label host) or 'non-public' (localhost,
+    .local, .internal and the like)."""
     try:
         scheme = urlparse(str(url)).scheme.lower()
     except ValueError:
         return "bad-url"
     if scheme not in WEB_SCHEMES:
         return "not-web"
-    deny = netfetch.hard_deny(url) or ""
-    if deny.startswith("job-board"):
-        return deny.split(" ", 1)[1] if " " in deny else "job-board"
-    if deny.startswith("bad-url"):
-        return "bad-url"
-    try:
-        host = netfetch.host_of(url)
-    except (netfetch.Denied, ValueError):
-        return "bad-url"
-    if not host:
-        return "bad-url"
-    return netfetch.job_board(host)
+    # R1: the one link refusal; G1 and G12 name its kind (bad-url, non-public) or the job-board domain
+    kind, _, rest = (netfetch.web_refusal(url) or "").partition(" ")
+    return (rest or "job-board") if kind == "job-board" else (kind or None)
+
+
+def refusal_kind(reason):
+    """A netfetch refusal reason as a G1 discard reason (host:<it>): the
+    job-board domain or 'bad-url'; None for any other refusal."""
+    kind, _, rest = str(reason or "").partition(" ")
+    if kind == "job-board":
+        return rest or "job-board"
+    return "bad-url" if kind == "bad-url" else None
 
 
 def g1_host(p, v, fetcher):
@@ -505,12 +544,22 @@ def g1_host(p, v, fetcher):
         v.gate_line("G1", True, f"lead-only {host}")
         return None
     if fetcher is not None and fetcher.robots is not None and host and not fetcher.policy.reason(p.url):
+        # A robots.txt read refused by policy (it redirects to a job board, a
+        # bad-url or a non-public host) is never 'allowed' (SV-07): a job
+        # board or bad-url is a discard, anything else the unreachable skip.
         try:
             allowed, _, why = fetcher.robots.check(p.url)
+        except netfetch.Denied as d:
+            kind = refusal_kind(d.reason)
+            if kind:
+                return v.stop("G1", "discard", f"host:{kind}", f"robots.txt of {host}")
+            allowed, why = False, f"robots-unreachable {host}"
         except netfetch.FetchError:
-            allowed, why = True, None
+            allowed, why = False, f"robots-unreachable {host}"
+        if not allowed and refusal_kind(why):
+            return v.stop("G1", "discard", f"host:{refusal_kind(why)}")
         if not allowed and why and why.startswith(("robots-unreachable", "crawl-delay")):
-            return v.stop("G1", "skip", why.split()[0], host)  # crawl-delay: the host is skipped this run only
+            return v.stop("G1", "skip", why.split()[0], host)  # the host is skipped this run only
         if not allowed:
             return v.stop("G1", "discard", f"robots:{host}")
     v.gate_line("G1", True, host or "-")
@@ -559,6 +608,21 @@ def place_verdict(part, rules, company_norm=""):
     return "out", "not a home place"
 
 
+def remote_states(parts, rules):
+    """The states a remote location list limits the job to, when it names at
+    least one and none of them is a home state (sorted codes), else []. Only
+    the remote places count ('Remote Michigan', 'Remote - TX'); an office
+    city in the same list does not. A bare 'Remote United States' beside them
+    is one more regional entry, not a nationwide job."""
+    if not rules.home_states:
+        return []
+    named = set()
+    for part in parts:
+        if re.search(r"\bremote\b", part, re.I):
+            named |= posting.region_of(part)[0]
+    return sorted(named) if named and not named & rules.home_states else []
+
+
 def site_label(part, company_norm):
     """True when a location names an office, lab or address rather than a
     place: a site word ('MBC Lab', 'Main Campus'), a street address, or the
@@ -596,6 +660,9 @@ def g3_location(p, v, rules):
     # 'Remote, Florida, USA' names the state the remote worker must live in;
     # a board's own remote flag with an office city ('Boston, MA') does not.
     said_remote = any(re.search(r"\bremote\b", part, re.I) for part in parts)
+    regional = remote_states(parts, rules)
+    if regional:  # 'Remote Michigan | Remote Ohio | Remote United States': a regional field job (L3-06)
+        return v.stop("G3", "discard", "location", quote(loc) + f" (remote, other states {'/'.join(regional)})")
     if rules.remote_ok and (any(kind == "remote" for kind, _ in verdicts)
                             or (p.remote == "remote" and not said_remote and p.us_eligible is not False)):
         v.gate_line("G3", True, f"remote {quote(loc)}")
@@ -614,45 +681,57 @@ def g3_location(p, v, rules):
 
 def family_match(fam, title):
     """(title_match, how) for one family, or (0, why-not)."""
+    tm, how, _ = family_score(fam, title)
+    return tm, how
+
+
+def family_score(fam, title):
+    """(title_match, how, raw) for one family: raw is the token-set score of
+    the core or adjacent title that matched (an exact title is 1.0), 0 for a
+    title_any match or none."""
     tw = words(title)
     none = first_hit(fam.get("title_none"), tw)
     if none:
-        return 0, f"title_none {none}"
+        return 0, f"title_none {none}", 0
     best = max(((dice(title, c), c) for c in fam.get("core_titles") or []), default=(0, ""))
     if best[0] >= TITLE_SIM:
-        return 1.0, f"core {quote(best[1])}"
+        return 1.0, f"core {quote(best[1])}", best[0]
     adj = max(((dice(title, c), c) for c in fam.get("adjacent_titles") or []), default=(0, ""))
     if adj[0] >= TITLE_SIM:
-        return 0.6, f"adjacent {quote(adj[1])}"
+        return 0.6, f"adjacent {quote(adj[1])}", adj[0]
     hit = first_hit(fam.get("title_any"), tw)
     if hit:
-        return 0.6, f"any {quote(hit)}"
-    return 0, "no title match"
+        return 0.6, f"any {quote(hit)}", 0
+    return 0, "no title match", 0
 
 
 def pick_family(rules, p, lane=""):
-    """(family, title_match, how) by file order; cv-mode families first for
-    academic employers; usajobs-mode families only for USAJOBS postings."""
+    """(family, title_match, how): cv-mode families first for academic
+    employers and usajobs-mode families only for USAJOBS postings; then the
+    closest core or adjacent title (an exact one first: a bare 'Research
+    Associate' is the research associate family's, not 'Clinical Research
+    Associate's'); then file order."""
     usajobs = lane == "usajobs" or p.ats == "usajobs"
     seg = rules.segment(p.company_norm)
     allowed = (rules.employers.get(p.company_norm) or {}).get("families") or []
     hits = []
-    for fam in rules.families:
+    for i, fam in enumerate(rules.families):
         mode = str(fam.get("mode", "industry")).lower()
         if (mode == "usajobs" and not usajobs) or (allowed and fam.get("id") not in allowed):
             continue
-        tm, how = family_match(fam, p.title)
+        tm, how, raw = family_score(fam, p.title)
         if tm:
-            hits.append((fam, tm, how, mode))
+            hits.append((fam, tm, how, mode, raw, i))
     if not hits:
         return None, 0, ""
     if usajobs:
-        hits.sort(key=lambda h: h[3] != "usajobs")
+        first = (lambda h: h[3] != "usajobs")
     elif seg in ACADEMIC:
-        hits.sort(key=lambda h: h[3] != "cv")
+        first = (lambda h: h[3] != "cv")
     else:
-        hits.sort(key=lambda h: h[3] == "cv")
-    fam, tm, how, _ = hits[0]
+        first = (lambda h: h[3] == "cv")
+    hits.sort(key=lambda h: (first(h), -h[4], h[5]))
+    fam, tm, how = hits[0][:3]
     return fam, tm, how
 
 
@@ -772,6 +851,321 @@ def g9_words(p, v, fam):
     return None
 
 
+# ---------- seniority against the user (R6) ----------
+#
+# Judged against the user, never by fixed words: the years and title levels
+# come from the achievement library's role headings (or the [experience]
+# override in settings.toml), so a senior user keeps senior roles. Only what
+# is clearly beyond is dropped (a principal-level title two or more steps over
+# the user's, or a stated bar of BEYOND_YEARS more years than the user has);
+# the rest of what asks for more is 'borderline', queued after the others.
+
+BEYOND_YEARS = 5   # a stated bar this many years over the user's own is clearly beyond
+MODEST_BAR = 5     # a principal-level title whose text asks at most this many years (that the user has) is borderline
+DOMAIN_YEARS = 4   # this many years of a field the user's library never names: borderline
+GENERIC_FIELD = frozenset(
+    "relevant related relevent industry industrial academic academia hands experience experienced work working "
+    "professional post doc docs doctoral postdoctoral graduate postgraduate scientific science sciences biotech "
+    "biotechnology pharmaceutical pharma company companies environment environments setting settings field fields "
+    "similar equivalent combination total minimum least more prior previous practical overall strong proven "
+    "progressive progressively responsible full time direct directly demonstrated successful year years laboratory "
+    "lab labs research the and with for within including plus combined applicable both either other any area areas "
+    "role roles position positions job jobs bench based independent independently leading leadership level "
+    "life biopharmaceutical biopharma advanced managing manage management projects project end hands on "
+    "relevant cross functional functional team teams".split())
+LEVEL_WORDS = (("senior principal", 6), ("distinguished", 6), ("associate principal", 5), ("principal", 5),
+               ("senior staff", 5), ("staff", 4), ("senior", 3))
+LEVEL_NAMES = {0: "entry", 1: "entry", 2: "scientist", 3: "senior", 4: "staff", 5: "principal", 6: "senior principal"}
+ASSOCIATE_TRACK = re.compile(r"\b(research associate|associate scientist|research assistant|lab associate|"
+                             r"laboratory associate|associate specialist|assistant|technician|technologist)\b")
+STUDENT_ROLE = re.compile(r"\b(graduate|student|phd candidate|doctoral candidate|intern|internship|undergraduate|"
+                          r"teaching assistant|trainee)\b", re.I)
+ACADEMIC_ROLE = re.compile(r"\b(postdoc\w*|post doc\w*|postdoctoral|post doctoral|fellow|professor|lecturer|"
+                           r"instructor)\b", re.I)
+ACADEMIC_ORG = re.compile(r"\b(university|college|institute|school|academy|hospital|medical center)\b", re.I)
+DOCTORATE_USER = re.compile(r"\bph\.? ?d\b|\bdoctora(?:l|te)\b|doctor of philosophy|\bthesis\b|\bdissertation\b|"
+                            r"\bpostdoc|\bpost-?doctoral", re.I)
+MONTHS = {m: i for i, m in enumerate(("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov",
+                                      "dec"), 1)}
+SPAN_END = re.compile(r"(?i)\b(present|current|now|today|ongoing)\b")
+YEAR_NUM = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9,
+            "ten": 10, "eleven": 11, "twelve": 12, "fifteen": 15}
+_N = r"(\d{1,2}|" + "|".join(YEAR_NUM) + r")"
+YEARS_ASKED = re.compile(r"(?i)\b" + _N + r"(?:\s*\(\d{1,2}\))?\s*(?:\+|plus)?\s*(?:(?:-|to|\u2013|\u2014)\s*" + _N +
+                         r"\s*\+?\s*)?(?:or more\s+|\+\s*)?(?:years?|yrs?)\b(?!\s+(?:of age|old))")
+YEARS_CONTEXT = re.compile(r"(?i)\b(experience[ds]?|industry|industrial|post-?docs?|post-?doctoral|post-?graduate)\b")
+UP_TO = re.compile(r"(?i)(?:up to|less than|fewer than|no more than|under|maximum of|at most)\s*$")
+DOCTORATE = re.compile(r"(?i)\b(ph\.?\s?d|doctorate|doctoral|m\.?d|pharm\.?\s?d|dvm)\b")
+OTHER_DEGREE = re.compile(r"(?i)\b(b\.?s|b\.?a|bachelor'?s?|m\.?s|master'?s?|associate'?s degree)\b")
+INDUSTRY = re.compile(r"(?i)\b(industry|industrial|biotech\w*|pharma\w*|commercial)\b")
+ACADEMIC_TOO = re.compile(r"(?i)\b(academi[ac]\w*|post-?doc\w*|post-?doctoral|or equivalent)\b")
+
+
+def title_level(title):
+    """The seniority a title asks for, the lowest among its alternatives
+    ('Scientist / Senior Scientist' asks for none): 6 senior principal or
+    distinguished, 5 principal or senior staff, 4 staff, 3 senior, else 0.
+    An associate-track title (research associate, associate scientist,
+    assistant, technician) is at most 2, below a PhD scientist, unless it
+    names a principal level. Roman numerals and digits say nothing: a
+    Genentech 'Scientist 3' is an entry PhD role."""
+    cap = 2 if ASSOCIATE_TRACK.search(words(title)) else None
+    alts = []
+    for part in re.split(r"\s*/\s*|\s+or\s+", str(title or "")):
+        w = words(part)
+        if alts and re.match(r"(?:i{1,3}|iv|[1-4])\b", w):
+            alts[-1] += " " + w  # 'Scientist I/II', 'Scientist 3/4': one alternative
+        elif w:
+            alts.append(w)
+    levels = []
+    for w in alts or [""]:
+        padded = f" {w} "
+        lvl = max((n for phrase, n in LEVEL_WORDS if f" {phrase} " in padded), default=0)
+        levels.append(min(lvl, cap) if cap is not None and lvl < 5 else lvl)
+    return min(levels)
+
+
+@dataclass
+class Experience:
+    years: float           # after the degree: every role but student ones (postdocs count)
+    industry_years: float  # of those, outside academia
+    level: int             # the highest title level held (title_level; a plain title is 2)
+    effective: int         # level, lifted at most one step by years
+    doctorate: bool
+    source: str            # "library" or "settings"
+    vocab: frozenset = frozenset()  # words (and 6-letter stems) of the library and techniques.md
+
+    def text(self):
+        return (f"{self.years:g} years ({self.industry_years:g} in industry), titles up to "
+                f"{LEVEL_NAMES.get(self.level, self.level)}, judged as {LEVEL_NAMES.get(self.effective)}")
+
+
+def month_of(text, end=False):
+    """(year, month) of 'Jun 2023', '2015' or 'Present' (today), else None."""
+    m = re.search(r"(?i)\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{4})\b", text)
+    if m:
+        return int(m.group(2)), MONTHS[m.group(1).lower()]
+    m = re.search(r"\b(19\d{2}|20\d{2})\b", text)
+    if m:
+        return int(m.group(1)), 12 if end else 1
+    return None
+
+
+def role_span(dates, today):
+    """(start, end) months since year 0 of a heading's dates, or None."""
+    parts = re.split(r"\s+(?:-|to|\u2013|\u2014)\s+|\s*[\u2013\u2014]\s*", dates, maxsplit=1)
+    if len(parts) != 2:
+        parts = dates.rsplit("-", 1) if dates.count("-") == 1 else [dates, dates]
+    start = month_of(parts[0])
+    end = (today.year, today.month) if SPAN_END.search(parts[1]) else month_of(parts[1], end=True)
+    if not start or not end:
+        return None
+    a, b = start[0] * 12 + start[1] - 1, end[0] * 12 + end[1]
+    return (a, b) if b > a else None
+
+
+def union_years(spans):
+    total, last = 0, None
+    for a, b in sorted(spans):
+        if last is not None and a < last:
+            a = last
+        if b > a:
+            total += b - a
+        last = b if last is None else max(last, b)
+    return round(total / 12, 1)
+
+
+def experience(root, today):
+    """The user's Experience from the achievement library's role headings
+    ('### Title | Employer | Mon YYYY - Mon YYYY'), with [experience] years
+    and industry_years in settings.toml taking over when set; None when
+    neither gives any years (nothing is judged by seniority then)."""
+    import library  # same folder
+    folder = jobfs.Folder(root)
+    try:
+        text = folder.library.read_text(encoding="utf-8-sig", errors="replace")
+    except OSError:
+        text = ""
+    spans, industry, level, fence, found = [], [], 0, False, False
+    for line in text.splitlines():
+        if line.strip().startswith("```"):
+            fence = not fence
+            continue
+        h = None if fence else library.HEADING_RE.match(line)
+        role = library.role_of(h.group(1)) if h else None
+        if not role:
+            continue
+        title, org, dates = role
+        found = True
+        if STUDENT_ROLE.search(title):
+            level = max(level, 1)
+            continue
+        lvl = title_level(title) or (1 if ASSOCIATE_TRACK.search(words(title)) else 2)
+        level = max(level, lvl)
+        span = role_span(dates, today)
+        if span:
+            spans.append(span)
+            if not (ACADEMIC_ROLE.search(title) or ACADEMIC_ORG.search(org)):
+                industry.append(span)
+    years, ind, source = union_years(spans), union_years(industry), "library"
+    over = (jobfs.settings(root).get("experience") or {}) if (folder.config / "settings.toml").exists() else {}
+
+    def number(key):  # a number from 0 to 60, else None ("" is blank: the library counts)
+        v = over.get(key) if isinstance(over, dict) else None
+        return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 60 else None
+    set_years, set_ind = number("years"), number("industry_years")
+    if set_years is not None:
+        years, ind, source = set_years, min(ind, set_years), "settings"
+    if set_ind is not None:
+        ind, years, source = set_ind, max(years, set_ind), "settings"
+    if not spans and source != "settings":
+        return None
+    level = level or 2
+    weighted = ind + 0.5 * max(0.0, years - ind)
+    by_years = 2 if weighted < 4 else 3 if weighted < 7 else 4 if weighted < 11 else 5
+    try:
+        text += "\n" + folder.techniques.read_text(encoding="utf-8-sig", errors="replace")
+    except OSError:
+        pass
+    vocab = set(words(text[:400_000]).split())
+    vocab |= {w[:6] for w in vocab if len(w) >= 6}
+    return Experience(years, ind, level, max(level, min(level + 1, by_years)),
+                      bool(DOCTORATE_USER.search(text)), source, frozenset(vocab))
+
+
+def requirement_lines(text):
+    """The lines of the required (not preferred) requirements sections; the
+    whole text's lines when there are none."""
+    text = (text or "")[:REQ_TEXT_MAX]
+    out = []
+    for i, m in enumerate(REQ_HEADING.finditer(text)):
+        if i >= REQ_SECTIONS_MAX:
+            break
+        if not PREFERRED_HEADING.search(m.group(0)):
+            out += section_after(text, m, REQ_SECTION_MAX).splitlines()
+    if sum(len(x) for x in out) < REQ_SECTION_MIN:
+        out = text.splitlines()
+    return [x for x in out if x.strip()]
+
+
+def years_asked(text, doctorate=True):
+    """[(years, industry, what)] for each required line that asks for years.
+    Per line: the years after a doctorate ('PhD with 4+ years'); a line
+    naming only other degrees is skipped for a doctorate holder (the PhD path
+    is elsewhere); else the first number. 'up to 2 years' and '0-3 years'
+    ask for none. A line must speak of experience (not 'a two year, fixed
+    term position') and not be preferred. industry: the line asks for
+    industry years and not academic ones too. what: the words after the
+    number up to the end of that clause ('drug discovery experience')."""
+    out = []
+    for line in requirement_lines(text):
+        if len(line) > 600:
+            continue
+        line = " ".join(line.split())  # one space between words: the patterns below stay linear (D3)
+        if not YEARS_CONTEXT.search(line) or PREFERRED_WORDS.search(line):
+            continue
+        hits = list(YEARS_ASKED.finditer(line))
+        if not hits:
+            continue
+        doc = DOCTORATE.search(line)
+        if doc and doctorate:
+            after = [m for m in hits if m.start() >= doc.end()]
+            pick = after[:1] or hits[-1:]
+            if after and OTHER_DEGREE.search(line, doc.end(), after[0].start()):
+                continue  # 'Ph.D. or Master's plus 10 years': the years are the other degree's
+        elif OTHER_DEGREE.search(line) and doctorate:
+            continue
+        elif OTHER_DEGREE.search(line):
+            pick = sorted(hits, key=lambda m: years_low(line, m))[:1]
+        else:
+            pick = hits[:1]
+        what = re.split(r"[.;:()\[\]]|,\s*(?:including|with|or|and)\b|\bincluding\b", line[pick[0].end():], maxsplit=1)[0]
+        out.append((years_low(line, pick[0]), bool(INDUSTRY.search(line)) and not ACADEMIC_TOO.search(line),
+                    what[:120]))
+    return out
+
+
+def years_bar(text, doctorate=True):
+    """(years, industry) the requirements ask for (the highest line of
+    years_asked), or (None, False)."""
+    asked = years_asked(text, doctorate)
+    if not asked:
+        return None, False
+    n, industry, _ = max(asked, key=lambda a: a[0])
+    return n, industry
+
+
+def domain_gap(asked, vocab):
+    """(years, field) for the largest 'DOMAIN_YEARS or more years of <field>'
+    whose field names nothing the user's library or techniques name ('5+
+    years of industry drug discovery experience'), else None. A field of
+    generic words only ('relevant industry experience') is no field."""
+    best = None
+    for n, _, what in asked:
+        if n < DOMAIN_YEARS:
+            continue
+        content = [w for w in words(what).split() if w not in GENERIC_FIELD and not w.isdigit() and len(w) > 2]
+        if content and not any(named(w, vocab) for w in content):
+            if best is None or n > best[0]:
+                best = (n, " ".join(content[:5]))
+    return best
+
+
+def named(word, vocab):
+    """True when the user's vocabulary holds the word or a word sharing its
+    first 6 letters ('microbiolog...')."""
+    return word in vocab or (len(word) >= 6 and word[:6] in vocab)
+
+
+def years_low(line, m):
+    """The lowest number of years one YEARS_ASKED match asks for."""
+    if UP_TO.search(line[max(0, m.start() - 16):m.start()]):
+        return 0
+    n = m.group(1).lower()
+    return int(YEAR_NUM.get(n, n))
+
+
+def seniority(title, text, fam, me):
+    """('ok' | 'borderline' | 'beyond', why) for an industry-mode family's
+    posting against the user's Experience (me; None judges nothing)."""
+    if me is None or str((fam or {}).get("mode", "industry")).lower() != "industry":
+        return "ok", ""
+    lvl = title_level(title)
+    asked = years_asked(text, me.doctorate) if text else []
+    bar, industry = max(asked, key=lambda a: a[0])[:2] if asked else (None, False)
+    have = me.industry_years if industry else me.years
+    asks = f"asks {bar}+ years{' in industry' if industry else ''}, you have {have:g}" if bar is not None else ""
+    if bar is not None and bar - have >= BEYOND_YEARS:
+        return "beyond", asks
+    name = LEVEL_NAMES.get(lvl, "")
+    if lvl >= 5 and lvl - me.effective >= 2:
+        if bar is not None and bar <= MODEST_BAR and bar <= have:
+            return "borderline", f"{name} title, but {asks}"
+        return "beyond", f"{name} level; your titles reach {LEVEL_NAMES.get(me.level)}" + (f"; {asks}" if asks else "")
+    if lvl > me.effective:
+        return "borderline", f"{name} level; you are judged {LEVEL_NAMES.get(me.effective)}"
+    if bar is not None and bar > have:
+        return "borderline", asks
+    gap = domain_gap(asked, me.vocab)
+    if gap:
+        return "borderline", f"asks {gap[0]}+ years of {gap[1]}, which your library does not name"
+    return "ok", ""
+
+
+def g9_seniority(p, v, fam, rules, unread=False):
+    """Clearly beyond the user: discarded (seniority, a filter reason judged
+    again when the library or settings change). Borderline: kept, marked so
+    the queue lists it after the rest. Unread postings (no text) are never
+    discarded here."""
+    verdict, why = seniority(p.title, "" if unread else p.text, fam, rules.experience)
+    if verdict == "beyond" and not unread:
+        return v.stop("G9", "discard", "seniority", why)
+    if verdict != "ok":
+        v.info["seniority"] = "borderline"
+        v.gate_line("G9", True, f"seniority borderline: {why}")
+    return None
+
+
 def g10_remote(p, v):
     if (p.remote == "remote") and p.us_eligible is False:
         return v.stop("G10", "discard", "location", f"remote, not US {quote(p.location)}")
@@ -797,7 +1191,7 @@ def g12_route(p, v):
     if not url:
         return v.stop("G12", "discard", "apply_route", "no apply URL")
     why = url_refusal(url)
-    if why in ("not-web", "bad-url"):
+    if why in ("not-web", "bad-url", "non-public"):
         return v.stop("G12", "discard", "apply_route", f"{why} apply link")
     if why:
         return v.stop("G12", "discard", "apply_route", f"job board {why}")
@@ -843,18 +1237,38 @@ def requirement_section(text):
     return section_after(text, m, len(text))
 
 
+def general_forms(t):
+    """The general forms of a technique: the last word of its name or an
+    alias when that word is a method on its own ('real-time PCR' -> 'PCR',
+    '16S rRNA sequencing' -> 'sequencing', 'confocal microscopy' ->
+    'microscopy'). 'culture', 'testing' and the like are not: a posting's
+    'company culture' says nothing about anaerobic culture."""
+    out = []
+    for form in t.forms:
+        parts = str(form).split()
+        last = parts[-1] if len(parts) > 1 else ""
+        if last.lower() in GENERAL_METHODS and last.lower() not in (x.lower() for x in out):
+            out.append(last)
+    return out
+
+
 def overlap(text, fam, techniques, library_text=""):
     """How many of the user's terms a posting names (the TERMS overlap, D6):
     each techniques.md technique in any of its forms (hands-on 1, familiar
-    0.5), and each family term (1 when the achievement library names it too,
-    else 0.5). A posting that names many of them comes first in the day's list."""
+    0.5), each family term (1 when the achievement library names it too,
+    else 0.5), and then a technique's general form when the posting names
+    only that (half: a posting's 'PCR' for the user's 'real-time PCR'). A
+    posting that names many of them comes first in the day's list. Ordering
+    only: this never decides what a resume may claim."""
     import checks  # same folder (term_regex)
     text = (text or "")[:FIT_TEXT_MAX]
     n, counted = 0.0, set()
+    found = set()
     for t in techniques:
         if checks.term_found(text, t.name, t.aliases):
             n += 1.0 if t.level == "hands-on" else 0.5
             counted |= {f.lower() for f in t.forms}
+            found.add(id(t))
     lib = library_text or ""
     for term in (fam or {}).get("terms") or []:
         low = str(term).lower()
@@ -863,6 +1277,14 @@ def overlap(text, fam, techniques, library_text=""):
         if checks.term_found(text, term):
             n += 1.0 if checks.term_found(lib, term) else 0.5
             counted.add(low)
+    for t in techniques:
+        if id(t) in found:
+            continue
+        for g in general_forms(t):
+            if g.lower() not in counted and checks.term_found(text, g):
+                n += 0.5 if t.level == "hands-on" else 0.25
+                counted.add(g.lower())
+                break
     return n
 
 
@@ -924,10 +1346,7 @@ class GateRun:
     # state files
     def _load_polls(self):
         """state/board_polls.json: {"polls": {board: [dates]}, "matched": {board: date}}."""
-        try:
-            data = json.loads((self.folder.state / "board_polls.json").read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            data = {}
+        data = jobfs.read_json_or(self.folder.state / "board_polls.json", jobfs.MAX_STATE, {})  # R3: the safe loader
         self.matched = dict(data.get("matched") or {})
         return dict(data.get("polls") or {})
 
@@ -1062,7 +1481,8 @@ class GateRun:
         if v.ok and (unread or not self.recheck_simhash(p, v)):
             fam = next((f for f in self.rules.families if f.get("id") == v.info.get("family")), None)
             _ = (g7_knockouts(p, v, self.rules) or g8_other(p, v, self.rules)
-                 or (None if unread else g9_words(p, v, fam)) or g10_remote(p, v) or g11_ai(v, ai_text)
+                 or (None if unread else g9_words(p, v, fam)) or g9_seniority(p, v, fam, self.rules, unread)
+                 or g10_remote(p, v) or g11_ai(v, ai_text)
                  or g12_route(p, v))
         self.finish(p, v, reading)
         return v
@@ -1140,6 +1560,7 @@ class GateRun:
         fit, cov, lvl = fit_of(p.text, p.title, fam, v.info.get("title_match", 0.6), self.techniques(),
                                self.library_text())
         d = p.to_dict()
+        d["posted"] = posted_value(p.posted) or ""  # R2: a YYYY-MM-DD date or "undated", never other text
         d.update(family=fam.get("id", ""), mode=str(fam.get("mode", "industry")),
                  family_priority=int(fam.get("priority", 2) or 2),
                  title_match=v.info.get("title_match", 0.6), fit=fit, coverage=cov, level_match=lvl,
@@ -1147,7 +1568,8 @@ class GateRun:
                  age_days=v.info.get("age_days"), date_basis=v.info.get("date_basis", ""),
                  repost_of=v.info.get("repost_of"), segment=self.rules.segment(p.company_norm),
                  posting_status=v.info.get("posting_status", "read"), markdown=md, ai_text=ai_text,
-                 hidden=hidden, pooled_on=self.today.isoformat(), folder="")
+                 hidden=hidden, pooled_on=self.today.isoformat(), folder="",
+                 seniority=v.info.get("seniority", ""))
         return d
 
     def save_trail(self, p, v):
@@ -1298,6 +1720,10 @@ def load_pool(root, path=None):
         return {"v": 1, "items": [], "needs_you": [], "counts": {}}
     data.setdefault("items", [])
     data.setdefault("needs_you", [])
+    for it in [x for k in ("items", "needs_you") if isinstance(data[k], list) for x in data[k]]:
+        # R2: keys an earlier version stored, in today's form
+        if isinstance(it, dict) and isinstance(it.get("job_key"), str):
+            it["job_key"] = jobkey.safe_key(it["job_key"])
     return data
 
 

@@ -17,7 +17,7 @@ is Claude (a session or a scheduled task).
 | `publications.md`, `techniques.md` | you, after the user confirms | citations (`- P-001` lines) and techniques, one line each |
 | `config/settings.toml`, `search_profile.toml`, `watchlist.csv`, `boards.csv` | you (`/job settings`, `/job watch`, setup), or the user in Notepad | the switches, families and places, watched boards, job boards |
 | `config/lead_salt.txt` | `leads.py` (first use) | the local salt for lead ids |
-| `variants/<family>/current.txt`, `variants/<family>/v<N>/` | you (`variants.py`) | role-family base resumes; a rework is a new `v<N+1>` |
+| `variants/<family>/current.txt`, `variants/<family>/v<N>/` | you (`variants.py`) | role-family base resumes; a rework is a new `v<N+1>`; `base_resume.pdf` from `variants.py rebuild` |
 | `runner/in/events/<ts>_<8hex>_<type>.json` | you, create-only, through `events.py emit`, `events.py add` or `tracker.py` | queue events, jobs from links joining today's list (`added`), tracker writes |
 | `runner/in/leads/<date>_<HHMM>_<source>.jsonl` | you, create-only, through `leads.py validate` | alert cards (company, title, location) |
 | `runner/in/requests/<ts>_<8hex>_<op>.json` | you, create-only, through `jobrunner.py request` | work for the runner |
@@ -45,6 +45,7 @@ is Claude (a session or a scheduled task).
 | `runner/out/status.json`, `tracker.json`, `needs_search.json`, `staged.json`, `liveness.json` | health, the tracker snapshot, companies to search, staged Tier A files, re-read postings |
 | `runner/out/results/<id>.json`, `requests_done/<date>/` | one result per request |
 | `runner/out/events_done/<date>/`, `events_rejected/` (with `.reason.txt`) | applied and refused events |
+| `runner/in/bad/` (with `.reason.txt`) | event and request files that could not be read as JSON (too big, nested too deep, not JSON); set aside, never deleted |
 | `upload/NN_<Last>_Resume_<Employer12>.pdf`, `NNc_..._Cover_...pdf`, `NNw_...docx`, `E<n>_...pdf`; `upload/_done/<date>/` | the files the user attaches; only the runner moves them |
 | `applications/_diy/<date>/E<n>_<Company>.md` | answer sheets for do-yourself items, one per item, numbered as its `upload/E<n>_` file (no links) |
 | `applications/_not_sent/<YYYY-MM>/` | folders of queued jobs that never got a row in 30 days (moved, never deleted) |
@@ -56,7 +57,7 @@ is Claude (a session or a scheduled task).
 | Files | Writer |
 |---|---|
 | `posting.md`, `posting.json`, `fill_plan.json`, `terms.json`, `resume_B.json`/`.docx`/`.pdf`/`.txt`, `cover_B.*`, `tune_log.json`, `.runner_files` | the runner; `.runner_files` lists them, and the runner never writes a file missing from it, or anything in a folder holding `.claimed` |
-| `.claimed`, `resume.json` and the Tier A resume files (`<Name> Resume.pdf`, `<Name> Cover Letter.pdf`), `final.json` (written by `build_resume.py --strict` only when every check passed; it names those files, and `today_view.py next` and staging use only them, until a library entry it cites is corrected), `notes.md`, `audit.md`, `filled.md`, `questions.json`, `cover_letter.*`, `submitted/` | you (a job-tailor sub-agent writes only inside its one folder) |
+| `.claimed`, `resume.json` and the Tier A resume files (`<Name> Resume.pdf`, `<Name> Cover Letter.pdf`), `final.json` (written by `build_resume.py --strict` only when every check passed; it names those files, and `today_view.py next` and staging use only them; once a library entry it cites is corrected, `next` prints `REBUILD #<n>` until a new build passes, or until you move it to `backups/` when the rebuild cannot pass), `notes.md`, `audit.md`, `filled.md`, `questions.json`, `cover_letter.*`, `submitted/` | you (a job-tailor sub-agent writes only inside its one folder) |
 
 A job from a pasted link (SKILL.md steps 1-9) has no `.runner_files`; every
 file in it is yours. So is a `/job add <link>` folder: its Tier B files and
@@ -82,10 +83,10 @@ reads it there but never writes in the folder.
 | 0 | ok |
 | 1 | bad input (`ERROR ...`), or a refusal (`REFUSED ...` from answers.py, variants.py, library.py); `ERROR --args-file ...`: write the file again under `claude/` and rerun |
 | 2 | a package is missing (`pip install` it) |
-| 3 | posting.py: nothing usable (`TRY` / `RERUN`), or `ROBOTS <host>` (read it in the browser); boards.py `GONE` or `ERROR` |
-| 4 | tracker `LOCKED` (the workbook is open in Excel), or posting.py `JOB BOARD` or `REFUSED` (a link whose address is not a plain web address: never fetched or opened; ask for the employer's own link or the posting text) |
+| 3 | posting.py: a link the checks passed did not load (`TRY` / `RERUN`: a timeout or an HTTP error), or `ROBOTS <host>` (read it in the browser); boards.py `GONE` or `ERROR` |
+| 4 | tracker `LOCKED` (the workbook is open in Excel), or posting.py `JOB BOARD` or `REFUSED` (a job board, a link that is not a plain public web address, or one that leads to a private address, before the request, while connecting or in a redirect: never fetched or opened by any tool, the browser included, and no `TRY` line; ask for the employer's own link or the posting text) |
 | 5 | tracker `REFUSED` (a backward status move, or a second row for a job already sent), or posting.py `CLOSED` |
-| 6 | `STRICT-FAIL` (build_resume.py `--strict`), `VARIANT-FAIL` (variants.py diff), `PREP_FAILED` (tier-b) |
+| 6 | `STRICT-FAIL` (build_resume.py `--strict`), `VARIANT-FAIL` (variants.py diff), `PREP_FAILED` (tier-b), `PROBLEM` (variants.py rebuild: that family stays out of the plan) |
 | 7 | netfetch `DENY` (host policy, robots or a private address) |
 | 8 | the runner is `LOCKED` (another run holds its lock) |
 | 9 | leads.py `PARSE_FAILURE` (an alert email gave no cards) |

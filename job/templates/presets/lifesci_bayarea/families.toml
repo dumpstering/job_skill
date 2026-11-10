@@ -60,6 +60,21 @@
 #   clinical research families (they need years in that field); senior MSL
 #   and senior writer titles too.
 # - QA reviewer and QC supervisor titles join quality and validation.
+#
+# Fixes from live day 3 (v1.2 round 4):
+# - Seniority is judged against the user, not here: the gates read the
+#   user's years and title levels from the achievement library (or the
+#   [experience] override in settings.toml) and drop only a posting clearly
+#   beyond them; the rest that asks for more is listed after the others.
+# - "HR" right after a number ("08-HR", "8 HR") is a shift length, not human
+#   resources. Stanford Health Care's phlebotomy lab assistants ("Lab
+#   Assistant III-P") stay out of the research associate family.
+# - Another field's postdocs and research roles (the round 4 LBNL reader
+#   lists every division: accelerator physics, quantum devices,
+#   electrochemistry, energy and earth systems) leave the postdoc, research
+#   associate and industry scientist families by title, and the postdoc
+#   family's G9 words need a biology word in the posting and drop one whose
+#   text names more of those fields. Metabolic or strain engineering stays.
 
 version = 1
 
@@ -169,8 +184,19 @@ title_any = ["postdoctoral", "postdoc*", "post doc*",
 title_none = ["coordinator", "administrator", "program manager", "affairs", "office", "director", "physician", "nurse",
               "nursing", "pharmacy", "clinical fellow", "clinical research fellow", "medical fellow",
               "materials science|materials engineering|materials scientist", "microfabrication", "mri",
-              "magnetic resonance", "translational imaging"]
-require_any = []
+              "magnetic resonance", "translational imaging", "physics", "physicist*", "quantum", "accelerator*",
+              "electrochemi*", "energy systems|energy storage|power systems", "earth system*", "hydrolog*",
+              "atmospheric", "chemist", "chemistry"]
+require_any = ["biolog*", "microbiolog*", "microb*", "bacteri*", "cell", "cells", "cellular", "molecular", "protein*",
+               "biochem*", "immunolog*", "genetic*", "genom*", "neuro*", "life science*", "biomedical", "tissue*",
+               "dna", "rna", "pcr", "assay*", "antibod*", "viral", "virus*", "virolog*", "pathogen*", "ecolog*", "ecosystem*", "plant*",
+               "soil*", "biogeochem*", "enzym*", "metabol*", "organism*", "infectio*", "biofilm*", "omics"]
+avoid_any = ["physics", "physicist*", "quantum", "accelerator*", "beamline", "x ray", "spectroscopy", "photonic*",
+             "superconduct*", "semiconductor*", "electrochemi*", "electrocataly*", "batter*",
+             "energy storage", "energy systems", "hvac", "hydrolog*", "hydrometeorolog*",
+             "earth system*", "atmospher*", "machine learning", "deep learning", "artificial intelligence",
+             "materials science", "mechanical engineering", "chemical engineering", "organic chemistry",
+             "synthetic chemistry"]
 terms = ["microbiology", "molecular biology", "bacterial genetics", "microbiome", "CRISPR", "sequencing",
          "publications", "grant writing"]
 seniority_ok = []
@@ -462,7 +488,8 @@ title_any = ["research associate", "research assistant", "staff research associa
 title_none = ["clinical+research|trial*|study|studies|operations|coordinator|nurse|technician|technologist|scientist|specialist|data",
               "clinical laboratory scientist", "cls", "mlt", "medical lab*", "phlebotom*", "animal",
               "vivarium", "husbandry", "director", "vp", "undergraduate", "student", "intern", "chemist", "chemistry",
-              "biophysic*", "social science", "category manager", "procurement", "outreach", "ecg|ekg"]
+              "biophysic*", "social science", "category manager", "procurement", "outreach", "ecg|ekg",
+              "iii p|ii p", "quantum", "physics", "physicist*", "accelerator*"]
 require_any = []
 terms = ["cell culture", "PCR", "qPCR", "ELISA", "Western blot", "aseptic technique", "molecular cloning",
          "lab management", "inventory"]
@@ -552,7 +579,8 @@ title_any = ["scientist"]
 title_none = ["data", "computer", "software", "machine learning", "ml", "ai", "computation*", "clinical laboratory",
               "clinical lab*", "cls", "clinical microbiology scientist", "clinical microbiologist", "director", "vp",
               "vice president", "head of", "materials science|materials engineering|materials scientist", "polymer",
-              "formulation*", "process engineer", "physical scientist", "social science", "chemist", "chemistry",
+              "formulation*", "process engineer", "physical scientist", "physicist*", "physics", "quantum",
+              "social science", "chemist", "chemistry",
               "chemical", "cheminformatic*", "statistic*", "biostatistic*", "toxicolog*", "safety",
               "pharmacovigilance", "bioinformatic*", "imaging", "engineer",
               "process engineering|device engineering|systems engineering|chemical engineering|mechanical engineering|manufacturing engineering",

@@ -344,9 +344,91 @@ def test_ascii():
                 path.read_bytes().decode("ascii")
 
 
+def test_safe_json():
+    """R3 / SV-02: read_json and loads_json, the one way to read a JSON file
+    from runner/in, claude, state, queue, applications or upload: a size limit
+    per caller, nesting at most 64 deep (checked by a linear scan before
+    parsing), and one plain BadJson for every way a file can be bad."""
+    import time
+    deep = '{"v": 1, "x": ' + "[" * 20000 + "]" * 20000 + "}"
+    for text, kind in ((deep, "depth"), ("[" * 65 + "]" * 65, "depth"), ('{"a": ', "json"),
+                       (b'{"a": "\xff"}', "utf8"), ("[" + "9" * 5000 + "]", "json")):
+        try:
+            jobfs.loads_json(text)
+            raise AssertionError(f"not refused: {text[:20]!r}")
+        except jobfs.BadJson as e:
+            assert isinstance(e, ValueError) and e.kind == kind, (e.kind, kind, str(e))
+    assert jobfs.loads_json("[" * 64 + "]" * 64) is not None, "64 deep is allowed"
+    assert jobfs.loads_json('{"a": "' + "[" * 5000 + '"}') == {"a": "[" * 5000}, "brackets in strings do not count"
+    assert jobfs.loads_json(b'\xef\xbb\xbf{"a": 1}') == {"a": 1} and jobfs.loads_json(chr(0xFEFF) + '[1]') == [1]
+    try:
+        jobfs.loads_json('{"n": NaN}', allow_nan=False)
+        raise AssertionError("NaN not refused")
+    except jobfs.BadJson:
+        pass
+    assert jobfs.BadJson("x", "depth").permanent and not jobfs.BadJson("x", "json").permanent
+    # linear on hostile shapes: unterminated strings full of escaped quotes, long escape runs, wide arrays
+    for text in ('"' + '\\"' * 200000, '"\\"' * 100000 + "[" * 100, '["' + "\\\\" * 200000 + '"]',
+                 "[" + ",".join(["[1,{\"a\":[2]}]"] * 50000) + "]"):
+        t0 = time.perf_counter()
+        try:
+            jobfs.loads_json(text)
+        except jobfs.BadJson:
+            pass
+        assert time.perf_counter() - t0 < 1.0, f"slow on {text[:12]!r}: {time.perf_counter() - t0:.2f} s"
+    with tempfile.TemporaryDirectory(prefix="jobfs_") as tmp:
+        p = Path(tmp) / "x.json"
+        p.write_text(deep, encoding="utf-8")
+        for fn in (lambda: jobfs.read_json(p, 64 * 1024), lambda: jobfs.read_json(p, 1000)):
+            try:
+                fn()
+                raise AssertionError("not refused")
+            except jobfs.BadJson as e:
+                assert e.kind in ("depth", "size"), e.kind
+        try:
+            jobfs.read_json(Path(tmp) / "none.json", 100)
+            raise AssertionError("a missing file is the caller's case")
+        except FileNotFoundError:
+            pass
+        lines = []
+        jobfs.set_bad_file_emit(lines.append)
+        try:
+            assert jobfs.read_json_or(p, jobfs.MAX_FILE, {}) == {} and jobfs.read_json_or(p, jobfs.MAX_FILE, {}) == {}
+            assert jobfs.read_json_or(Path(tmp) / "none.json", jobfs.MAX_FILE, {"d": 1}) == {"d": 1}
+            assert lines == [f"ERROR bad file {p.parent.parent.name}/{p.parent.name}/x.json: nested deeper than 64 "
+                             "(treated as missing)"], lines
+            # a verified file that is bad, with no good .prev.json: NotReady, one ERROR line
+            q = Path(tmp) / "queue.json"
+            q.write_text(deep, encoding="utf-8")
+            try:
+                jobfs.read_json_verified(q, retries=0)
+                raise AssertionError("not refused")
+            except jobfs.NotReady as e:
+                assert not e.missing
+            assert len(lines) == 2 and "queue.json: " in lines[1] and "nested deeper than 64" in lines[1], lines
+            try:
+                jobfs.read_json_verified(Path(tmp) / "gone.json", retries=0)
+            except jobfs.NotReady as e:
+                assert e.missing and len(lines) == 2, "a missing file is silent"
+        finally:
+            jobfs.set_bad_file_emit(None)
+        # a small file read under the large limit costs its own size, never a max_bytes buffer
+        small = Path(tmp) / "small.json"
+        small.write_text('{"a": [1, 2, 3]}', encoding="utf-8")
+        t0 = time.perf_counter()
+        for _ in range(200):
+            assert jobfs.read_json(small, jobfs.MAX_STATE) == {"a": [1, 2, 3]}
+        assert time.perf_counter() - t0 < 1.0, f"200 small reads took {time.perf_counter() - t0:.2f} s"
+        # a JSONL line nested too deep is skipped like a cut one; atomic_write_json over a bad file still writes
+        j = Path(tmp) / "x.jsonl"
+        j.write_text('{"a": 1}\n' + deep + "\n" + '{"b": 2}\n', encoding="utf-8")
+        assert jobfs.read_jsonl(j) == [{"a": 1}, {"b": 2}]
+        assert jobfs.atomic_write_json(p, {"k": 1})["_rev"] == 1
+
+
 def main():
     for t in (test_time, test_settings, test_atomic_json, test_create_only_and_jsonl, test_run_lock,
-              test_posting_record, test_names_and_folder, test_ascii):
+              test_posting_record, test_names_and_folder, test_ascii, test_safe_json):
         t()
         print("ok", t.__name__)
     print("PASS")

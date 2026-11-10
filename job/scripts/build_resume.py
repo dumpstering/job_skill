@@ -72,6 +72,7 @@ from xml.sax.saxutils import escape
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import argfile  # noqa: E402
 import checks  # noqa: E402
+import jobfs  # noqa: E402  the safe JSON loader (shared decision R3)
 
 EN_DASH = chr(0x2013)
 EM_DASH = chr(0x2014)
@@ -136,9 +137,11 @@ def check_bullets(bullets, where):
 
 def load(path):
     try:
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as e:
+        data = jobfs.read_json(path, jobfs.MAX_FILE)
+    except (OSError, ValueError) as e:  # BadJson: too big, nested deeper than 64, not JSON
         raise InputError(f"cannot read {path}: {e}")
+    if not isinstance(data, dict):
+        raise InputError(f"{path} must hold one JSON object")
     if not isinstance(data.get("name"), str) or not data["name"].strip():
         raise InputError('"name" is required')
     contact = data.setdefault("contact", [])
@@ -695,7 +698,7 @@ class Parser(argparse.ArgumentParser):
 
 
 def parse_args(argv):
-    ap = Parser(description=__doc__.splitlines()[0])
+    ap = Parser(description=__doc__.splitlines()[0], allow_abbrev=False)
     ap.add_argument("json_path")
     ap.add_argument("--out", required=True, help="folder to write into")
     ap.add_argument("--base", help='file name without extension, e.g. "First Last Resume" (default: the '
@@ -748,7 +751,7 @@ def techniques_for(args):
 
 def read_final(out):
     try:
-        data = json.loads((out / FINAL_JSON).read_text(encoding="utf-8"))
+        data = jobfs.read_json(out / FINAL_JSON, jobfs.MAX_FILE)
         return data if isinstance(data, dict) else {}
     except (OSError, ValueError):
         return {}

@@ -63,3 +63,6 @@ de8405_received = ""
 timezone = "America/Los_Angeles"
 [schedule]
 weekly_day = "monday"
+[experience]                # the gates judge seniority against these (R6); blank: counted from the library's role headings
+years = ""                  # whole years of work after the degree (postdocs count, student roles do not)
+industry_years = ""         # of those, outside universities, institutes and hospitals

@@ -63,6 +63,7 @@ mode M only).
 """
 import argparse
 import csv
+import functools
 import io
 import os
 import re
@@ -566,7 +567,8 @@ def add_business_days(d, n):
 def referral_state(item_key, ref_rows, hold_days, day):
     """('asked'|'held'|'', hold_until) from the Referrals sheet for one job."""
     for r in ref_rows:
-        if text(r.get("Job key")) == item_key and text(r.get("Status")).lower() in ("sent", "replied", "referred"):
+        if jobkey.same_key(text(r.get("Job key")), item_key) and \
+                text(r.get("Status")).lower() in ("sent", "replied", "referred"):
             sent = text(r.get("Date"))[:10]
             if hold_days and re.fullmatch(r"\d{4}-\d{2}-\d{2}", sent):
                 until = add_business_days(date.fromisoformat(sent), int(hold_days))
@@ -650,7 +652,8 @@ def cmd_match(a):
                 print(name_line(h))
         ref = res["referral"]
         if ref["state"] != "none" and a.n is None:
-            print(f"REFERRAL #{it.get('n')} {it.get('job_key')} {ref['state']} {ref['contact_ref']}"
+            shown_key = it.get("job_key") if jobkey.inline_ok(it.get("job_key")) else "(key refused: unsafe characters)"
+            print(f"REFERRAL #{it.get('n')} {shown_key} {ref['state']} {ref['contact_ref']}"
                   + (f" until {ref['hold_until']}" if ref["hold_until"] else ""))
     if a.n is not None:
         if not rows:
@@ -676,7 +679,7 @@ def resume_summary(folder):
     for name in ("resume.json", "resume_B.json"):
         p = Path(folder) / name
         try:
-            data = json.loads(p.read_text(encoding="utf-8"))
+            data = jobfs.read_json(p, jobfs.MAX_FILE)  # R3: the safe loader (BadJson is a ValueError)
         except (OSError, ValueError):
             continue
         for s in data.get("sections", []) if isinstance(data, dict) else []:
@@ -686,16 +689,19 @@ def resume_summary(folder):
 
 
 def posting_facts(root, item):
-    """(link, req ID, posting text) for a queue item's job folder."""
-    import json
+    """(link, req ID, posting text) for a queue item's job folder. The link is
+    the first of posting.json's URL and the item's apply URL that
+    netfetch.web_refusal passes (R1), else blank."""
+    import netfetch  # stdlib and jobfs only
     folder = Path(root) / str(item.get("folder", ""))
-    link, req, md = str(item.get("apply_url", "")), "", ""
+    links, req, md = [str(item.get("apply_url") or "")], "", ""
     try:
-        pj = json.loads((folder / "posting.json").read_text(encoding="utf-8"))
-        link = pj.get("url") or link
+        pj = jobfs.read_json(folder / "posting.json", jobfs.MAX_FILE)  # R3: the safe loader
+        links.insert(0, str(pj.get("url") or ""))
         req = (pj.get("req_ids") or [""])[0]
     except (OSError, ValueError, AttributeError):
         pass
+    link = next((u for u in links if u and netfetch.web_refusal(u) is None), "")
     try:
         md = (folder / "posting.md").read_text(encoding="utf-8", errors="replace")
     except OSError:
@@ -723,7 +729,7 @@ def applied_on(store, job_key):
     if store is None or not job_key:
         return ""
     for r in store.app_rows():
-        if text(r.get("Job key")) == job_key and text(r.get("Applied")):
+        if jobkey.same_key(text(r.get("Job key")), job_key) and text(r.get("Applied")):
             return text(r.get("Applied"))[:10]
     return ""
 
@@ -733,11 +739,12 @@ def draft(contact_first, item, link, req, pitch, me, applied=""):
     role = f"the {item.get('role', '')} role at {item.get('company', '')}"
     if req:
         role += f" (req {req})"
+    where = f": {link}." if link else "."
     if applied:
-        opener = f"I applied for {role} on {applied}: {link}."
+        opener = f"I applied for {role} on {applied}{where}"
         ask = "Would you be willing to refer me or put in a word with the hiring team? A yes or no is fine."
     else:
-        opener = f"I am about to apply for {role}: {link}."
+        opener = f"I am about to apply for {role}{where}"
         ask = "Would you be willing to refer me before I apply? A yes or no is completely fine."
     body = f"{opener} {pitch} {ask}"
     sign = f" Thanks, {me}" if me else " Thanks"
@@ -795,7 +802,7 @@ def plan_asks(root, day, items, people, store):
             if name.lower() in used:
                 lines.append(f"SKIP {tag} | {who}: already asked about another job today")
                 continue
-            if name.lower() in busy and busy[name.lower()][0] != key:
+            if name.lower() in busy and not jobkey.same_key(busy[name.lower()][0], key):
                 lines.append(f"SKIP {tag} | {who}: open ask for another job ({busy[name.lower()][1]} "
                              f"{busy[name.lower()][2]})")
                 continue
@@ -861,6 +868,7 @@ def cmd_asks(a):
 def build_parser():
     ap = Parser(prog="network.py", description="Referral network: import, match, asks.", allow_abbrev=False)
     sub = ap.add_subparsers(dest="cmd", required=True, metavar="command")
+    sub.add_parser = functools.partial(sub.add_parser, allow_abbrev=False)  # R4: exact option names everywhere
     p = sub.add_parser("import", help="Read network/raw into network/network.csv.")
     p.add_argument("--root", required=True)
     p.add_argument("--raw", help="the folder holding the exports (default network/raw)")

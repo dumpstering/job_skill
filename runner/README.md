@@ -10,7 +10,7 @@ is in [job/references/runner.md](../job/references/runner.md).
 | File | What |
 |---|---|
 | `install_runner.cmd` | Template. `build_zip.py` replaces `@@VERSION@@` and `@@ZIP_SHA256@@` and ships it beside the release zip. It downloads `jobrunner-<version>.zip` with `curl.exe`, checks it with `certutil -hashfile ... SHA256` (a mismatch stops before anything is installed), installs Python 3.13 per user with `winget` if `py -3.13` is missing, extracts with `tar` to `%LOCALAPPDATA%\JobRunner\app\<version>`, then runs `install_runner.ps1`. Every program is called by its full path (`%SystemRoot%\System32\certutil.exe`, `curl.exe`, `tar.exe`, Windows PowerShell; the Python launcher and winget in their install folders) and Python with `-I`, so a same-named `.bat` or `.py` file saved beside it in Downloads never runs. `install_runner.cmd <local zip>` uses a local zip instead of the download (still hash-checked). |
-| `install_runner.ps1` | The install (no admin): app files into `app\<version>`, `venv`, `pip install --require-hashes --only-binary=:all: -r requirements.lock`, `venv\Lib\site-packages\jobrunner_app.pth` (so `pythonw.exe -I -m jobrunner` finds the app), `config.toml` (`folder = "<Documents>\\JobSearch"`; both files UTF-8, so a user name with an accent works), a check that `jobrunner status` starts from them as Task Scheduler will run it (the install stops otherwise), the optional keys prompt into `keys.toml` with a user-only ACL, the two scheduled tasks, the desktop shortcut "Run job finder now", and `jobrunner selftest --net`. A second run updates in place and keeps keys and config. |
+| `install_runner.ps1` | The install (no admin): app files into `app\<version>`, `venv`, `pip install --require-hashes --only-binary=:all: -r requirements.lock`, `venv\Lib\site-packages\jobrunner_app.pth` (so `pythonw.exe -I -m jobrunner` finds the app), `config.toml` (`folder = "<Documents>\\JobSearch"`; both files UTF-8, so a user name with an accent works), a check that `jobrunner status` starts from them as Task Scheduler will run it (the install stops otherwise), the optional keys prompt into `keys.toml` with a user-only ACL, the two scheduled tasks, the desktop shortcut "Run job finder now", and `jobrunner selftest --net`. A second run updates in place and keeps keys and config; it asks only for a key not entered yet (Adzuna, USAJOBS), so a skipped key is added by running it again. |
 | `uninstall_runner.ps1` | Removes the two tasks, `%LOCALAPPDATA%\JobRunner\app`, the `.pth` file and the shortcut. Never touches the JobSearch folder; keeps `config.toml` and `keys.toml`. |
 | `requirements.lock` | openpyxl, python-docx, reportlab, pypdf and tzdata, plus every dependency, pinned to one Python 3.13 win_amd64 (or pure) wheel each by SHA-256. |
 
@@ -41,9 +41,14 @@ file: the OS frees it when its holder ends, however it ends.
 Before a request runs, the runner writes `state\request_starts\<id>.json`
 and removes it when the request ends; a request whose run was stopped twice
 (the time limit, a page that hangs the reader) is answered `ok` false and
-never started a third time. One board, lane, lead, liveness item or network
-import that fails is one `ERROR` line in `logs\runner_<date>.log`; the run
-goes on.
+never started a third time; a tick removes a marker whose request was
+answered or that is over 30 days old. One board, lane, lead, liveness item or
+network import that fails is one `ERROR` line in `logs\runner_<date>.log`;
+the run goes on. An event or request file that cannot be read as JSON (over
+64 KB, nested deeper than 64, or not JSON) moves to `runner\in\bad\` with one
+`ERROR` line; a bad state or queue file is treated as missing with one
+`ERROR` line. Liveness starts an item only while the tick has room for it
+inside its 10 minutes, and writes `runner\out\liveness.json` after each one.
 
 ## install_runner.ps1 switches
 
@@ -105,6 +110,6 @@ dependencies, and confirm with
 
 ## Manual check (once per release, a Windows 11 user without admin)
 
-1. Double-click the built `install_runner.cmd`: Python installs per user, the venv is created, both tasks show in `Get-ScheduledTask JobRunner-*`, and the selftest prints PASS lines. Run it again: nothing breaks, keys are kept.
+1. Double-click the built `install_runner.cmd`: Python installs per user, the venv is created, both tasks show in `Get-ScheduledTask JobRunner-*`, and the selftest prints PASS lines. Run it again: nothing breaks, keys are kept, and it asks only for a key skipped the first time.
 2. Change one byte of the zip and run the .cmd on it: the SHA-256 check fails and nothing is installed.
 3. Run `uninstall_runner.ps1`: the tasks and `%LOCALAPPDATA%\JobRunner\app` are gone; `Documents\JobSearch` is untouched.

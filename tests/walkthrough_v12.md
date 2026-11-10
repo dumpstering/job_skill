@@ -129,9 +129,12 @@ Set `JOB_SKILL_NOW=2026-11-06T18:00:00Z`. The fixture is
 - [ ] **B6 step 4 (MANUAL fit and questions).** `P\tracker.py update R P-fc153b11 "fit=Good Fit"` -> `UPDATED P-fc153b11 Fit:  -> Good Fit`.
       (`fit=Good` is refused: the values are Strong Fit, Good Fit, Stretch, Long Shot.)
 - [ ] **B7 step 5, build.** With `tests\sample_resume.json` as the written resume.json:
-      `P\build_resume.py <job>\resume.json --out <job> --base "Jordan Avery Resume" --sources tests\sample_sources\master_resume.md tests\sample_sources\achievement_library.md --terms tests\sample_terms.json`
-      -> three `wrote:` lines (1 page), two `WARN` lint lines, `PARSE ok (18 checks)`, two `FACT`
-      lines, three `KEYWORD` lines. Each is fixed or carried into Verify.
+      `P\build_resume.py <job>\resume.json --out <job> --sources tests\sample_sources\master_resume.md tests\sample_sources\achievement_library.md --terms tests\sample_terms.json`
+      (no `--base`: the files are named from the JSON's own name)
+      -> three `wrote:` lines for `Jordan Avery Resume.txt`, `.docx` and `.pdf` (1 page), two `WARN`
+      lint lines, `PARSE ok (18 checks)`, two `FACT` lines, three `KEYWORD` lines. This dry run
+      is not `--strict`, so it shows them all; the real build (SKILL.md step 5) is the strict
+      command, and each finding is fixed before Verify.
 - [ ] **B8 audit (MANUAL).** "audit" in the same context (writing_rules.md):
       the banned word and the two FACT numbers are the findings; fix, rebuild.
       `P\tracker.py update R P-fc153b11 "status=Resume ready"`.

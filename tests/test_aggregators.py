@@ -9,6 +9,7 @@ Stdlib only. Exits non-zero on the first failure and prints PASS at the end.
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -223,9 +224,48 @@ def test_odd_answers_stay_in_their_lane():
         shutil.rmtree(root)
 
 
+def test_hostile_links_and_keys():
+    """R1 / R2: a lane keeps only links netfetch.web_refusal passes (a link
+    with userinfo, a private address or a backslash is dropped, the posting
+    kept only when its own link is plain), and every key it builds holds only
+    A-Z a-z 0-9 . _ : / - (at most 200 characters), hostile links included."""
+    import jobkey
+    good = json.loads((FIX / "agg_usajobs.json").read_text(encoding="utf-8"))
+    items = good["SearchResult"]["SearchResultItems"]
+    first = items[0]["MatchedObjectDescriptor"]
+    hostile = []
+    for i, uri in enumerate(("https://www.usajobs.gov/job/8000$(id){a,b}`x`?q=1&r=2",
+                             "https://user@www.usajobs.gov/job/800091", "http://10.0.0.1/job/800092",
+                             "https://www.usajobs.gov" + chr(92) + "@evil.example/job/800093",
+                             "https://www.usajobs.gov/job/" + "9" * 300)):
+        d = json.loads(json.dumps(first))
+        d["PositionURI"], d["ApplyURI"] = uri, [uri]
+        d["PositionID"] = f"HOSTILE-{i}"
+        hostile.append({"MatchedObjectDescriptor": d})
+    good["SearchResult"]["SearchResultItems"] = items + hostile
+    root = make_root({"usajobs": True, "adzuna": False})
+    os.environ["JOB_SKILL_NOW"] = "2026-11-05T18:00:00Z"
+    try:
+        lanes = {ln.name: ln for ln in aggregators.run(root, fetcher=Fuzzed(json.dumps(good)),
+                                                       keys_file=root / "keys.toml", emit=lambda _l: None)}
+        recs = [rd.posting for rd in lanes["usajobs"].postings]
+        # the shell-syntax link is kept (a plain public link) under a safe key; userinfo, a private
+        # address, a backslash and a link over 200 characters are never kept
+        assert len(recs) == len(items) + 1, [r.url for r in recs]
+        for r in recs:
+            assert jobkey.SAFE_KEY.fullmatch(r.job_key) and len(r.job_key) <= jobkey.KEY_MAX, ascii(r.job_key)
+            for link in (r.url, r.apply_url):
+                assert netfetch.web_refusal(link) is None, ascii(link)
+        odd = [r for r in recs if "$(" in r.url]
+        assert len(odd) == 1 and re.search(r"-[0-9a-f]{12}$", odd[0].job_key), [r.job_key for r in recs]
+    finally:
+        del os.environ["JOB_SKILL_NOW"]
+        shutil.rmtree(root)
+
+
 def main():
     for t in (test_usajobs_headers_and_records, test_adzuna_leads_only, test_lanes_behind_settings_and_keys,
-              test_muse_drops_stale, test_cli, test_odd_answers_stay_in_their_lane):
+              test_muse_drops_stale, test_cli, test_odd_answers_stay_in_their_lane, test_hostile_links_and_keys):
         t()
         print("ok", t.__name__)
     print("PASS")

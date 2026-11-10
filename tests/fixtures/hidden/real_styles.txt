@@ -1,0 +1,250 @@
+# Distinct inline style values in public employer posting HTML (Greenhouse and Lever list APIs and
+# posting pages, 2026-11-06), one per line.
+--background-color:#01210e;--bg-position-x-dt:center;--bg-position-y-dt:center;--bg-position-x-mb:center;--bg-position-y-mb:center;--overlay:;
+--max-width-dt:660px;--max-width-mb:660px;
+--smush-placeholder-width: 1024px; --smush-placeholder-aspect-ratio: 1024/640;
+Body Text
+First Paragraph
+Hyperlink
+List Bullet
+background-color: #efeffe; color: #222222;
+background-color:rgb(198,198,198);font-size:12pt;white-space:pre-wrap;
+background-image: none;background-color: #ffffff;
+background-image:url('https://mazetx.com/wp-content/uploads/2021/03/action-2277292_1280-1.jpg')
+background: white; margin: 0in 0in 0in 0px; font-size: 11pt; font-family: Montserrat;
+break-after: avoid; margin-top: 0in; margin-right: 0in; margin-bottom: 8pt; line-height: 107%; font-size: 11pt; font-family: Calibri, sans-serif;
+break-after: avoid; margin: 0in 0in 0in 0px; line-height: 115%; font-size: 12pt; font-family: Aptos, sans-serif;
+break-after: avoid; margin: 0in 0in 8pt 0px; line-height: 115%; font-size: 12pt; font-family: Aptos, sans-serif;
+break-after: avoid; margin: 0in 0in 8pt; line-height: 107%; font-size: 11pt; font-family: Calibri, sans-serif;
+break-after: avoid; margin: 0in 0in 8pt; line-height: 115%; font-size: 12pt; font-family: Aptos, sans-serif;
+clip-path:url(#a)
+color: #212121;
+color: #2d2d2d;
+color: #666666;
+color:black;white-space:pre-wrap;
+color:rgb(0,0,0);font-size:10.5pt;white-space:pre-wrap;
+color:rgb(0,0,0);font-size:11pt;white-space:pre-wrap;
+color:rgb(0,0,0);font-size:12.5pt;white-space:pre-wrap;
+color:rgb(0,0,0);margin:0pt 0px 3pt;font-size:11pt;line-height:1.2;letter-spacing:0.25px;
+color:rgb(0,0,0);margin:0px;font-size:12pt;line-height:1.6;letter-spacing:0.25px;text-align:start;
+color:rgb(17,85,204);font-size:11pt;text-decoration:underline;white-space:pre-wrap;
+color:rgb(30,74,169);cursor:pointer;
+color:rgb(31,56,100);font-size:12.5pt;white-space:pre-wrap;
+color:rgb(32,32,34);font-size:10.5pt;white-space:pre-wrap;
+color:rgb(5,31,32);font-size:12pt;white-space:pre-wrap;
+color:rgb(67,67,67);font-size:14pt;white-space:pre-wrap;
+display: block; float: left; min-width: 70px; max-width: 200px;
+display: flex;z-index:1000;justify-content: center;align-items: center;left:0;top:0;position:absolute;height: 100%;width: 100%;padding-top: 50px;color:#1a8099;
+display: none
+display: none;
+display:none !important;
+display:none;visibility:hidden
+enable-background:new 0 0 73 70;
+fill-rule:evenodd
+fill:none
+font-family: 'times new roman', times, serif; font-size: 12pt;
+font-family: Aptos, sans-serif;
+font-family: Arial, sans-serif;
+font-family: Arial, sans-serif; color: #2d2d2d;
+font-family: Arial, sans-serif; color: #d13438;
+font-family: Arial, sans-serif; color: black;
+font-family: Calibri, sans-serif;
+font-family: Calibri, sans-serif; color: black; background: white;
+font-family: times new roman, times, serif;
+font-family:"Basel Grotesk",Arial,sans-serif;font-size:10.5pt;font-weight:400;line-height:1.38;letter-spacing:0.25px;margin:0px;padding:0px;
+font-family:"Basel Grotesk",Arial,sans-serif;font-size:11pt;font-weight:400;line-height:1.2;letter-spacing:0.25px;margin:0pt 0px 7pt;padding:0px;
+font-family:"Basel Grotesk",Arial,sans-serif;font-size:11pt;font-weight:400;line-height:1.38;letter-spacing:0.25px;margin:0pt 0px;padding:0px;
+font-family:"Basel Grotesk",Arial,sans-serif;font-size:11pt;font-weight:400;line-height:1.6;letter-spacing:0.25px;margin:0px 0px 10.6667px;padding:0px;text-align:left;
+font-family:"Basel Grotesk",Arial,sans-serif;font-size:11pt;font-weight:400;line-height:1.6;letter-spacing:0.25px;margin:4px 0px;padding:0px;
+font-family:"Basel Grotesk",Arial,sans-serif;font-size:11pt;font-weight:400;line-height:1.6;letter-spacing:0.25px;margin:4px 0px;padding:0px;text-align:start;
+font-family:"Basel Grotesk",Arial,sans-serif;font-size:11pt;font-weight:400;line-height:normal;letter-spacing:0.25px;margin:4px 0px;padding:0px;
+font-family:"Basel Grotesk",Arial,sans-serif;font-size:11pt;font-weight:400;margin:8px 0px;line-height:1.6;padding:0px 0px 0px 32px;list-style-type:disc;
+font-family:"Basel Grotesk",Arial,sans-serif;font-size:12.5pt;font-weight:400;line-height:1.2;letter-spacing:0.25px;margin:0pt 0px 7pt;padding:0px;
+font-family:"Basel Grotesk",Arial,sans-serif;font-size:12pt;font-weight:400;line-height:1.6;letter-spacing:0.25px;margin:4px 0px;padding:0px;
+font-family:"Basel Grotesk",Arial,sans-serif;line-height:1.38;font-size:21pt;font-weight:600;letter-spacing:0.25px;margin-top:16pt;margin-bottom:4pt;padding-left:0px;
+font-family:"Basel Grotesk",Arial,sans-serif;line-height:1.6;font-size:12.5pt;font-weight:600;letter-spacing:1px;margin-top:24px;margin-bottom:4px;padding-left:0px;
+font-family:"Basel Grotesk",Arial,sans-serif;line-height:1.6;font-size:36pt;font-weight:600;letter-spacing:1px;margin-top:24px;margin-bottom:4px;padding-left:0px;
+font-family:\"Basel Grotesk\",Arial,sans-serif;font-size:10.5pt;font-weight:400;line-height:1.38;letter-spacing:0.25px;margin:0px;padding:0px;
+font-family:\"Basel Grotesk\",Arial,sans-serif;font-size:11pt;font-weight:400;line-height:1.2;letter-spacing:0.25px;margin:0pt 0px 7pt;padding:0px;
+font-family:\"Basel Grotesk\",Arial,sans-serif;font-size:11pt;font-weight:400;line-height:1.38;letter-spacing:0.25px;margin:0pt 0px;padding:0px;
+font-family:\"Basel Grotesk\",Arial,sans-serif;font-size:11pt;font-weight:400;line-height:1.6;letter-spacing:0.25px;margin:0px 0px 10.6667px;padding:0px;text-align:left;
+font-family:\"Basel Grotesk\",Arial,sans-serif;font-size:11pt;font-weight:400;line-height:1.6;letter-spacing:0.25px;margin:4px 0px;padding:0px;
+font-family:\"Basel Grotesk\",Arial,sans-serif;font-size:11pt;font-weight:400;line-height:1.6;letter-spacing:0.25px;margin:4px 0px;padding:0px;text-align:start;
+font-family:\"Basel Grotesk\",Arial,sans-serif;font-size:11pt;font-weight:400;line-height:normal;letter-spacing:0.25px;margin:4px 0px;padding:0px;
+font-family:\"Basel Grotesk\",Arial,sans-serif;font-size:11pt;font-weight:400;margin:8px 0px;line-height:1.6;padding:0px 0px 0px 32px;list-style-type:disc;
+font-family:\"Basel Grotesk\",Arial,sans-serif;font-size:12.5pt;font-weight:400;line-height:1.2;letter-spacing:0.25px;margin:0pt 0px 7pt;padding:0px;
+font-family:\"Basel Grotesk\",Arial,sans-serif;font-size:12pt;font-weight:400;line-height:1.6;letter-spacing:0.25px;margin:4px 0px;padding:0px;
+font-family:\"Basel Grotesk\",Arial,sans-serif;line-height:1.38;font-size:21pt;font-weight:600;letter-spacing:0.25px;margin-top:16pt;margin-bottom:4pt;padding-left:0px;
+font-family:\"Basel Grotesk\",Arial,sans-serif;line-height:1.6;font-size:12.5pt;font-weight:600;letter-spacing:1px;margin-top:24px;margin-bottom:4px;padding-left:0px;
+font-family:\"Basel Grotesk\",Arial,sans-serif;line-height:1.6;font-size:36pt;font-weight:600;letter-spacing:1px;margin-top:24px;margin-bottom:4px;padding-left:0px;
+font-size: 10.0pt;
+font-size: 10.0pt; color: black;
+font-size: 10.0pt; font-family: Montserrat;
+font-size: 10.0pt; font-family: Montserrat; color: black;
+font-size: 10.0pt; line-height: 115%; color: black;
+font-size: 10pt;
+font-size: 10pt; color: #000000;
+font-size: 11.0pt;
+font-size: 11.0pt; color: #428bca;
+font-size: 11.0pt; font-family: Aptos, sans-serif;
+font-size: 11.0pt; font-family: Calibri, sans-serif;
+font-size: 11.0pt; font-family: Calibri, sans-serif; color: #242424; border: none windowtext 1.0pt; padding: 0in;
+font-size: 11.0pt; line-height: 107%; font-family: Calibri, sans-serif;
+font-size: 11.0pt; line-height: 115%;
+font-size: 11.0pt; line-height: 115%; font-family: Arial, sans-serif;
+font-size: 11.0pt; line-height: 116%;
+font-size: 11pt;
+font-size: 11pt; color: #000000; text-decoration: underline;
+font-size: 11pt; color: #1d1c1d;
+font-size: 11pt; font-family: Arial, sans-serif;
+font-size: 11pt; font-family: Arial, sans-serif; color: #1d1c1d;
+font-size: 11pt; font-family: Arial, sans-serif; color: #1d1c1d; text-decoration: underline; text-decoration-skip-ink: none;
+font-size: 11pt; font-family: Calibri, sans-serif;
+font-size: 11pt; font-family: Calibri, sans-serif; color: #242424; border: 1pt windowtext; padding: 0in;
+font-size: 11pt; font-weight: 400;
+font-size: 12.0pt; line-height: 107%;
+font-size: 12.0pt; line-height: 107%; font-family: 'MS Gothic';
+font-size: 12.0pt; line-height: 107%; font-family: Calibri, sans-serif;
+font-size: 12pt;
+font-size: 12pt; font-family: Arial, sans-serif;
+font-size: 13.3333px;
+font-size: 13.5pt;
+font-size: 14.6667px;
+font-size: 14pt;
+font-size: 16px
+font-size: 16px;
+font-size: 18px
+font-size: 18px;
+font-size: 7pt;
+font-size:12pt;white-space:pre-wrap;
+font-size:18pt;white-space:pre-wrap;
+font-size:7pt;white-space:pre-wrap;
+font-style: inherit; font-variant: inherit; font-weight: inherit; font-stretch: inherit; line-height: inherit; font-optical-sizing: inherit; font-size-adjust: inherit; font-kerning: inherit; font-feature-settings: inherit; font-variation-settings: inherit; font-language-override: inherit; color: inherit;
+font-weight: 400;
+font-weight: bold;
+heading 3
+height: 17.95pt;
+label:input;color:inherit;background:0;opacity:1;width:100%;grid-area:1 / 2;font:inherit;min-width:2px;border:0;margin:0;outline:0;padding:0
+line-height: 1.50545; margin-top: 0pt; margin-bottom: 0pt;
+line-height: 1.50545; margin-top: 0pt; margin-bottom: 12pt;
+line-height: 1.50545; margin-top: 12pt; margin-bottom: 0pt;
+line-height: 1.50545; margin-top: 12pt; margin-bottom: 12pt;
+line-height: 1.5;
+line-height: 1.6
+line-height: 1.8; margin-top: 0pt; margin-bottom: 0pt;
+line-height: 1.8; margin-top: 0pt; margin-bottom: 10pt;
+line-height: 1.8; margin-top: 0pt; margin-bottom: 16pt;
+line-height: 1.8; margin-top: 0pt; margin-bottom: 4pt;
+line-height: 1.8; margin-top: 4pt; margin-bottom: 0pt;
+line-height: 107%; font-size: 11pt; font-family: Calibri, sans-serif;
+line-height: 107%; font-size: 11pt; font-family: Calibri, sans-serif; margin: 0in 0in 8pt 24px;
+line-height: 107%; margin: 0in 0in 0in 24px; font-size: 12pt; font-family: Aptos, sans-serif;
+line-height: 107%; margin: 0in 0in 8pt 24px; font-size: 12pt; font-family: Aptos, sans-serif;
+line-height: 115%; background: white; margin: 0in 0in 0in 0px; font-size: 11pt; font-family: Montserrat;
+line-height: normal; margin-top: 0in; margin-right: 0in; margin-bottom: 8pt; font-size: 12pt; font-family: Aptos, sans-serif;
+line-height: normal; margin: 0in 0in 8pt 0px; font-size: 12pt; font-family: 'Times New Roman', serif;
+line-height: normal; margin: 0in 0in 8pt; font-size: 12pt; font-family: Aptos, sans-serif;
+line-height: normal; text-align: justify !important; margin: 0in 0in 8pt 0px; font-size: 12pt; font-family: Aptos, sans-serif;
+list-style-type: disc;
+list-style-type: revert;
+margin-bottom: 0in; margin-top: 0px;
+margin-bottom: 3pt; break-after: avoid; margin-top: 0in; margin-right: 0in; line-height: 107%; font-size: 11pt; font-family: Calibri, sans-serif;
+margin-bottom: 3pt; margin-top: 0in; margin-right: 0in; line-height: 107%; font-size: 11pt; font-family: Calibri, sans-serif;
+margin-left:0
+margin-right: 0in; margin-left: 0in; font-size: 12pt; font-family: 'Times New Roman', serif;
+margin-right: 30px
+margin-right: 5px;
+margin-top: 0in; margin-bottom: .0001pt;
+margin-top: 0in; margin-bottom: 0in;
+margin-top: 0in; margin-right: 0in; margin-bottom: 8pt; line-height: 107%; font-size: 11pt; font-family: Calibri, sans-serif;
+margin-top: 0in; margin-right: 0in; margin-bottom: 8pt; line-height: 115%; font-size: 12pt; font-family: Aptos, sans-serif;
+margin-top: 0pt; margin-bottom: 0pt;
+margin-top: 0pt; margin-bottom: 12pt;
+margin-top: 0pt; margin-bottom: 3pt;
+margin-top: 0px; margin-bottom: 0px; padding-inline-start: 48px;
+margin-top: 10.1pt; margin-bottom: 0in;
+margin-top: 10.1pt; margin-bottom: 6.0pt;
+margin-top: 12pt; margin-bottom: 0pt;
+margin-top: 12pt; margin-bottom: 12pt;
+margin-top: 3pt; margin-bottom: 0pt;
+margin-top: 3pt; margin-bottom: 3pt;
+margin-top: 6.0pt; margin-bottom: 10.1pt;
+margin-top: 6.0pt; margin-bottom: 6.0pt;
+margin-top:0.5rem;
+margin: 0in 0in 0in 0.25in; font-size: 11pt; font-family: Aptos, sans-serif;
+margin: 0in 0in 0in 0.5in; line-height: 107%; font-size: 11pt; font-family: Calibri, sans-serif;
+margin: 0in 0in 0in 0.5in; line-height: 115%; font-size: 12pt; font-family: Aptos, sans-serif;
+margin: 0in 0in 0in 0.75in; font-size: 12pt; font-family: 'Times New Roman', serif;
+margin: 0in 0in 0in 0.75in; line-height: normal; font-size: 11pt; font-family: Calibri, sans-serif;
+margin: 0in 0in 0in 0px; font-size: 10pt; font-family: Montserrat;
+margin: 0in 0in 0in 0px; line-height: 107%; font-size: 11pt; font-family: Calibri, sans-serif;
+margin: 0in 0in 0in 0px; line-height: 115%; font-size: 12pt; font-family: Aptos, sans-serif;
+margin: 0in 0in 0in 0px; line-height: 116%; font-size: 12pt; font-family: Aptos, sans-serif;
+margin: 0in 0in 0in 24px; background: white; font-size: 12pt; font-family: 'Times New Roman', serif;
+margin: 0in 0in 0in 24px; font-size: 11pt; font-family: Aptos, sans-serif;
+margin: 0in 0in 0in 24px; font-size: 12pt; font-family: 'Times New Roman', serif;
+margin: 0in 0in 0in 24px; line-height: 107%; font-size: 11pt; font-family: Calibri, sans-serif;
+margin: 0in 0in 0in 24px; line-height: normal; font-size: 11pt; font-family: Calibri, sans-serif;
+margin: 0in 0in 0in 24px; line-height: normal; font-size: 12pt; font-family: Aptos, sans-serif;
+margin: 0in 0in 8pt 0.25in; line-height: 107%; font-size: 11pt; font-family: Calibri, sans-serif;
+margin: 0in 0in 8pt 0.25in; line-height: 115%; font-size: 12pt; font-family: Aptos, sans-serif;
+margin: 0in 0in 8pt 0.5in; line-height: 107%; font-size: 11pt; font-family: Calibri, sans-serif;
+margin: 0in 0in 8pt 0.5in; line-height: 115%; font-size: 12pt; font-family: Aptos, sans-serif;
+margin: 0in 0in 8pt 0.5in; line-height: normal; font-size: 12pt; font-family: Aptos, sans-serif;
+margin: 0in 0in 8pt 0.75in; line-height: 107%; font-size: 11pt; font-family: Calibri, sans-serif;
+margin: 0in 0in 8pt 0.75in; line-height: 115%; font-size: 12pt; font-family: Aptos, sans-serif;
+margin: 0in 0in 8pt 0px; line-height: 107%; font-size: 11pt; font-family: Calibri, sans-serif;
+margin: 0in 0in 8pt 0px; line-height: 115%; font-size: 12pt; font-family: Aptos, sans-serif;
+margin: 0in 0in 8pt 0px; line-height: 116%; font-size: 12pt; font-family: Aptos, sans-serif;
+margin: 0in 0in 8pt 24px; line-height: 107%; font-size: 11pt; font-family: Calibri, sans-serif;
+margin: 0in 0in 8pt 3pt; line-height: 107%; font-size: 11pt; font-family: Calibri, sans-serif;
+margin: 0in 0in 8pt; font-size: 12pt; font-family: Aptos, sans-serif; line-height: 115%;
+margin: 0in 0in 8pt; line-height: 107%; font-size: 11pt; font-family: Calibri, sans-serif;
+margin: 0in 0in 8pt; line-height: 115%; font-size: 12pt; font-family: Aptos, sans-serif;
+margin: 0in 0in 8pt; line-height: 116%; font-size: 12pt; font-family: Aptos, sans-serif;
+margin: 0in 15.6pt 0.0001pt 0px; line-height: 100%; font-size: 10pt; font-family: Montserrat;
+margin: 0in 15.85pt 0.0001pt 0px; line-height: 100%; font-size: 10pt; font-family: Montserrat;
+margin: 0in; background: white; font-variant-ligatures: normal; text-align: start; text-decoration-thickness: initial; text-decoration-style: initial; text-decoration-color: initial; font-size: 12pt; font-family: 'Times New Roman', serif;
+margin: 0in; font-size: 12pt; font-family: 'Times New Roman', serif;
+margin: 0in; font-size: 12pt; font-family: Aptos, sans-serif;
+margin: 10.1pt 0in 0in 0px; line-height: 115%; font-size: 11pt; font-family: Montserrat;
+margin: 10.1pt 0in 6pt 0px; line-height: 115%; font-size: 11pt; font-family: Montserrat;
+margin: 10.1pt 0in 6pt; font-size: 11pt; font-family: Montserrat;
+margin: 12pt 27.1pt 12pt 0in; font-size: 10pt; font-family: Montserrat;
+margin: 6pt 0in 10.1pt 0px; line-height: 115%; font-size: 11pt; font-family: Montserrat;
+margin: 6pt 0in 6pt 0px; line-height: 115%; font-size: 11pt; font-family: Montserrat;
+margin: 6pt 0in; font-size: 11pt; font-family: Montserrat;
+margin: 6pt 27.1pt 12pt 0in; font-size: 10pt; font-family: Montserrat;
+margin:0px;font-size:12pt;line-height:1.6;letter-spacing:0.25px;
+max-width: max-content;
+min-height: 50px;
+padding-left:1.5px
+padding-top: 16px; padding-left: 16px; padding-right: 16px;
+padding-top:0;padding-bottom:var(--wp--preset--spacing--4-xl)
+padding-top:10px;
+padding-top:var(--wp--preset--spacing--5-xl);padding-bottom:var(--wp--preset--spacing--4-xl)
+padding-top:var(--wp--preset--spacing--super);padding-bottom:var(--wp--preset--spacing--4-xl)
+position: relative;
+position:absolute;left:0;right:0;color:#000;margin:0 auto;bottom:0;text-align:center;background-color:#FFFFFF;
+text-align: center;
+text-align: center; margin: 0in 0in 8pt; line-height: 107%; font-size: 11pt; font-family: Calibri, sans-serif;
+text-align: center; margin: 0in 0in 8pt; line-height: 115%; font-size: 12pt; font-family: Aptos, sans-serif;
+text-align: justify; line-height: 115%; margin: 0in 0in 8pt; font-size: 12pt; font-family: Aptos, sans-serif;
+text-align: left;
+text-align: right;
+text-decoration: line-through; color: red;
+text-decoration: none
+text-decoration: none; color: #868a8f;
+text-decoration: underline;
+text-decoration: underline; color: teal;
+vertical-align: middle
+visibility: hidden; text-align: center;
+visibility:hidden
+white-space:pre-wrap;
+width: 100%;
+width: 100%; height: 900px; border: none; display: block;
+width: 100%; overflow: hidden;
+width: 120.0px; height: 30.0px;
+width: 200.0px; height: 50.0px;
+width: 7.5in; border-collapse: collapse; border: none;
+width: 7.5in; border: none; padding: 0in 5.4pt 0in 5.4pt;

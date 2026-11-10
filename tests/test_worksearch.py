@@ -188,9 +188,32 @@ def test_presets():
     assert Path(worksearch.PRESETS).read_bytes().decode("ascii")
 
 
+def test_old_keys_and_employer_site():
+    """R2: a tracker row keeping an earlier version's job key (with '?' and
+    '=') and a row with this version's key for the same link are one job (PA
+    repeat rule). SV-09: the record's employer website is never a job board,
+    social or reference page (the row's Employer site from posting.py)."""
+    import jobkey
+    link = "https://careers.example-bio.com/Jobs/QC?jobId=77"
+    old = jobkey.raw_key(link)
+    assert old != jobkey.job_key(link) and "?" in old, old
+    a1, a2 = app(1, "Example Bio", "2026-11-03", old), app(2, "Example Bio", "2026-11-05", jobkey.job_key(link))
+    acts = [worksearch.app_activity(r, {}, {}) for r in (a1, a2)]
+    assert worksearch.repeat_jobs(acts) == {1}, [a["_key"] for a in acts]
+    for site, want in (("https://www.linkedin.com/company/example-bio", ""), ("https://twitter.com/examplebio", ""),
+                       ("https://www.example-bio.com", "https://www.example-bio.com"), ("http://10.0.0.7/", "")):
+        rec = worksearch.app_activity(dict(a1, **{"Employer site": site}), {}, {})
+        assert rec["employer_main_website"] == want, (site, rec["employer_main_website"])
+    # R1: the posting link a log row shows is one netfetch.web_refusal passes; a job board's is never echoed
+    for url, want in (("https://www.linkedin.com/jobs/view/1", ""), ("https://user@careers.example-bio.com/j/1", ""),
+                      ("javascript:alert(1)", ""), (link, link)):
+        rec = worksearch.app_activity(dict(a1, URL=url), {}, {})
+        assert rec["posting_url"] == want, (url, rec["posting_url"])
+
+
 def main():
     for fn in (test_export_ca, test_never_rewrites, test_checks, test_fl_and_pa, test_formula_guard_and_employers,
-               test_presets):
+               test_presets, test_old_keys_and_employer_site):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

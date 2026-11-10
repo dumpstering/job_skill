@@ -7,6 +7,7 @@ Stdlib only. Exits non-zero on the first failure and prints PASS at the end.
 import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -347,10 +348,9 @@ def test_network_paths():
         assert code == 3 and lines[0].startswith("FETCH-FAILED") and lines[1] == (
             "TRY https://api.lever.co/v0/postings/leverco/ad208490-4052-4f91-a57e-433f2d1e484b"), lines
         assert lines[2] == "RERUN --json-file <the raw response, saved> --source lever", lines
-    # a non-public address is refused before any connection, and still exits 3 with TRY
+    # R1 (SV-01): a non-public address is refused before any connection: exit 4, never a TRY line
     code, lines, _ = run_cli("http://127.0.0.1:9/jobs/1", "--out", os.path.join(tempfile.gettempdir(), "posting_unused.md"))
-    assert code == 3 and lines[0].startswith("FETCH-FAILED") and "refused" in lines[0], lines
-    assert lines[1] == "TRY http://127.0.0.1:9/jobs/1", lines
+    assert code == 4 and lines[0].startswith("REFUSED bad-url") and len(lines) == 1, lines
 
 
 def test_public_only():
@@ -551,11 +551,103 @@ def test_v12_posted_and_employer_site():
         pasted = Path(tmp) / "p.txt"
         pasted.write_text("Do the work.", encoding="utf-8")
         code, lines, _ = run_cli("--out", str(out), "--text-file", str(pasted), "--company", "A", "--role", "B")
-        assert code == 0 and "POSTED none" in lines, lines
+        assert code == 0 and "POSTED undated" in lines, lines
+        assert "Posted: undated\n" in out.read_text(encoding="utf-8")
 
     # sameAs is used when url is missing
     p = posting.parse_html((V12 / "page_sr_jsonld.html").read_text(encoding="utf-8"), SR_URL, posting.Report())
     assert p["employer_site"] == "https://acmerecruiting.example" and p["source"] == "json-ld", p
+
+
+def jsonld_page(tmp, ld):
+    page = Path(tmp) / "page.html"
+    page.write_text('<html><body><script type="application/ld+json">' + json.dumps(ld) + "</script></body></html>",
+                    encoding="utf-8")
+    return page
+
+
+def test_employer_site_never_a_board_or_social_page():
+    """SV-09: EMPLOYER SITE is the first url or sameAs value that
+    netfetch.web_refusal passes on a host that is not a job board or a social
+    or reference site (LinkedIn, Facebook, X or Twitter, Instagram, YouTube,
+    Glassdoor, Crunchbase, Wikipedia), else none; worksearch never records
+    such a host as the employer's website either."""
+    base = {"@type": "JobPosting", "title": "Scientist", "description": "<p>" + "Run assays. " * 80 + "</p>"}
+    cases = [
+        ({"sameAs": ["https://www.linkedin.com/company/example-bio", "https://www.example-bio.com"]},
+         "https://www.example-bio.com"),
+        ({"url": "https://www.facebook.com/examplebio", "sameAs": ["https://x.com/examplebio",
+                                                                   "https://twitter.com/examplebio",
+                                                                   "https://www.example-bio.com/about"]},
+         "https://www.example-bio.com/about"),
+        ({"sameAs": ["https://www.instagram.com/examplebio", "https://www.youtube.com/@examplebio",
+                     "https://www.glassdoor.com/Overview/x.htm", "https://www.crunchbase.com/organization/x",
+                     "https://en.wikipedia.org/wiki/Example_Bio"]}, "none"),
+        ({"url": "http://10.0.0.7/", "sameAs": "https://user@www.example-bio.com"}, "none"),
+        ({"url": "https://www.example-bio.com", "sameAs": "https://www.linkedin.com/company/x"},
+         "https://www.example-bio.com"),
+    ]
+    with tempfile.TemporaryDirectory(prefix="posting_site_") as tmp:
+        for org, want in cases:
+            page = jsonld_page(tmp, dict(base, hiringOrganization=dict(org, name="Example Bio")))
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                code = posting.main(["https://careers.example-bio.com/jobs/1", "--out", str(Path(tmp) / "p.md"),
+                                     "--html-file", str(page)])
+            lines = buf.getvalue().splitlines()
+            assert code == 0 and f"EMPLOYER SITE {want}" in lines, (org, lines)
+    import worksearch
+    for main_site, row_site, want in (("", "https://www.linkedin.com/company/x", ""),
+                                      ("https://www.facebook.com/x", "https://www.example-bio.com",
+                                       "https://www.example-bio.com"),
+                                      ("https://www.example-bio.com", "", "https://www.example-bio.com"),
+                                      ("https://en.wikipedia.org/wiki/X", "", "")):
+        got = worksearch.employer_fields({"Main website": main_site}, {"Employer site": row_site})
+        assert got["employer_main_website"] == want, (main_site, row_site, got)
+
+
+def test_posted_and_printed_values_safe():
+    """SV-03 / R2: a posting's posted value is a real YYYY-MM-DD date or
+    'undated' in posting.md and on the POSTED line (never the page's own
+    text); JOB KEY and CLOSED's key hold only the R2 characters and FOLDER
+    passes jobkey.path_ok (never $ ` " or \\) for a hostile link, employer
+    name and title."""
+    base = {"@type": "JobPosting", "title": "Scientist $(id) `x`",
+            "description": "<p>" + "Run cell-based assays and write reports. " * 30 + "</p>",
+            "hiringOrganization": {"name": "Example & Bio; {a,b} > c"}}
+    with tempfile.TemporaryDirectory(prefix="posting_r2_") as tmp:
+        incoming = Path(tmp) / "JobSearch" / "applications" / "_incoming"
+        incoming.mkdir(parents=True)
+        for posted, want in (("2026;echo${IFS}x>y", "undated"), ("2026-13-45", "undated"),
+                             (chr(0x0662) + "026-11-01", "undated"), ("2026-11-01T08:00:00Z", "2026-11-01")):
+            page = jsonld_page(tmp, dict(base, datePosted=posted))
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                code = posting.main(["https://careers.example-bio.com/jobs/4471$({echo,x}>y)?id=1&b=2",
+                                     "--out", str(incoming / "posting.md"), "--html-file", str(page)])
+            lines = buf.getvalue().splitlines()
+            assert code == 0, lines
+            assert (f"POSTED {want} (datePosted)" if want != "undated" else "POSTED undated") in lines, lines
+            text = (incoming / "posting.md").read_text(encoding="utf-8")
+            assert f"\nPosted: {want}\n" in text, text[:400]
+            key = next(ln for ln in lines if ln.startswith("JOB KEY "))[8:]
+            folder = next(ln for ln in lines if ln.startswith("FOLDER "))[7:]
+            assert posting.jobkey.inline_ok(key) and posting.jobkey.path_ok(folder), (key, folder)
+            assert re.fullmatch(r"[A-Za-z0-9._:/-]{1,200}", key) and f"Job key: {key}\n" in text, key
+            assert not any(c in folder for c in "$`\"\\") and folder.startswith("applications/"), folder
+        (incoming.parent / folder.split("/", 1)[1]).mkdir()
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            posting.main(["https://careers.example-bio.com/jobs/4471", "--out", str(incoming / "posting.md"),
+                          "--html-file", str(page)])
+        taken = next(ln for ln in buf.getvalue().splitlines() if ln.startswith("FOLDER "))
+        assert taken == f"FOLDER {folder} (2)", (taken, folder)
+    assert posting.inline_line("JOB KEY", "url:x.example/a b") == \
+        "JOB KEY REFUSED: it holds characters a command line must not carry, so it is not printed"
+    assert posting.inline_line("FOLDER", "applications/2026-11-06 A & B - C (2)", path=True) == \
+        "FOLDER applications/2026-11-06 A & B - C (2)"
+    for bad in ("applications/a$b", "applications/../x", "/abs", "-x", "applications/a\"b", "C:/x"):
+        assert posting.inline_line("FOLDER", bad, path=True).startswith("FOLDER REFUSED: "), bad
 
 
 def test_v12_closed():
@@ -661,6 +753,14 @@ def test_v12_read_posting():
     # one saved file, no network
     r2 = posting.read_posting(GH_URL, offline=FIX / "greenhouse.json", first_seen="2026-11-05")
     assert r2.posting.simhash == rec.simhash and r2.posting.lane == "pasted"
+    # R3: a saved file nested thousands deep is judged by the safe loader (never a RecursionError)
+    with tempfile.TemporaryDirectory() as tmp:
+        deep = Path(tmp) / "deep.json"
+        deep.write_text('{"a": ' * 20000 + "1" + "}" * 20000, encoding="ascii")
+        try:
+            posting.read_posting(GH_URL, offline=deep)
+        except (posting.FetchError, ValueError):
+            pass  # one plain failure is fine; a RecursionError would escape this test
     # an employer page through the offline fixtures: JSON-LD, employer site, flags
     r3 = posting.read_posting(EMP_URL, offline=off)
     assert r3.posting.employer_site == "https://www.acmebio.example" and r3.posting.req_ids == ["AS-3141"], r3.posting
@@ -860,10 +960,83 @@ def test_refused_links():
     assert posting.is_job_board("www.link" + chr(0xAD) + "edin.com") and posting.is_job_board("lnkd.in")
 
 
+def test_refusals_never_try():
+    """SV-01 / G3-08 / R1: every link netfetch.web_refusal refuses exits 4
+    (JOB BOARD or REFUSED) with no TRY line, whether refused before any
+    request (a backslash or userinfo in the authority, a private, loopback,
+    .local, IP-literal, single-label or odd-port link), while connecting (the
+    name resolves to a private address) or anywhere in a redirect chain (to a
+    private address or a job board); with --html-file too. Exit 3 with TRY
+    stays for a fetch failure on a link web_refusal passes."""
+    BS = chr(92)
+    asked = []
+    real_gai = posting.socket.getaddrinfo
+    posting.socket.getaddrinfo = lambda host, *a, **k: asked.append(host) or real_gai("localhost", 1)
+
+    def run(argv):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = posting.main(argv)
+        return code, buf.getvalue().splitlines()
+    try:
+        with tempfile.TemporaryDirectory(prefix="posting_r1_") as tmp:
+            out = str(Path(tmp) / "posting.md")
+            page = Path(tmp) / "page.html"
+            page.write_text("<html><body><h1>Scientist</h1>" + "<p>Run assays.</p>" * 80 + "</body></html>",
+                            encoding="utf-8")
+            for url, first in (("https://www.linkedin.com" + BS + "@careers.example-bio.com/jobs/1", "JOB BOARD"),
+                               ("https://careers.example-bio.com" + BS + "@jobs.example-two.com/x", "REFUSED bad-url"),
+                               ("http://127.0.0.1:8080/admin", "REFUSED bad-url"),
+                               ("http://192.168.1.1/", "REFUSED non-public"),
+                               ("http://localhost./x", "REFUSED non-public"),
+                               ("http://router.local/", "REFUSED non-public"),
+                               ("https://user@careers.example-bio.com/jobs/1", "REFUSED bad-url"),
+                               ("https://13.107.42.14/jobs/1", "REFUSED bad-url ip-address"),
+                               ("http://2130706433/x", "REFUSED bad-url ip-address"),
+                               ("http://[::1]/x", "REFUSED non-public"),
+                               ("http://intranet/x", "REFUSED bad-url single-label"),
+                               ("https://careers.example-bio.com:8443/jobs/1", "REFUSED bad-url port"),
+                               ("javascript:alert(1)", "REFUSED bad-url")):
+                for extra in ([], ["--html-file", str(page)]):
+                    code, lines = run([url, "--out", out] + extra)
+                    assert code == 4 and lines[0].startswith(first), (ascii(url), extra, code, lines)
+                    assert not any(ln.startswith(("TRY", "NEXT", "FETCH-FAILED")) for ln in lines), lines
+                    assert not Path(out).exists()
+            assert not asked, asked
+            # refused while connecting: the name resolves to a private address
+            posting.socket.getaddrinfo = lambda host, port, *a, **k: [
+                (posting.socket.AF_INET, posting.socket.SOCK_STREAM, 6, "", ("10.0.0.5", port))]
+            code, lines = run(["https://careers.example-bio.com/jobs/2", "--out", out])
+            assert code == 4 and lines[0].startswith("REFUSED non-public careers.example-bio.com"), (code, lines)
+            assert not any(ln.startswith("TRY") for ln in lines), lines
+            # refused in a redirect chain: the real redirect handler, called as urllib calls it
+            for target, first in (("http://10.0.0.5/admin", "REFUSED non-public 10.0.0.5"),
+                                  ("https://www.linkedin.com/jobs/view/1", "JOB BOARD linkedin.com"),
+                                  ("https://careers.example-bio.com:9000/x", "REFUSED bad-url port")):
+                class Redirecting:
+                    def open(self, req, timeout=None, target=target):
+                        posting.PublicRedirects().redirect_request(req, None, 302, "Found", {}, target)
+                        raise AssertionError("redirect followed")
+                saved = (posting.OPENER, posting.getproxies)
+                posting.OPENER, posting.getproxies = Redirecting(), (lambda: {})
+                try:
+                    code, lines = run(["https://careers.example-bio.com/jobs/3", "--out", out])
+                finally:
+                    posting.OPENER, posting.getproxies = saved
+                assert code == 4 and lines[0].startswith(first), (target, code, lines)
+                assert not any(ln.startswith("TRY") for ln in lines), lines
+            # a fetch failure on a link web_refusal passes keeps exit 3 with TRY (the user's own link)
+            posting.socket.getaddrinfo = lambda *a, **k: (_ for _ in ()).throw(posting.socket.gaierror("no dns"))
+            code, lines = run(["https://careers.example-bio.com/jobs/4", "--out", out])
+            assert code == 3 and "TRY https://careers.example-bio.com/jobs/4" in lines, lines
+    finally:
+        posting.socket.getaddrinfo = real_gai
+
+
 def test_folder_line():
-    """SEC-13: posting.py prints the job folder to create, named as the
-    runner names its own (path characters out), with ' (2)' when taken; the
-    employer name loses '/' and '\\'."""
+    """SEC-13 / R2: posting.py prints the job folder to create, named as the
+    runner names its own (path characters out), with ' (2)' when taken, and
+    only when jobkey.path_ok passes it; the employer name loses '/' and '\\'."""
     ld = {"@type": "JobPosting", "title": "Scientist I/II", "description": "<p>" + "Run assays. " * 80 + "</p>",
           "hiringOrganization": {"name": "Acme Bio/../../../Desktop/x"}}
     with tempfile.TemporaryDirectory(prefix="posting_folder_") as tmp:
@@ -912,7 +1085,8 @@ def main():
               test_v12_closed, test_v12_smartrecruiters_and_robots, test_v12_read_posting,
               test_pasted_wrapped_ai_text_and_req, test_hidden_and_addressed_text, test_unclosed_tags_linear,
               test_readers_bounded, test_jsonld_odd_types, test_invisible_characters, test_refused_links,
-              test_folder_line, test_city_state_codes):
+              test_folder_line, test_city_state_codes, test_refusals_never_try,
+              test_employer_site_never_a_board_or_social_page, test_posted_and_printed_values_safe):
         t()
         print("ok", t.__name__)
     if os.environ.get("JOB_SKILL_LIVE") == "1":

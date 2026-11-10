@@ -1,9 +1,11 @@
-"""Check job/scripts/jobkey.py: v1.1 keys unchanged, the v1.2 ATS keys,
-canonical URLs, company names and SimHash.
+"""Check job/scripts/jobkey.py: v1.1 keys unchanged (as raw_key; job_key is
+their R2 form), keys safe by construction for hostile links and from every
+board reader, the v1.2 ATS keys, canonical URLs, company names and SimHash.
 
 Usage: python tests/test_jobkey.py
 Stdlib only. Exits non-zero on the first failure and prints PASS at the end.
 """
+import re
 import sys
 from pathlib import Path
 
@@ -73,9 +75,124 @@ V12_PAIRS = [
 
 
 def test_v11_keys_unchanged():
+    """v1.1 keys stand as raw_key; job_key is their R2 form (safe_key), the
+    same as before for every key already in the R2 character set."""
     for url, key in V11_KEYS.items():
-        assert jobkey.job_key(url) == key, (url, jobkey.job_key(url), key)
+        assert jobkey.raw_key(url) == key, (url, jobkey.raw_key(url), key)
+        assert jobkey.job_key(url) == jobkey.safe_key(key), (url, jobkey.job_key(url), key)
+        if jobkey.SAFE_KEY.fullmatch(key):
+            assert jobkey.job_key(url) == key, (url, jobkey.job_key(url), key)
     assert jobkey.job_key("") == ""
+    # a stored v1.1 key with '?' and '=' compares equal to this version's key for the same link
+    old = V11_KEYS["https://careers.acme.example/Jobs/IT-Support?jobId=77&utm_source=x"]
+    new = jobkey.job_key("https://careers.acme.example/Jobs/IT-Support?jobId=77&utm_source=x")
+    assert new != old and jobkey.same_key(old, new) and jobkey.same_key(new, new), (old, new)
+    assert not jobkey.same_key(old, jobkey.job_key("https://careers.acme.example/Jobs/IT-Support?jobId=78"))
+    assert not jobkey.same_key("", "") and not jobkey.same_key(None, "url:x")
+
+
+# Hostile links (R2): shell syntax, quotes, spaces, control and non-ASCII
+# characters and overlong paths in every place a key copies from a link.
+BAD = "$(id){a,b}>x;`y`|z&w\"q'r " + chr(0x0A) + chr(0x00E9) + chr(0x202E) + "%2F\\"
+HOSTILE = [
+    "https://job-boards.greenhouse.io/acme/jobs/" + BAD,
+    "https://careers.acme.example/open?gh_jid=" + BAD,
+    "https://boards.greenhouse.io/embed/job_app?token=" + BAD,
+    "https://jobs.lever.co/acme/" + BAD,
+    "https://jobs.ashbyhq.com/acme/" + BAD,
+    "https://acme.wd5.myworkdayjobs.com/en-US/Ext/job/x/Title_JR" + BAD,
+    "https://jobs.smartrecruiters.com/" + BAD + "/" + BAD,
+    "https://careers-acme.icims.com/jobs/" + BAD + "/x/job",
+    "https://acme.bamboohr.com/careers/" + BAD,
+    "https://apply.workable.com/" + BAD + "/j/" + BAD,
+    "https://acme.teamtailor.com/jobs/12" + BAD,
+    "https://workforcenow.adp.com/x?cid=" + BAD + "&jobId=" + BAD,
+    "https://myjobs.adp.com/" + BAD + "/cx?reqId=" + BAD,
+    "https://recruiting.paylocity.com/Recruiting/Jobs/Details/12" + BAD,
+    "https://jobs.dayforcehcm.com/en-US/" + BAD + "/x/jobs/12",
+    "https://jobs.jobvite.com/" + BAD + "/job/" + BAD,
+    "https://acme.applytojob.com/apply/" + BAD,
+    "https://www.linkedin.com/jobs/search/?currentJobId=" + BAD,
+    "https://www.indeed.com/viewjob?jk=" + BAD,
+    "https://careers.acme.example/" + BAD + "?jobId=" + BAD + "&id=" + BAD,
+    "https://careers.acme.example/" + "a" * 400,
+    "https://careers.acme.example/" + "a" * 195 + BAD,
+    "https://" + BAD + ".example/x",
+]
+
+
+def test_keys_safe_by_construction():
+    """R2: every key job_key produces holds only A-Z a-z 0-9 . _ : / - and is
+    at most 200 characters, for hostile links in every key form and with
+    every ats hint; a key that had to change carries a hash, so distinct links
+    keep distinct keys; safe_key is idempotent; inline_ok accepts exactly the
+    key characters (paths: plus spaces) and never a leading '-'."""
+    keys = {}
+    for url in HOSTILE:
+        for ats in (None, "phenom", "teamtailor", "workday", "greenhouse"):
+            k = jobkey.job_key(url, ats)
+            assert jobkey.SAFE_KEY.fullmatch(k) and len(k) <= jobkey.KEY_MAX, (ascii(url), ats, ascii(k))
+            assert jobkey.safe_key(k) == k and jobkey.inline_ok(k), ascii(k)
+            if jobkey.raw_key(url, ats) != k:
+                assert re.search(r"-[0-9a-f]{12}$", k), ascii(k)
+            keys.setdefault(k, set()).add(jobkey.raw_key(url, ats))
+    assert all(len(raws) == 1 for raws in keys.values()), [ascii(k) for k, r in keys.items() if len(r) > 1]
+    # two links that differ only in a replaced character, or past the cut, keep distinct keys
+    pairs = [("https://careers.acme.example/a$b", "https://careers.acme.example/a{b"),
+             ("https://careers.acme.example/" + "a" * 300 + "1", "https://careers.acme.example/" + "a" * 300 + "2")]
+    for a, b in pairs:
+        assert jobkey.job_key(a) != jobkey.job_key(b), (a[:60], b[:60])
+    assert jobkey.safe_key(None) == "" and jobkey.safe_key("greenhouse:1") == "greenhouse:1"
+    for v, path, ok in (("url:a.example/b-1", False, True), ("a b", False, False), ("a b", True, True),
+                        ("--root", False, False), ("x$y", True, False), ("", False, False), ("", True, False),
+                        ("a" * 201, False, False), ("2026-11-06", False, True), (7, False, True),
+                        ("applications/2026-11-06 Johnson & Johnson - Scientist (2)", True, True),
+                        ("applications/Caf" + chr(0xE9) + " Bio", True, True), ("applications/../x", True, False),
+                        ("/x", True, False), ("-x", True, False), ("C:/x", True, False), ("a`b", True, False),
+                        ("a\"b", True, False), ("a\\b", True, False), ("a\nb", True, False), ("a//b", True, False)):
+        assert jobkey.inline_ok(v, path=path) is ok, (v, path)
+    # every runner job folder name passes the path rule (jobfs.job_folder_name drops $ ` " \ and controls)
+    sys.path.insert(0, str(HERE.parent / "job" / "scripts"))
+    import jobfs
+    for company, role in (("Johnson & Johnson", "Scientist (Bio/Chem)"), ("A$b`c\"d\\e", "R&D: 100% {x}"),
+                          ("Caf" + chr(0xE9) + " Bio", "QC!#=@[]^~;,'+")):
+        name = jobfs.job_folder_name("2026-11-06", company, role)
+        assert jobkey.path_ok(f"applications/{name}") and jobkey.path_ok(f"applications/{name} (2)"), name
+
+
+def test_reader_keys_safe():
+    """R2, reader side: every board reader, on its own fixture and on the same
+    answers with every link in them made hostile (shell syntax and quotes
+    appended), produces only keys in the R2 set. Readers build keys through
+    posting.to_record -> jobkey.job_key, so this covers them all."""
+    tests_dir = str(HERE)
+    if tests_dir not in sys.path:
+        sys.path.insert(0, tests_dir)
+    import boards
+    import netfetch
+    import test_boards as tb
+
+    class Hostile(netfetch.OfflineSource):
+        def respond(self, method, url, data=None):
+            r = super().respond(method, url, data)
+            if not url.endswith("/robots.txt"):
+                r.body = LINK.sub(lambda m: m.group(1) + b"$(id){a,b}`x`;y&z", r.body)
+            return r
+    LINK = re.compile(rb"(https?:(?:\\?/){2}[A-Za-z0-9.-]+(?:\\?/)[^\"'\s<>\\]{0,300})")
+    for hostile in (False, True):
+        n, changed = 0, 0
+        for name, text in sorted(tb.SPECS.items()):
+            spec = boards.parse_spec(text)
+            f = tb.fetcher(extra_hosts=(spec.host,) if spec.host else ())
+            if hostile:
+                f.offline = Hostile(tb.FIX)
+            res = boards.read_board(spec, f, first_seen="2026-11-05")
+            for rd in res.readings:
+                k = rd.posting.job_key
+                assert jobkey.SAFE_KEY.fullmatch(k) and len(k) <= jobkey.KEY_MAX, (name, hostile, ascii(k))
+                n += 1
+                changed += "_id_a_b_x" in k  # the hostile text reached the key and was made safe
+        assert n > 50 and (changed > 5 if hostile else changed == 0), (hostile, n, changed)
 
 
 def test_v12_keys():
@@ -133,7 +250,8 @@ def test_simhash():
 
 
 def main():
-    for t in (test_v11_keys_unchanged, test_v12_keys, test_canonical_url, test_company_names, test_simhash):
+    for t in (test_v11_keys_unchanged, test_v12_keys, test_canonical_url, test_company_names, test_simhash,
+              test_keys_safe_by_construction, test_reader_keys_safe):
         t()
         print("ok", t.__name__)
     print("PASS")

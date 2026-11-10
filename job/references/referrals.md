@@ -81,7 +81,10 @@ query string and all: for a row, `{"_": ["<ID>", "referral_url=<url>"]}`
 and `tracker.py update --args-file claude/args.json`; for the contact,
 `"referral-url": "<url>"` in the `referral-add` file. While item 7 is not yet applied,
 the fill opens that link instead of the posting. A gh_src in a link shows a
-source is attached, not that a referral happened.
+source is attached, not that a referral happened. A link that is not a plain
+public web address (a user name, an IP address, another port, a local name)
+is refused (`ERROR --referral-url refused ...`, nothing written): store the
+row without it and use the posting link.
 
 **Nudge.** Once, when Nudge on arrives with no reply: offer one short
 follow-up as text to paste. Never a second nudge. After that, set the row to

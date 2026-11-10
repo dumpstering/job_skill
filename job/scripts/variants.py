@@ -9,6 +9,7 @@ Usage:
     python variants.py tune    --root R --item <job folder> [--family F]
     python variants.py diff    --root R --item <job folder>
     python variants.py tier-b  --root R --item <job folder> [--family F]
+    python variants.py rebuild --root R [--approve PLAN]
 
 A variant lives in variants/<family>/v<N>/: resume.json (every bullet with an
 ev list of library IDs), pool.json (summary options, extra bullets per role,
@@ -27,6 +28,23 @@ since approval`; check then prints `CHANGED` lines (the entry's new text and
 each bullet citing it) and a NEXT line, and approve re-approves the same
 files on the user's word (`APPROVED <family> v<N> again`). A changed file is
 never re-approved: it needs a new version.
+
+rebuild (R8: recovery in one reply) takes every family whose current
+approval a correction broke (its files intact, a cited library entry
+changed) at once. For each it uses the newest unapproved version above the
+current one when Claude made one (new --copy, the lines that now say more
+fixed), else the same files again; it runs the approval checks and a strict
+build of the base resume (base_resume.pdf in that version's folder), and
+prints one combined diff with only the changed lines: CHANGED <id> (the
+entry's new text, once), then per family "- "/"+ " lines (a new version
+against the current one) or "= " lines (the same files: the lines citing a
+changed entry), then PLAN <12 hex> (a hash of every file and entry that one
+yes approves) and NEXT. rebuild --approve PLAN approves them all when
+nothing changed since that plan (else REFUSED): a new version with the old
+version's mode and caps, the same files as APPROVED ... again; then it
+rebuilds today's Tier B files built from a version it replaced (tier-b on
+each job folder not done and not claimed), so the held jobs are ready at
+once. A family with PROBLEM lines stays out of the plan.
 
 tune makes resume_B.json and tune_log.json in the job folder using only:
 the summary option with the most posting-term overlap; bullets stable-sorted
@@ -47,7 +65,8 @@ fails too prints PREP_FAILED (exit 6). A form that requires a cover letter
 also gets cover_B from letter.json, with the letter check.
 
 Exit codes: 0 ok, 1 bad input or a refusal (REFUSED, UNAPPROVED with no
-approved version), 6 VARIANT-FAIL (diff) or PREP_FAILED (tier-b).
+approved version), 6 VARIANT-FAIL (diff), PREP_FAILED (tier-b) or PROBLEM
+lines that keep a family out of a rebuild plan.
 """
 import argparse
 import copy
@@ -67,7 +86,9 @@ import checks  # noqa: E402
 import jobfs  # noqa: E402
 import library  # noqa: E402
 
-FAMILY_RE = re.compile(r"^[a-z0-9][a-z0-9_]{0,39}$")
+FAMILY_RE = re.compile(r"^[a-z0-9][a-z0-9_]{0,39}\Z")  # \Z: a trailing newline never passes
+PLAN_RE = re.compile(r"[0-9a-f]{12}")
+DIFF_TEXT_MAX = 400
 VARIANT_FILES = ("resume.json", "pool.json", "letter.json")
 POOL_KEYS = {"summaries", "bullets", "skills", "aliases", "publications"}
 LETTER_SLOTS = {"{company}", "{role}", "{focus}", "{date}"}
@@ -88,7 +109,7 @@ def sha256_file(path):
 
 def read_json(path):
     try:
-        return json.loads(Path(path).read_text(encoding="utf-8-sig"))
+        return jobfs.read_json(path, jobfs.MAX_FILE)
     except FileNotFoundError:
         raise Refused(f"ERROR {path} not found")
     except (OSError, ValueError) as e:
@@ -120,7 +141,7 @@ def current_version(root, family):
 def files_approval(vdir):
     """(ok, reason, approved dict or None): the approved files' exact bytes."""
     try:
-        approved = json.loads((vdir / "approved.json").read_text(encoding="utf-8-sig"))
+        approved = jobfs.read_json(vdir / "approved.json", jobfs.MAX_FILE)
     except FileNotFoundError:
         return False, "not approved yet", None
     except (OSError, ValueError) as e:
@@ -154,7 +175,7 @@ def cited_ids(vdir):
     ids = set()
     for name in ("resume.json", "pool.json"):
         try:
-            data = json.loads((vdir / name).read_text(encoding="utf-8-sig"))
+            data = jobfs.read_json(vdir / name, jobfs.MAX_FILE)
         except (OSError, ValueError):
             continue
         stack = [data]
@@ -468,8 +489,9 @@ REVIEW_TEMPLATE = """# Variant {family} v{n}
 """
 
 
-def cmd_approve(root, family, version, mode, max_pages, pub_max):
+def cmd_approve(root, family, version, mode, max_pages, pub_max, emit=print, show_changed=True):
     check_family(family)
+    print = emit  # noqa: A001  every line below goes to emit (rebuild --approve collects them)
     f = jobfs.Folder(root)
     version = version or current_version(root, family)
     if version is None:
@@ -491,7 +513,7 @@ def cmd_approve(root, family, version, mode, max_pages, pub_max):
         # Only cited library entries changed: the user re-approves the same files
         # after reading the bullets that cite them (variants.md).
         again = changed
-        for line in changed_lines(root, vdir, changed):
+        for line in changed_lines(root, vdir, changed) if show_changed else []:
             print(line)
         mode = mode or old.get("mode")
         max_pages = max_pages or old.get("max_pages")
@@ -530,7 +552,7 @@ def changed_lines(root, vdir, changed):
     units = []
     for name in ("resume.json", "pool.json"):
         try:
-            data = json.loads((vdir / name).read_text(encoding="utf-8-sig"))
+            data = jobfs.read_json(vdir / name, jobfs.MAX_FILE)
         except (OSError, ValueError):
             continue
         stack = [data]
@@ -570,6 +592,11 @@ def cmd_check(root, family):
             print(f'WARN family {fam.get("id")}: variant = "{fam.get("variant")}" is not read; '
                   f'its variant is variants/{fam.get("id")} (remove the variant line)')
     fams = [family] if family else sorted(p.name for p in base.glob("*") if p.is_dir())
+    odd = [f for f in fams if not FAMILY_RE.match(f)]
+    if odd:  # shared decision 2: a name printed for a command line is a family id, or not printed at all
+        print(f"REFUSED {plural_folders(len(odd))} in variants/ whose name is not a family id (lowercase "
+              "letters, digits and _); not read")
+        fams = [f for f in fams if FAMILY_RE.match(f)]
     if not fams:
         print("VARIANTS none")
         return 0
@@ -587,7 +614,8 @@ def cmd_check(root, family):
                     print(line)
                 print(f"NEXT if every cited line above still holds against the new text, ask the user to "
                       f"re-approve {fam} (variants.py approve --family {fam}); if one says more, "
-                      f"variants.py new --family {fam} --copy, fix it, and ask for approval")
+                      f"variants.py new --family {fam} --copy, fix it, and ask for approval. With more than one "
+                      "family affected, variants.py rebuild shows them all for one yes")
         if v is not None and v == cur:
             print(f"APPROVED {fam} v{v} (on {approved.get('approved_on', '?')})")
         elif v is not None:
@@ -597,6 +625,295 @@ def cmd_check(root, family):
         for d in versions(root, fam):
             if cur is not None and d > cur and not (jobfs.Folder(root).variant(fam, d) / "approved.json").exists():
                 print(f"DRAFT {fam} v{d} (not approved)")
+    return 0
+
+
+def plural_folders(k):
+    return f"{k} folder" + ("" if k == 1 else "s")
+
+
+# ---------- rebuild: every family a correction broke, one diff, one yes (R8) ----------
+
+def unit_lines(vdir):
+    """[(file, label, text)] of every line a reader sees in a version's files,
+    in document order: the resume's summary, role headers, bullets, skills
+    lines and citations; the pool's summaries, bullets, skills, aliases and
+    publications; the letter's lines. Raises ValueError on a file that is not
+    a JSON object of the usual shape (the approval checks then say why)."""
+    out = []
+
+    def add(name, label, text):
+        if isinstance(text, str) and text.strip():
+            out.append((name, label, checks.norm(text)))
+    for name in VARIANT_FILES:
+        path = vdir / name
+        if not path.exists():
+            continue
+        data = jobfs.read_json(path, jobfs.MAX_FILE)
+        if not isinstance(data, dict):
+            raise ValueError(f"{name} is not an object")
+        if name == "resume.json":
+            add(name, "name", data.get("name"))
+            add(name, "contact", " | ".join(c for c in data.get("contact") or [] if isinstance(c, str)))
+            for s in data.get("sections") or []:
+                h = str(s.get("heading", ""))
+                add(name, h, s.get("paragraph"))
+                for ln in s.get("lines") or []:
+                    add(name, f"{h} / {ln.get('label', '')}", ln.get("text"))
+                for e in s.get("entries") or []:
+                    role = f"{e.get('title', '')} | {e.get('org', '')}"
+                    add(name, h, " | ".join(str(e.get(k, "")) for k in ("title", "org", "location", "dates")))
+                    for b in e.get("bullets") or []:
+                        add(name, role, checks.bullet_text(b))
+                for b in s.get("bullets") or []:
+                    add(name, h, checks.bullet_text(b))
+                if s.get("citations"):
+                    add(name, h, ", ".join(str(c) for c in s["citations"]))
+        elif name == "pool.json":
+            for t in data.get("summaries") or []:
+                add(name, "summary option", t)
+            for key, items in (data.get("bullets") or {}).items():
+                for b in items or []:
+                    add(name, f"extra bullet, {key}", checks.bullet_text(b))
+            for ln in data.get("skills") or []:
+                add(name, f"extra skills, {ln.get('label', '')}", ", ".join(str(i) for i in ln.get("items") or []))
+            for a in data.get("aliases") or []:
+                add(name, "alias", f"{a.get('variant', '')} = {', '.join(str(x) for x in a.get('posting') or [])}")
+            if data.get("publications"):
+                add(name, "extra publications", ", ".join(str(p) for p in data["publications"]))
+        else:
+            L = data.get("letter") or {}
+            for k in ("greeting", "closing"):
+                add(name, k, L.get(k))
+            for t in L.get("paragraphs") or []:
+                add(name, "paragraph", t)
+    return out
+
+
+def changed_unit_lines(old_dir, new_dir):
+    """The "- " and "+ " lines between two versions: the changed lines only."""
+    import difflib
+    a = [f"{f} {label}: {text}" for f, label, text in unit_lines(old_dir)]
+    b = [f"{f} {label}: {text}" for f, label, text in unit_lines(new_dir)]
+    out = []
+    for op, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
+        if op in ("replace", "delete"):
+            out += [f"- {x[:DIFF_TEXT_MAX]}" for x in a[i1:i2]]
+        if op in ("replace", "insert"):
+            out += [f"+ {x[:DIFF_TEXT_MAX]}" for x in b[j1:j2]]
+    return out
+
+
+def citing_lines(vdir, ids):
+    """The "= " lines: each line of the version citing one of ids, with the ids it cites."""
+    out = []
+    for name in ("resume.json", "pool.json"):
+        try:
+            data = jobfs.read_json(vdir / name, jobfs.MAX_FILE)
+        except (OSError, ValueError):
+            continue
+        stack = [data]
+        while stack:
+            x = stack.pop()
+            if isinstance(x, dict):
+                ev = x.get("ev")
+                if isinstance(ev, list) and isinstance(x.get("text"), str) and set(ev) & set(ids):
+                    hit = ", ".join(i for i in ev if i in ids)
+                    out.append(f"= {name}: {checks.norm(x['text'])[:DIFF_TEXT_MAX]} (cites {hit})")
+                stack += list(x.values())
+            elif isinstance(x, list):
+                stack += reversed(x)
+    return out
+
+
+def broken_families(root):
+    """[(family, current version, its old approved dict, [(id, why)])] for every
+    family whose current version's files are intact as approved and whose
+    approval a changed cited library entry broke."""
+    out = []
+    base = jobfs.Folder(root).variants
+    for fam in sorted(p.name for p in base.glob("*") if p.is_dir()) if base.exists() else []:
+        if not FAMILY_RE.match(fam):
+            continue
+        cur = current_version(root, fam)
+        if cur is None:
+            continue
+        ok, _, old = files_approval(jobfs.Folder(root).variant(fam, cur))
+        if not ok:
+            continue
+        changed = changed_entries(root, old)
+        if changed:
+            out.append((fam, cur, old, changed))
+    return out
+
+
+def draft_above(root, family, cur):
+    """The newest version above cur with no approved.json (Claude's fix), or None."""
+    f = jobfs.Folder(root)
+    drafts = [v for v in versions(root, family) if v > cur and not (f.variant(family, v) / "approved.json").exists()]
+    return drafts[-1] if drafts else None
+
+
+def plan_targets(root):
+    """[(family, old version, target version, old approved, changed entries)]
+    rebuild would approve, and the PLAN hash over every file and cited entry."""
+    f = jobfs.Folder(root)
+    targets = []
+    for fam, cur, old, changed in broken_families(root):
+        target = draft_above(root, fam, cur) or cur
+        targets.append((fam, cur, target, old, changed))
+    lib = library.hashes(f.library)
+    record = []
+    for fam, cur, target, _, _ in targets:
+        vdir = f.variant(fam, target)
+        files = {n: sha256_file(vdir / n) for n in VARIANT_FILES if (vdir / n).exists()}
+        record.append([fam, cur, target, files, {i: lib.get(i, "") for i in cited_ids(vdir)}])
+    digest = hashlib.sha256(json.dumps(record, sort_keys=True).encode("utf-8")).hexdigest()[:12]
+    return targets, digest
+
+
+def base_build(root, vdir, old):
+    """A strict build of the version's resume.json; base_resume.pdf joins its
+    folder. (ok, problem lines)."""
+    ok, lines, out = strict_build(root, vdir / "resume.json", "base_resume", old, vdir)
+    try:
+        if ok and (out / "base_resume.pdf").exists():
+            shutil.copyfile(out / "base_resume.pdf", vdir / "base_resume.pdf")
+        return ok, ([] if ok else problem_lines(lines))
+    finally:
+        shutil.rmtree(out, ignore_errors=True)
+
+
+def held_folders(root, family, keep_version):
+    """Today's job folders whose Tier B files came from another version of
+    family (tune_log.json), not done and not claimed: the jobs a new version
+    must rebuild before they can go out."""
+    import events
+    day = jobfs.today(root)
+    f = jobfs.Folder(root)
+    qd = f.queue_dir(day)
+    paths = ([qd / "queue.json"] + sorted(qd.glob("addendum_*.json"))) if qd.exists() else []
+    try:
+        states = {(it.get("n"), it.get("job_key")): it.get("state")
+                  for it in events.overlay(root, day)["items"].values()}
+    except Exception:  # no events readable: every item counts as not done
+        states = {}
+    out, seen = [], set()
+    for p in paths:
+        if p.name.endswith(".prev.json") or p.name == "addendum_user.json" or not p.exists():
+            continue
+        try:
+            data = jobfs.read_json_verified(p, retries=0, wait=0)
+        except Exception:  # a queue file that cannot be read: its jobs wait for the runner
+            continue
+        for it in data.get("items") or [] if isinstance(data, dict) else []:
+            if not isinstance(it, dict) or it.get("added_by"):
+                continue
+            if states.get((it.get("n"), it.get("job_key"))) in ("applied", "skipped", "later", "blocked"):
+                continue
+            folder = f.root / str(it.get("folder", ""))
+            if folder in seen or not folder.is_dir() or (folder / ".claimed").exists():
+                continue
+            try:
+                log = jobfs.read_json(folder / "tune_log.json", jobfs.MAX_FILE)  # R3: the safe loader
+            except (OSError, ValueError):
+                continue
+            if isinstance(log, dict) and log.get("family") == family and log.get("version") != keep_version:
+                seen.add(folder)
+                out.append(folder)
+    return out
+
+
+def cmd_rebuild(root, plan=None):
+    """R8: every family a correction broke, at once (module docstring)."""
+    targets, digest = plan_targets(root)
+    f = jobfs.Folder(root)
+    if not targets:
+        print("REBUILD none: no approved base resume cites a corrected library entry")
+        return 0
+    if plan is not None:
+        return approve_plan(root, targets, digest, plan)
+    lib = library.load(f.library).by_id if f.library.exists() else {}
+    shown = set()
+    for _, _, _, _, changed in targets:
+        for eid, why in changed:
+            if eid in shown:
+                continue
+            shown.add(eid)
+            now = lib[eid].text if eid in lib else ""
+            print(f'CHANGED {eid}: "{checks.norm(now)[:DIFF_TEXT_MAX]}"' if now else f"CHANGED {why}")
+    clean, problems = [], []
+    for fam, cur, target, old, changed in targets:
+        vdir = f.variant(fam, target)
+        ids = [i for i, _ in changed]
+        if target != cur:
+            try:
+                lines = changed_unit_lines(f.variant(fam, cur), vdir)
+            except (OSError, ValueError, AttributeError, TypeError) as e:
+                lines = [f"PROBLEM v{target} cannot be read ({type(e).__name__})"]
+            print(f"REBUILD {fam} v{cur} -> v{target}: {len(lines)} changed line{'s' if len(lines) != 1 else ''}")
+        else:
+            lines = citing_lines(vdir, ids)
+            print(f"REBUILD {fam} v{cur} again: no line changes; {len(lines)} line{'s' if len(lines) != 1 else ''} "
+                  f"cite{'s' if len(lines) == 1 else ''} the corrected {'entry' if len(ids) == 1 else 'entries'}")
+        for line in lines:
+            print(f"  {line}")
+        found = [ln for ln in lines if ln.startswith("PROBLEM")] + approval_problems(root, vdir)
+        if not found:
+            ok, built = base_build(root, vdir, old)
+            found = [] if ok else built
+        for p in found:
+            print(f"PROBLEM {fam} v{target}: {p.removeprefix('PROBLEM ')}")
+        (problems if found else clean).append(fam)
+        if not found:
+            jobs = len(held_folders(root, fam, target)) if target != cur else 0
+            print(f"BUILD ok {fam} v{target} (base_resume.pdf)" + (f"; {jobs} of today's jobs are rebuilt on the "
+                                                                    f"yes" if jobs else ""))
+    if problems:
+        print(f"NEXT fix {', '.join(problems)} first (a line that now says more than its entry: variants.py new "
+              "--family <id> --copy, fix it there), then run variants.py rebuild again, so one yes covers every "
+              "family")
+        return 6
+    print(f"PLAN {digest} ({len(clean)} famil{'y' if len(clean) == 1 else 'ies'})")
+    print("NEXT read each = line against its CHANGED text; where one now says more, variants.py new --family <id> "
+          "--copy, fix that line, and run rebuild again. Then show the user every line above in one message and, "
+          f"on their one yes, run variants.py rebuild --approve {digest}")
+    return 0
+
+
+def approve_plan(root, targets, digest, plan):
+    """rebuild --approve: every family of the plan, then today's held jobs rebuilt."""
+    if not PLAN_RE.fullmatch(plan or "") or plan != digest:
+        raise Refused("REFUSED the base resumes or the library changed since that plan: run variants.py rebuild "
+                      "again and show the user its lines")
+    approved, rebuilt, failed = 0, 0, 0
+    for fam, cur, target, old, _ in targets:
+        lines = []
+        try:
+            cmd_approve(root, fam, target, old.get("mode"), old.get("max_pages"), old.get("publications_max"),
+                        emit=lines.append, show_changed=False)
+        except Refused as e:
+            for line in lines + [str(e)]:
+                print(line)
+            return 1
+        for line in lines:
+            print(line)
+        approved += 1
+        if target == cur:
+            continue  # the same files approved again: their jobs are ready at once
+        for folder in held_folders(root, fam, target):
+            out = []
+            try:
+                status = tier_b(root, folder, family=fam, emit=out.append)
+            except Refused as e:
+                status = "prep_failed"
+                out.append(str(e))
+            if status in ("built", "fallback_base"):
+                rebuilt += 1
+            elif status != "claimed":
+                failed += 1
+                print(next((ln for ln in out if ln.startswith("PREP_FAILED")), f"PREP_FAILED {fam} {folder.name}"))
+    print(f"DONE approved={approved} rebuilt={rebuilt} prep_failed={failed}")
     return 0
 
 
@@ -1012,7 +1329,7 @@ def runner_names(item):
     except OSError:
         return set()
     try:
-        data = json.loads(text)
+        data = jobfs.loads_json(text)  # R3: the safe loader (BadJson is a ValueError)
         if isinstance(data, list):
             return {str(x) for x in data}
     except ValueError:
@@ -1068,7 +1385,7 @@ def item_terms(root, item, family, posting_text):
     path = item / "terms.json"
     if path.exists():
         try:
-            return terms_list(json.loads(path.read_text(encoding="utf-8-sig")))
+            return terms_list(jobfs.read_json(path, jobfs.MAX_FILE))  # R3: the safe loader
         except (OSError, ValueError):
             pass
     return terms_list(build_terms(root, family, posting_text))
@@ -1344,14 +1661,14 @@ class Parser(argparse.ArgumentParser):
 
 
 def main(argv=None):
-    ap = Parser(description=__doc__.splitlines()[0])
+    ap = Parser(description=__doc__.splitlines()[0], allow_abbrev=False)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("new", "approve", "check", "tune", "diff", "tier-b"):
-        p = sub.add_parser(name)
+    for name in ("new", "approve", "check", "tune", "diff", "tier-b", "rebuild"):
+        p = sub.add_parser(name, allow_abbrev=False)
         p.add_argument("--root", required=True, help="the JobSearch folder")
         if name in ("new", "approve"):
             p.add_argument("--family", required=True)
-        elif name != "diff":
+        elif name not in ("diff", "rebuild"):
             p.add_argument("--family")
         if name in ("tune", "diff", "tier-b"):
             p.add_argument("--item", required=True, help="the job folder")
@@ -1361,9 +1678,13 @@ def main(argv=None):
     ap_approve.add_argument("--mode", choices=sorted(build_resume.MODE_CAPS))
     ap_approve.add_argument("--max-pages", type=int)
     ap_approve.add_argument("--publications-max", type=int)
+    sub.choices["rebuild"].add_argument("--approve", metavar="PLAN",
+                                        help="the PLAN a rebuild printed: approve every family in it (the user's yes)")
     args = ap.parse_args(argv)
     root = Path(args.root)
     try:
+        if args.cmd == "rebuild":
+            return cmd_rebuild(root, args.approve)
         if args.cmd == "new":
             return cmd_new(root, args.family, args.copy)
         if args.cmd == "approve":

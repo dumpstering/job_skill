@@ -356,7 +356,9 @@ Then merge it into `achievement_library.md`, after copying the file to
 - Add each new entry under its role heading; a new role gets a new heading in
   date order.
 - A "Replaces:" entry replaces the old entry it names; the "Replaces:" prefix
-  never goes into the file.
+  never goes into the file. Then run `variants.py rebuild` (variants.md, "One
+  correction, every family"), so every base resume citing it is shown to me
+  in one message for one yes.
 - A corrected heading replaces the old heading, and the section's entries move
   with it.
 - Tell me in one line how many entries were added and replaced.

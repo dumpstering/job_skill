@@ -18,7 +18,7 @@ files, and never write the runner's files.
 
 - Setup writes `mode = "M"` until the runner is installed; switch to `"L"` after its selftest PASS lines.
 - Every pasted link (`/job <link>`) works in every mode.
-- In mode S run, in the sandbox: `python scripts/jobrunner.py daily --root <JobSearch> --mode S`
+- In mode S run, in the sandbox: `python "<skill>/scripts/jobrunner.py" daily --root "<folder>" --mode S`
   (a root-local lock, `state/run.lock`), then `tick --mode S` after writing events or requests.
   A tick that prints `TICK the daily is due (...)` asks you to run that daily now (mode S has no
   Daily task).
@@ -37,8 +37,9 @@ files, and never write the runner's files.
 | `runner/out/tracker.json` | the tracker snapshot (tracker.py reads it in mode L) |
 | `runner/out/results/<id>.json` | one per request: `{id, op, ok, at, lines, result}` |
 | `runner/out/staged.json` | Tier A files staged by `stage_tier_a`, with their sha256 |
-| `runner/out/liveness.json` | the next items' postings re-read by the tick: `{items: {job_key: {checked, closed, why}}}`; only through the URL discovery read (the posting's own url), and only when the unattended policy allows it or its ATS API endpoint; a board's apply link is never a fallback (`why` "skip ..." otherwise) |
-| `state/request_starts/<id>.json` | the attempt marker of a request being answered (removed when it ends) |
+| `runner/out/liveness.json` | the next items' postings re-read by the tick: `{items: {job_key: {checked, closed, why}}}`; only through the URL discovery read (the posting's own url), and only when the unattended policy allows it or its ATS API endpoint; a board's apply link is never a fallback (`why` "skip ..." otherwise); written after each item, and an item starts only while the tick has room for its reads inside its 10 minutes (`LIVENESS budget: <n> items left for the next tick`) |
+| `state/request_starts/<id>.json` | the attempt marker of a request being answered (removed when it ends; a tick removes one whose request was answered or that is over 30 days old) |
+| `runner/in/bad/` | event and request files that cannot be read as JSON (over 64 KB, nested deeper than 64, or not JSON after 3 tries), each with a `.reason.txt`; never deleted |
 | `reports/funnel.csv`, `logs/runner_<date>.log` | metrics and the log (keys redacted) |
 
 Every runner JSON carries `_rev` and `_sha256`. Read it with the verified
@@ -79,23 +80,32 @@ The tick applies them in name order (`tracker.py apply-events`), moves them to
 writes the `added` jobs into `queue/<date>/addendum_user.json` (it never
 writes in their folders, which are yours),
 moves the upload files of applied items to `upload/_done/<date>/` and updates
-`reports/funnel.csv`. A file that will not parse is retried on 3 ticks, then
-moved to `runner/out/events_rejected/` with a `.reason.txt`. `events.py overlay`
+`reports/funnel.csv`. A file that will not parse is retried on 3 ticks; one
+that cannot be read as JSON then (or at once when over 64 KB or nested
+deeper than 64) moves to `runner/in/bad/` with a `.reason.txt` and one
+`ERROR bad event file` line, and one that parses but breaks the rules moves
+to `runner/out/events_rejected/`; both count in `TRACKER REJECTED`. A request
+file that cannot be read as JSON is answered `ok` false and moves to
+`runner/in/bad/` too. No bad file stops a run, the card or `next`. `events.py overlay`
 (and `today_view.py`) read pending and applied events together, so you never wait for a tick.
 
 ## Requests (what you ask the runner to do)
 
 Write the arguments as one JSON object to `R/claude/args.json` with your file
-tool, then `python scripts/jobrunner.py request <op> --root R --json-file
+tool, then `python "<skill>/scripts/jobrunner.py" request <op> --root "<folder>" --json-file
 claude/args.json` (it reads the file once, validates, and creates
 `runner/in/requests/<id>_<op>.json`, printing `REQUEST <id> <op>`). A company
 name or a URL never goes on the command line (SKILL.md "Scripts"); `--json`
 inline is only for codes and numbers.
 Arguments are company names, URLs and folders inside the root; anything else
 is refused before the file is written, and the runner checks again. A URL is
-judged on netfetch's canonical host: a job board in any spelling (lnkd.in and
-licdn.com too), a host that is not plain `a-z 0-9 . -` (`DENY bad-url`), an R3
-list endpoint or a private address is refused. A request's own URL is
+judged by `netfetch.web_refusal`, the one check every link goes through: a
+job board in any spelling or reading (lnkd.in and licdn.com too), a link that
+is not a plain public web address (`DENY bad-url`: a backslash, space or
+control character, user info, a port other than 80 or 443, an IP address, a
+one-label or local name), a name that leads to a private address (`DENY
+non-public`) or an R3 list endpoint is refused, and never opened by any tool,
+the browser included. A request's own URL is
 allowed for that request only, never for the rest of the run. The next tick
 (at most 15 minutes) writes `runner/out/results/<id>.json`. The long ops
 (`resolve_leads`, `probe_url`, `rebuild_queue`) never run inside a tick: the
@@ -119,9 +129,10 @@ not finish it, and ask again only for a different link.
 
 ## The card and the next item
 
-- `python scripts/today_view.py card --root R` prints the card (1.2) word for word. Show it as printed.
-- `python scripts/today_view.py next --root R` prints the next item's handover data (`NEXT`, `OPEN`, `UPLOAD`, `LETTER`, `ANSWERS`, `SENSITIVE`, `DRAFT`, `ATTACH`, `HANDOVER` lines), the same item the card's `Starting #N` names. The resume is the file the job folder's `final.json` names (a strict Tier A build that passed and cites no library entry corrected since), else `resume_B.pdf`; it compares the staged copy's sha256 with it and names the job-folder file when they differ. Items with no resume (prep_failed) are held in one `WAIT` line. A Tier B file whose version (`tune_log.json`) is no longer approved gets a `HOLD` line instead of `OPEN` and `UPLOAD`, after every other item; `OPEN` is only ever a plain http(s) web address (`SKIP #NN bad link` otherwise). Its `SENSITIVE` and `Check:` lines come from `claude/<date>/sensitive_ok.json` (apply_batch.md). `card --short` and `next --short` are the easy day: no-account items, easiest ATS first, none with an open question, a sensitive field beyond the profile's salary and sponsorship not settled today, or no resume yet (daily.md).
+- `python "<skill>/scripts/today_view.py" card --root "<folder>"` prints the card (1.2) word for word. Show it as printed.
+- `python "<skill>/scripts/today_view.py" next --root "<folder>"` prints the next item's handover data (`NEXT`, `OPEN`, `UPLOAD`, `LETTER`, `ANSWERS`, `SENSITIVE`, `DRAFT`, `ATTACH`, `HANDOVER` lines), the same item the card's `Starting #N` names. The resume is the file the job folder's `final.json` names (a strict Tier A build that passed and cites no library entry corrected since), else `resume_B.pdf`; it compares the staged copy's sha256 with it and names the job-folder file when they differ. Items with no resume (prep_failed) are held in one `WAIT` line. A Tier B file whose version (`tune_log.json`) is no longer approved gets a `HOLD` line instead of `OPEN` and `UPLOAD`, after every other item. A Tier A build whose `final.json` cites a library entry corrected since gets a `REBUILD #<n>` line before the item served, never its Tier B file without a word (apply_batch.md step 1). `OPEN` is only ever a link `netfetch.web_refusal` passes (`SKIP #NN bad link` otherwise), and a job key, code or path that a command line must not carry gives `SKIP #NN unsafe value`. `ANSWERS ... needs` lists only the question ids still open. Its `SENSITIVE` and `Check:` lines come from `claude/<date>/sensitive_ok.json` (apply_batch.md). `card --short` and `next --short` are the easy day: no-account items, easiest ATS first, none with an open question, a sensitive field beyond the profile's salary and sponsorship not settled today, or no resume yet (daily.md).
 - `progress` gives the counts and the closing line; `diy` gives the do-yourself list (no links); `drafts` prints the free-text drafts of `morning.json` in full (the card shows one line each).
+- The day's first card adds one line when no job-alert lead (source `<board>_alert`, in `runner/in/leads/` or `state/leads_state.json`) has arrived for 3 days in a folder older than that, unless alert reading is off (`[alerts]`): the user types `/job alerts` (setup.md "Alerts").
 - The day's items are `queue.json`, its addenda and the `added` jobs not yet in `addendum_user.json`, so a job added from a link counts in `card`, `next` and `progress` at once.
 - `claude/<date>/morning.json` (written by job-morning, create-only) feeds the card:
   `{"v":1, "date", "prepared":false (only when written before today's list), "urgent":[{"text"}], "away":[{"text"}], "questions":[{"id","text","jobs":[n...],"all_jobs","saved"}], "waiting":<jobs>, "drafts":[{"n","label","question_id","text"}], "referral_drafts":[{"n","contact_ref"}], "weekly":["<line>"]}`. The sensitive line always comes from the fill plans.
@@ -129,7 +140,7 @@ not finish it, and ask again only for a different link.
 
 ## Selftest
 
-`jobrunner.py selftest [--net] --root R` prints one `PASS` or `FAIL` line per
+`jobrunner.py selftest [--net] --root "<folder>"` prints one `PASS` or `FAIL` line per
 check, then `SELFTEST PASS` or `SELFTEST FAIL <names>` (exit 1 on a FAIL):
 python, packages (openpyxl, python-docx, reportlab, pypdf), tzdata, folder
 (write in `runner/out/`), robots (a live robots.txt fetch with `--net`, else
@@ -151,7 +162,7 @@ when the PC runner has not run for 36 hours (daily.md); a FAIL changes nothing.
 - `errors` holding today's `offline <date>` entry (mode L): one line says the job sites could not be reached this morning and the job finder tries again later today.
 - `tracker_locked_since` over 2 hours: the card asks the user to close the spreadsheet.
 - `version` older than the skill: ask the user to double-click the new `install_runner.cmd`; `min_skill` newer than the skill: ask for the new skill zip.
-- `errors`: a config file that stopped parsing (the runner uses `state/last_good/`), or an optional step that failed. The card checks `settings.toml` and `search_profile.toml` itself, live, and gives one line per file that does not parse ("Your search_profile.toml has a typo ..., so I'm using the last copy that worked. Type /job settings to fix it.").
+- `errors`: a config file that stopped parsing (the runner uses `state/last_good/`), an optional step that failed, or a job board still in error after the poll's one retry (`board <key>: <why>`; its jobs come on the next run, and 3 days of errors pause it). The card checks `settings.toml` and `search_profile.toml` itself, live, and gives one line per file that does not parse ("Your search_profile.toml has a typo ..., so I'm using the last copy that worked. Type /job settings to fix it.").
 
 ## Exit codes
 

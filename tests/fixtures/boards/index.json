@@ -567,6 +567,27 @@
 "file": "bamboohr_gone.html",
 "url": "https://www.bamboohr.com/"
 },
+"https://jobs.bayer.com/job/Berkeley-Production-Specialist-II-Cell-Therapy-Cell-Culture-Berkeley%2C-CA-Cali/1429392733/": {
+"file": "sf_bayer_1429392733.html"
+},
+"https://jobs.bayer.com/job/Berkeley-QA-Validation-specialist-Berkeley%2C-CA-Cali/1452679733/": {
+"file": "sf_bayer_1452679733.html"
+},
+"https://jobs.bayer.com/job/Woodland-Tomato-Intern-for-Innovative-Projects-Cali/1443944333/": {
+"file": "sf_bayer_1443944333.html"
+},
+"https://jobs.bayer.com/search/?q=&locationsearch=&sortColumn=referencedate&sortDirection=desc": {
+"file": "sf_bayer_search.html"
+},
+"https://jobs.boehringer-ingelheim.com/job/Fremont%2C-CA-MFG-Associate%2C-Downstream%2C-Swing-Shift%2C-Fremont-CA-Unit/1447836733/": {
+"file": "sf_bi_1447836733.html"
+},
+"https://jobs.boehringer-ingelheim.com/job/Fremont%2C-CA-SeniorMaster-QC-Associate%2C-QC-Lab-General%2C-Fremont-CA-Unit/1445843933/": {
+"file": "sf_bi_1445843933.html"
+},
+"https://jobs.boehringer-ingelheim.com/search/?q=&locationsearch=&sortColumn=referencedate&sortDirection=desc": {
+"file": "sf_bi_search.html"
+},
 "https://jobs.dayforcehcm.com/api/auth/csrf": {
 "file": "dayforce_csrf.json"
 },
@@ -588,6 +609,18 @@
 },
 "https://jobs.jobvite.com/sutrobio/jobs": {
 "file": "jobvite_sutrobio.html"
+},
+"https://jobs.lbl.gov/": {
+"file": "sm_lbl_home.html"
+},
+"https://jobs.lbl.gov/jobs/biologist-postdoctoral-fellow-7656": {
+"file": "sm_lbl_7656.html"
+},
+"https://jobs.lbl.gov/jobs/postdoctoral-researcher-7681": {
+"file": "sm_lbl_7681.html"
+},
+"https://jobs.lbl.gov/jobs/student-assistant-7683": {
+"file": "sm_lbl_7683.html"
 },
 "https://mangomaterials.bamboohr.com/careers/52/detail": {
 "file": "bamboohr_mangomaterials_detail.json"
@@ -1470,5 +1503,17 @@
 },
 "https://www.comeet.com/jobs/pinnaclehomecare/1B.00E": {
 "file": "comeet_pinnacle.html"
+},
+"https://www.kaiserpermanentejobs.org/job/oakland/research-specialist-ii-research-support/641/100384886784": {
+"file": "tb_kp_100384886784.html"
+},
+"https://www.kaiserpermanentejobs.org/job/pleasanton/clinical-laboratory-scientist/641/100099196080": {
+"file": "tb_kp_100099196080.html"
+},
+"https://www.kaiserpermanentejobs.org/job/san-diego/laboratory-assistant-i/641/102926296608": {
+"file": "tb_kp_102926296608.html"
+},
+"https://www.kaiserpermanentejobs.org/sitemap.xml": {
+"file": "tb_kp_sitemap.xml"
 }
 }
