@@ -33,7 +33,7 @@ from dataclasses import asdict, dataclass, field, fields
 from datetime import date, datetime, timedelta, timezone, tzinfo
 from pathlib import Path
 
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 EVENT_SCHEMA = 1
 DEFAULT_TZ = "America/Los_Angeles"
 

@@ -89,6 +89,18 @@ Two messages to the user, with the file work between them.
   filled from the resume and confirmed in message 1 (formats in
   cv_publications.md). Leave them as templates when there is nothing to list.
 
+### Starting files already in the folder
+
+When `achievement_library.md`, `techniques.md`, `publications.md` or
+`config/search_profile.toml` is already there (someone prepared it for the
+user), keep it: never recreate it from a template or replace it with the
+preset. Check it against `master_resume.md`, add what the resume has and the
+file lacks (new entries, new IDs), run `library.py ids`, and show the user
+what is there for a yes. In `config/search_profile.toml` fill only what is
+empty (`[home] label` and `zip`), copy the preset's `watchlist.csv` and
+`boards.csv` if missing, and ask only the preferences the file leaves at
+their defaults.
+
 ### Achievement library
 
 Create `achievement_library.md` from

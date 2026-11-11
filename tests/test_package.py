@@ -506,7 +506,8 @@ def test_build_clean_checkout(tmp):
     code, out = run_build(src)
     assert code == 0, out
     dist = src / "dist" / f"v{VERSION}"
-    names = ["job-search-plugin.zip", "job.zip", f"jobrunner-{VERSION}.zip", "install_runner.cmd", "SETUP_GUIDE.md"]
+    names = ["job-search-plugin.zip", "job.zip", f"jobrunner-{VERSION}.zip", "install_runner.cmd", "SETUP_GUIDE.md",
+             "job-skill-full.zip"]
     assert sorted(p.name for p in dist.iterdir()) == sorted(names), list(dist.iterdir())
     after = tree_state(src)
     changed = sorted(k for k in set(before) | set(after) if before.get(k) != after.get(k))
@@ -548,6 +549,19 @@ def test_build_clean_checkout(tmp):
     assert f'set "VER={VERSION}"' in text
     assert f"SHA256 jobrunner-{VERSION}.zip {sha}" in out
     assert (dist / "SETUP_GUIDE.md").read_bytes() == (src / "SETUP_GUIDE.md").read_bytes()
+
+    # The one download for a new user: every part, byte for byte, plus the two guides as .txt.
+    with zipfile.ZipFile(dist / "job-skill-full.zip") as z:
+        full = {n: z.read(n) for n in z.namelist()}
+    parts = ["job-search-plugin.zip", "job.zip", f"jobrunner-{VERSION}.zip", "install_runner.cmd"]
+    assert sorted(full) == sorted("job-skill/" + n for n in parts + ["START_HERE.txt", "SETUP_GUIDE.txt"]), sorted(full)
+    for n in parts:
+        assert full["job-skill/" + n] == (dist / n).read_bytes(), n
+    start = full["job-skill/START_HERE.txt"].replace(b"\r\n", b"\n")
+    assert start == (src / "GETTING_STARTED.md").read_bytes().replace(b"\r\n", b"\n")
+    assert b"releases/latest/download/job-skill-full.zip" in start, "the guide links the full download"
+    for word in (b"install_runner.cmd", b"job-search-plugin.zip", b"/job setup", b"Extract All"):
+        assert word in start, word
 
     code, out2 = run_build(src)  # a rebuild gives the same bytes
     assert code == 0, out2

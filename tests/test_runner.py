@@ -990,6 +990,27 @@ def test_cmd_hash_mismatch():
     assert not app.exists(), app
     print("ok install_runner.cmd refuses a zip with one changed byte")
 
+    # The full download: with no argument, a jobrunner-<version>.zip beside the installer
+    # is used in place of the download, in a folder with spaces and parentheses, and is
+    # hash-checked like any other.
+    full = work / "job-skill (1)"
+    full.mkdir()
+    e = dict(os.environ, LOCALAPPDATA=str(work / "la"), TEMP=str(work / "tmp"), TMP=str(work / "tmp"))
+    (work / "la").mkdir()
+    (work / "tmp").mkdir()
+    (full / "install_runner.cmd").write_bytes(cmd.read_bytes())
+    (full / "jobrunner-0.0.0-test.zip").write_bytes(bad.read_bytes())
+    r = subprocess.run(["cmd", "/c", str(full / "install_runner.cmd")], capture_output=True, text=True,
+                       errors="replace", stdin=subprocess.DEVNULL, env=e, timeout=300)
+    assert r.returncode == 1 and "Using jobrunner-0.0.0-test.zip from this folder" in r.stdout, r.stdout[-800:]
+    assert "does not match its SHA-256" in r.stdout and "could not download" not in r.stdout, r.stdout[-800:]
+    (full / "jobrunner-0.0.0-test.zip").write_bytes(good.read_bytes())
+    r = subprocess.run(["cmd", "/c", str(full / "install_runner.cmd")], capture_output=True, text=True,
+                       errors="replace", stdin=subprocess.DEVNULL, env=e, timeout=300)
+    assert "Using jobrunner-0.0.0-test.zip from this folder" in r.stdout and "SHA-256 ok." in r.stdout, r.stdout[-800:]
+    assert "Done." not in r.stdout and r.returncode == 1, "the test zip holds no installer script: nothing installs"
+    print("ok install_runner.cmd uses the zip beside it (hash-checked), no download")
+
 
 def test_cmd_planted_files():
     """A certutil.bat (curl, tar, py, powershell, winget, where) saved beside

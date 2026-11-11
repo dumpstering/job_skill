@@ -43,7 +43,7 @@ import sys
 import zipfile
 from pathlib import Path
 
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 DESC_MAX = 200
 SKILL_MAX_LINES = 500
 ZIP_TIME = (2026, 11, 5, 0, 0, 0)
@@ -76,6 +76,7 @@ class Tree:
         self.agents = self.root / "plugin" / "agents"
         self.runner = self.root / "runner"
         self.guide = self.root / "SETUP_GUIDE.md"
+        self.start = self.root / "GETTING_STARTED.md"
         self.dist = (Path(dist).resolve() if dist else self.root / "dist") / f"v{VERSION}"
 
     def rel(self, p):
@@ -115,7 +116,7 @@ RUNNER_FILES = ("install_runner.ps1", "uninstall_runner.ps1", "requirements.lock
 
 def packaged(t):
     files = skill_files(t) + agent_files(t) + [t.runner / n for n in RUNNER_FILES]
-    files += [t.runner / "install_runner.cmd", t.guide]
+    files += [t.runner / "install_runner.cmd", t.guide, t.start]
     return [p for p in files if p.is_file()]
 
 
@@ -181,7 +182,7 @@ def check_skill(t):
         f = frontmatter(p.read_text(encoding="utf-8", errors="replace")) or {}
         if f.get("name") != p.stem or not f.get("description"):
             problems.append(f"FAIL {t.rel(p)}: agent frontmatter needs name {p.stem} and a description")
-    for need in [t.runner / n for n in RUNNER_FILES + ("install_runner.cmd",)] + [t.guide]:
+    for need in [t.runner / n for n in RUNNER_FILES + ("install_runner.cmd",)] + [t.guide, t.start]:
         if not need.is_file():
             problems.append(f"FAIL {t.rel(need)}: missing")
     cmd = t.runner / "install_runner.cmd"
@@ -325,6 +326,15 @@ def skill_description(t):
     return frontmatter((t.skill / "SKILL.md").read_text(encoding="utf-8"))["description"]
 
 
+FULL_ZIP = "job-skill-full.zip"   # no version in the name: releases/latest/download/<name> always works
+FULL_FOLDER = "job-skill"
+
+
+def crlf(data):
+    """Text with CRLF line ends, for Notepad on older Windows."""
+    return data.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n")
+
+
 def build(t):
     t.dist.mkdir(parents=True, exist_ok=True)
     skill = [(p.relative_to(t.skill).as_posix(), zip_bytes(p)) for p in skill_files(t)]
@@ -354,7 +364,16 @@ def build(t):
     tmp.write_bytes(t.guide.read_bytes())
     os.replace(tmp, t.dist / "SETUP_GUIDE.md")
 
-    for name in ("job-search-plugin.zip", "job.zip", runner_zip.name, "install_runner.cmd", "SETUP_GUIDE.md"):
+    # One download for a new user: everything above in one folder, the two guides as
+    # .txt (Notepad opens them), START_HERE first.
+    parts = ["job-search-plugin.zip", "job.zip", runner_zip.name, "install_runner.cmd"]
+    full = [(FULL_FOLDER + "/START_HERE.txt", crlf(t.start.read_bytes())),
+            (FULL_FOLDER + "/SETUP_GUIDE.txt", crlf(t.guide.read_bytes()))]
+    full += [(FULL_FOLDER + "/" + n, (t.dist / n).read_bytes()) for n in parts]
+    write_zip(t.dist / FULL_ZIP, full)
+
+    for name in ("job-search-plugin.zip", "job.zip", runner_zip.name, "install_runner.cmd", "SETUP_GUIDE.md",
+                 FULL_ZIP):
         f = t.dist / name
         print(f"wrote: {f} ({f.stat().st_size:,} bytes)")
     print(f"SHA256 {runner_zip.name} {sha}")

@@ -9,8 +9,9 @@ rem Every program is called by its full path, never by a bare name: a file
 rem named certutil.bat (or curl, tar, py, powershell) saved beside this
 rem installer in Downloads would otherwise run in its place. Python runs
 rem with -I, so nothing is imported from the folder this starts in.
-rem Testing: install_runner.cmd C:\path\jobrunner-<version>.zip uses that local
-rem file instead of the download (it is still hash-checked).
+rem A jobrunner-<version>.zip beside this file (the full download) is used in
+rem place of the download. Testing: install_runner.cmd C:\path\jobrunner-<version>.zip
+rem uses that local file (both are still hash-checked).
 setlocal EnableExtensions
 set "NoDefaultCurrentDirectoryInExePath=1"
 set "VER=@@VERSION@@"
@@ -30,6 +31,11 @@ set "PYALL=%SystemRoot%\py.exe"
 set "PY313=%LOCALAPPDATA%\Programs\Python\Python313\python.exe"
 
 echo Job finder %VER%: installing for %USERNAME% (no admin needed).
+rem The full download holds the runner zip beside this file: use it, no second
+rem download (it is hash-checked like any other). Tested outside a ( ) block, so a
+rem folder such as "job-skill (1)" cannot break the line.
+set "BESIDE=%~dp0jobrunner-%VER%.zip"
+if "%~1"=="" if exist "%BESIDE%" goto :beside
 if not "%~1"=="" (
     if not exist "%~f1" (
         echo ERROR %~1 not found.
@@ -43,6 +49,13 @@ if not "%~1"=="" (
         goto :fail
     )
 )
+goto :havezip
+
+:beside
+echo Using jobrunner-%VER%.zip from this folder.
+copy /y "%BESIDE%" "%ZIP%" >nul || goto :fail
+
+:havezip
 
 set "GOT="
 rem "call" lets the inner cmd expand the paths, so a ( or space in a path never breaks the for line.

@@ -8,6 +8,11 @@ attach the file it names, look over the page, and click Submit yourself.
 Every application goes into a spreadsheet, and Claude checks Gmail for
 replies.
 
+New to this? Start with the short guide (`START_HERE.txt` in the download,
+GETTING_STARTED.md on GitHub). The one download with every file is
+https://github.com/dumpstering/job_skill/releases/latest/download/job-skill-full.zip;
+unzip it with Extract All first.
+
 You need:
 - The Claude desktop app for Windows, signed in on a paid plan (Pro or
   higher; see "Checking your usage" for which plan).
@@ -87,9 +92,9 @@ You can also say "more to one company" to loosen the per-company limits.
 
 ## Day 2: the job finder (about 20 minutes, plus 15-20 per base resume)
 
-1. **Install the job finder.** Download `install_runner.cmd` from the
-   release page, https://github.com/dumpstering/job_skill/releases/latest,
-   and double-click it. If Windows SmartScreen warns you,
+1. **Install the job finder.** Double-click `install_runner.cmd` in the
+   unzipped `job-skill` folder (or download it from the release page,
+   https://github.com/dumpstering/job_skill/releases/latest). If Windows SmartScreen warns you,
    click More info > Run anyway. It needs no administrator rights. It
    installs Python for your user, checks that the download is the published
    one (it stops if not), and sets up two Windows tasks: one at 5:30 every

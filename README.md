@@ -1,8 +1,12 @@
 # job_skill
 
+**New here? Read [GETTING_STARTED.md](GETTING_STARTED.md)** and download
+[job-skill-full.zip](https://github.com/dumpstering/job_skill/releases/latest/download/job-skill-full.zip):
+one file with everything, no GitHub account or coding needed.
+
 A Claude skill and plugin, `job`, for a daily job search run from one folder
 on a Windows PC, plus a small local job finder (the runner) that does the
-zero-token work. Version 1.2.
+zero-token work. Version 1.3.
 
 - **The runner** (Python, Task Scheduler, on the user's PC) reads employer
   job boards every morning (Greenhouse, Lever, Ashby, Workday, BambooHR,
@@ -122,7 +126,7 @@ runner tick every 15 min: tracker.py apply-events -> applications.xlsx -> runner
 python -m venv .venv
 .venv\Scripts\python -m pip install python-docx reportlab pypdf openpyxl tzdata
 .venv\Scripts\python tests\run_all.py            # every tests\test_*.py; PASS <script> each, then ALL PASS
-python build_zip.py                              # writes dist\v1.3.0\ (refuses on a FAIL line)
+python build_zip.py                              # writes dist\v1.3.1\ (refuses on a FAIL line)
 ```
 
 One at a time (each prints `ok <name>` lines and `PASS`):
@@ -166,10 +170,10 @@ python job\scripts\today_view.py card --root <that copy> --date 2026-11-06
 It prints `DAILY ok queue=30 pool_left=41 discards=141 tier_b_built=30
 prep_failed=0`. `runner/README.md` has the installer commands.
 
-Release: `gh release create v1.3.0 dist/v1.3.0/* -R dumpstering/job_skill`.
+Release: `gh release create v1.3.1 dist/v1.3.1/* -R dumpstering/job_skill`.
 The release page is https://github.com/dumpstering/job_skill/releases/latest
 (setup.md and SETUP_GUIDE.md send the user there for `install_runner.cmd`).
-`install_runner.cmd` downloads `jobrunner-1.3.0.zip` from that release and
+`install_runner.cmd` downloads `jobrunner-1.3.1.zip` from that release and
 checks it against the SHA-256 build_zip.py wrote into it. Send
 `job-search-plugin.zip`, `install_runner.cmd` and `SETUP_GUIDE.md`;
 `job.zip` is the fallback.

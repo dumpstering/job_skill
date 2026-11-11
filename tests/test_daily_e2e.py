@@ -327,7 +327,7 @@ def test_day():
         assert sum(1 for it in q["items"] if it["tier"] == "A") == 4
         status = json.loads((root / "runner" / "out" / "status.json").read_text(encoding="utf-8"))
         assert status["last_daily"]["ok"] and status["last_daily"]["date"] == DAY.isoformat(), status
-        assert status["version"] == "1.3.0" and status["mode"] == "L" and "tracker_locked_since" in status
+        assert status["version"] == "1.3.1" and status["mode"] == "L" and "tracker_locked_since" in status
         with open(root / "reports" / "funnel.csv", encoding="utf-8", newline="") as f:
             rows = list(csv.DictReader(f))
         assert len(rows) == 1 and rows[0]["date"] == DAY.isoformat() and rows[0]["queued"] == "30", rows
