@@ -66,7 +66,7 @@ inside its 10 minutes, and writes `runner\out\liveness.json` after each one.
 
 ```
 powershell -NoProfile -File runner\install_runner.ps1 -DryRun -Folder C:\Temp\JobSearch
-powershell -NoProfile -File runner\install_runner.ps1 -NoTasks -NoKeys -AppSource C:\Temp\jobrunner-1.2.0.zip -InstallRoot C:\Temp\JR -Folder C:\Temp\JobSearch
+powershell -NoProfile -File runner\install_runner.ps1 -NoTasks -NoKeys -AppSource C:\Temp\jobrunner-1.3.0.zip -InstallRoot C:\Temp\JR -Folder C:\Temp\JobSearch
 powershell -NoProfile -File runner\uninstall_runner.ps1 -DryRun
 .venv\Scripts\python tests\test_runner.py        # lock, tick, requests, boundary, selftest, installer dry run
 .venv\Scripts\python tests\test_runner.py test_locked test_missed_daily   # only the named cases

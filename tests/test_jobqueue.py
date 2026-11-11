@@ -735,6 +735,44 @@ def test_borderline_seniority_last():
         assert not ctx.borderline({"job_key": "k3", "title": "Principal Scientist", "seniority": ""})
 
 
+def test_low_rank_last():
+    """Round 6: a job the gates marked low_rank (shift work when [gates]
+    shift_work is "last", or a job in a relocation region) is taken and
+    listed after everything else, borderline seniority included, however
+    high its fit; with room in the day it is still queued, at the end."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        data = json.loads((POOL / "pool_71.json").read_text(encoding="utf-8"))
+        gh = [it for it in data["items"] if it["ats"] == "greenhouse"]
+        shift, moving, asks_more = gh[0]["job_key"], gh[1]["job_key"], gh[2]["job_key"]
+        for it in data["items"]:
+            it["seniority"] = "borderline" if it["job_key"] == asks_more else ""
+            if it["job_key"] in (shift, moving, asks_more):
+                it["fit"] = 0.99
+        gh[0]["low_rank"] = ["shift"]
+        gh[1].update(low_rank=["relocate"], relocate="Shelbyville")
+        assert jobqueue.late_rank(gh[0]) == jobqueue.late_rank(gh[1]) == 2 and jobqueue.late_rank(gh[2]) == 1
+        assert jobqueue.late_rank(gh[3]) == 0
+        (root / "p.json").write_text(json.dumps(data), encoding="utf-8")
+        build(root, str(root / "p.json"))
+        got = {it["job_key"] for it in queue(root)["items"]}
+        assert len(got) == 30 and not got & {shift, moving, asks_more}, "the others fill the 30 slots first"
+    with tempfile.TemporaryDirectory() as tmp:  # a short pool: all three are queued, in that order, at the end
+        root = Path(tmp)
+        keep = [gh[0], gh[1], gh[2]] + [it for it in data["items"] if it["ats"] == "greenhouse"][3:9]
+        (root / "p.json").write_text(json.dumps(dict(data, items=keep)), encoding="utf-8")
+        build(root, str(root / "p.json"))
+        items = queue(root)["items"]
+        n = {it["job_key"]: it["n"] for it in items}
+        if {shift, moving, asks_more} <= set(n):
+            rest = [v for k, v in n.items() if k not in (shift, moving, asks_more)]
+            assert max(rest) < n[asks_more] < min(n[shift], n[moving]), n
+        else:  # a cap held some back: whatever was queued keeps the order
+            late = [n[k] for k in (shift, moving) if k in n]
+            first = [v for k, v in n.items() if k not in (shift, moving)]
+            assert not late or not first or min(late) > max(first), n
+
+
 def test_one_item_never_stops_build():
     """V4-01: a pool item holding half of a UTF-16 pair (a lone surrogate, as
     a board that cut an emoji sends it) is queued with U+FFFD in its files; an
@@ -800,7 +838,7 @@ def main():
                test_user_addendum, test_do_yourself_files_local_date, test_outcomes_next_day, test_user_skip_week,
                test_handover_carry, test_numbers_around_addendum, test_reservation_release,
                test_fold_old_pending_event, test_referral_link_in_queue, test_widen_on_usable_supply,
-               test_account_block_best_only, test_borderline_seniority_last, test_one_item_never_stops_build):
+               test_account_block_best_only, test_borderline_seniority_last, test_low_rank_last, test_one_item_never_stops_build):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

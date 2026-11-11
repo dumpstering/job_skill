@@ -849,6 +849,10 @@ def test_selftest():
     assert lines[-1] == "SELFTEST PASS", lines
     status = json.loads((root / "runner" / "out" / "status.json").read_text(encoding="utf-8"))
     assert status["selftest"]["net"] == "PASS" and status["selftest"]["recruitee"] == "PASS", status
+    # status.json names what this runner's tracker takes beyond v1.2.0 (a LinkedIn row), so a
+    # session never sends one to an older runner (today_view.py linkedin: LINKEDIN WAIT runner)
+    import jobrunner
+    assert status["features"] == list(jobrunner.FEATURES) and "linkedin_source" in status["features"], status
     code, lines, _ = run("selftest", root, offline=mock_net(TMP / "net_bad", robots_ok=False))
     assert code == 1 and any(ln.startswith("FAIL robots ") for ln in lines), lines
     assert lines[-1] == "SELFTEST FAIL robots", lines

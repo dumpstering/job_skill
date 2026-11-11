@@ -45,8 +45,9 @@ Two messages to the user, with the file work between them.
 - **LinkedIn alerts** (they feed the daily list): "On LinkedIn, create 5 job
   alerts now, daily, by email, one per broad title: <5 titles across the
   families>. I'll suggest 3 more each of the next days, up to 20." Claude
-  never opens LinkedIn; the user creates them. (Click path UNVERIFIED:
-  search Jobs for the title and place, then switch on "Set alert".)
+  never creates an alert, under any setting; the user creates them. (Click
+  path UNVERIFIED: search Jobs for the title and place, then switch on "Set
+  alert".)
 - **LinkedIn data export** (for referrals; Connections can take up to 48
   hours): "On LinkedIn, Me > Settings & Privacy > Data Privacy > Download
   your data. When the email comes, drop the zip into JobSearch\network\raw."
@@ -114,7 +115,7 @@ Create `config/` and write, backing up anything already there:
 2. **The search profile, from a preset when one fits.** Presets live in
    `templates/presets/`; `lifesci_bayarea` holds life-science title
    families, license knockouts and San Francisco Bay Area places, plus a
-   watch list of about 280 employer boards and a list of life-science job boards.
+   watch list of about 290 employer boards and a list of life-science job boards.
    - When the user's field and region match a preset, say so in one line and
      offer it. On yes: copy
      [../templates/presets/lifesci_bayarea/families.toml](../templates/presets/lifesci_bayarea/families.toml)
@@ -130,6 +131,21 @@ Create `config/` and write, backing up anything already there:
      the header-only [../templates/watchlist.csv](../templates/watchlist.csv)
      and [../templates/boards.csv](../templates/boards.csv); employers come
      in through `/job watch` and resolved leads.
+   - **Families from the user's own roles.** Set each `[[family]]`
+     `status` from the master resume: `active` for a family whose titles or
+     duties the user has held, `proposed` for a plausible neighbor (it joins
+     when the list runs short), `paused` for the rest. The preset ships its
+     manufacturing, MSAT, CMC, field-support and lab-operations families
+     paused; turn on the ones the resume supports. Say the active ones in
+     one line and take corrections.
+   - **Four preferences, one message, "skip" keeps the default:** the lowest
+     yearly pay worth applying for (`[gates] pay_floor`; a job that states
+     less is dropped, one that states nothing is kept); temp jobs yes or no
+     (no: drop `"temporary"` from `employment_types`; contract stays); shift
+     work (night, weekend, 12-hour) yes, or only after everything else
+     (`shift_work = "last"`); and whether another area is worth moving to,
+     and for what pay (one `[[home.region]]` table, `enabled = true`, its
+     own `pay_floor`).
 3. The unemployment answer: with a claim, set `[worksearch] claiming = true`
    and `state`, and ask the one follow-up [worksearch.md](worksearch.md)
    "Setup" names (in California, the DE 8405 date).
@@ -215,10 +231,28 @@ caught up by the first `/job`. Free plans have no scheduled tasks; then
    resumes in a minute or two (`runner/out/status.json` then shows
    `last_daily.counts.prep_failed` 0). Do this before the first `/job`: a
    running session holds that run until it ends.
-8. **The export:** when the LinkedIn zip has arrived, the user drops it into
+8. **LinkedIn in your own browser, one question** (asked once, here, and
+   never again unless the user brings it up). Say exactly: "Most new jobs
+   are on LinkedIn. I can work there in your own Chrome: search, read the
+   postings and fill Easy Apply for you. LinkedIn's rules do not allow
+   automated tools, and it can restrict an account; this mode works slowly
+   in your own browser, and you click Submit. Turn it on? (yes or no)"
+   - Only a clear yes turns it on ("yes", "turn it on"). Then back up
+     `config/settings.toml`, set `[linkedin] browser = true` (a file from an
+     earlier version has no `[linkedin]` table: add the template's), and say:
+     "LinkedIn is on: at most 25 applications a day there. Type /job
+     linkedin to start; say 'stop using LinkedIn' any time."
+   - "No", "later", "maybe", a question, or no answer: leave `browser =
+     false`, never guess, and say once: "Left off. You can still paste job
+     pages with /job paste." The change later is `/job settings`
+     ([settings.md](settings.md)).
+   - It needs the Claude in Chrome extension in the Chrome where the user is
+     signed in to LinkedIn ([linkedin_browser.md](linkedin_browser.md));
+     without it, say so and leave the setting off.
+9. **The export:** when the LinkedIn zip has arrived, the user drops it into
    `network\raw\` ([referrals.md](referrals.md)).
-9. **The usage check** on days 1-2 ([usage.md](usage.md)).
-10. Then the first `/job`.
+10. **The usage check** on days 1-2 ([usage.md](usage.md)).
+11. Then the first `/job`.
 
 ## Alerts (`/job alerts`, from the card's alert line)
 
@@ -234,7 +268,7 @@ short exchange:
    goes once a lead arrives.
 3. None found: "On LinkedIn, create 5 job alerts now, daily, by email, one
    per broad title: <5 titles across the families>. Reply done." (Sitting 1,
-   message 2). Claude never opens LinkedIn.
+   message 2). Claude never creates the alerts.
 4. The user wants no alert emails: back up `config/settings.toml`, set
    `[alerts] read_linkedin = false` and `senders = []`, and say the line
    will not come back.

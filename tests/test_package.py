@@ -37,7 +37,8 @@ VERSION = build_zip.VERSION
 DESCRIPTION = ("Daily job search: finds fresh postings, writes truthful tailored resumes, fills applications for "
                "you to submit, and tracks replies. Use for /job, a job link, or job emails.")
 # Spec 1.7, plus the two scheduled modes.
-ENTRY_POINTS = ["/job", "/job short", "/job <link>", "/job add <link>", "/job inbox", "/job log", "/job status",
+ENTRY_POINTS = ["/job", "/job short", "/job <link>", "/job add <link>", "/job paste", "/job linkedin", "/job inbox",
+                "/job log", "/job status",
                 "/job prep", "/job week", "/job worksearch", "/job usage", "/job settings", "/job variants",
                 "/job watch <company or careers URL>", "/job network", "/job setup", "morning", "inbox-watch"]
 # Capitalized words in code spans that are not script output lines.
@@ -53,9 +54,16 @@ FAILURE_CODES = ["closed", "login_required", "account_needed", "account_locked",
 GMAIL = "someone" + "@gmail.com"
 TOKEN_URL = "https://www.linkedin.com/comm/jobs/view/1?" + "otp" + "Token=abc"
 BOARD_HOST = re.compile(r"linkedin\.com|indeed\.(com|\*)|\bindeed\b", re.I)
+INDEED_HOST = re.compile(r"indeed\.(com|\*)|\bindeed\b", re.I)
 REFUSAL = re.compile(r"\bnever\b|\bnot\b|refus|\bdeny|denied|do-yourself|\bdrop|unopened|without opening|"
                      r"left out|leave out|"
                      r"\bno link\b|\bnor\b|\bban", re.I)
+# The one reference that tells Claude how to work on LinkedIn (the opt-in browser mode).
+LINKEDIN_DOC = "references/linkedin_browser.md"
+# A paragraph that sends Claude there names the setting or the gate with it.
+LINKEDIN_MODE = re.compile(r"/job\s+linkedin\b|linkedin_browser\.md")
+LINKEDIN_GATE = re.compile(r"\[linkedin\]\s+browser|browser\s+=\s+true|LINKEDIN GO")
+RISK = r"LinkedIn's rules do not allow\s+automated tools, and it\s+can restrict an\s+account"
 
 
 def docs():
@@ -256,20 +264,154 @@ def test_output_lines_exist():
 
 
 def test_no_job_board_fetch():
-    """No reference tells Claude to open a job board or keep an alert link."""
-    problems = []
-    for name, text in docs():
-        for para in re.split(r"\n\s*\n", text):
-            if para.lstrip().startswith("#"):
-                continue  # a heading names the site; the paragraphs under it are checked
-            # A resume's own profile link (linkedin.com/in/<name>) is content, never fetched.
-            if BOARD_HOST.search(para.replace("linkedin.com/in/", "")) and not REFUSAL.search(para):
-                problems.append(f"{name}: {para.strip()[:90]!r}")
-            if re.search(r"\b(store|save|keep)\b[^.]{0,40}\balert link", para, re.I) and \
-                    not re.search(r"\bnever\b", para, re.I):
-                problems.append(f"{name}: stores an alert link: {para.strip()[:90]!r}")
+    """No reference tells Claude to open a job board or keep an alert link.
+    The rule since the LinkedIn browser mode: Indeed and the other boards
+    appear only in refusal or do-yourself wording, in every file; so does
+    linkedin.com, in every file but linkedin_browser.md, the opt-in mode's
+    own reference (test_linkedin_rule holds that file to its gate and its
+    limits). A paragraph of any other file that sends Claude to that mode
+    names the setting or the LINKEDIN GO gate with it."""
+    problems = [p for name, text in docs() for p in board_problems(name, text)]
     assert not problems, "\n".join(problems)
-    print("ok job-board hosts appear only in refusal or do-yourself wording")
+    # the lint itself: each kind of planted paragraph is caught, in the right files only
+    other = "references/daily.md"
+    assert board_problems(other, "Open linkedin.com/jobs and search for the title.")
+    assert not board_problems(LINKEDIN_DOC, "Open linkedin.com/jobs and search for the title.")
+    assert board_problems(LINKEDIN_DOC, "Then open indeed.com and search there too.")
+    assert board_problems(other, "Then open indeed.com and search there too.")
+    assert board_problems(other, "When the list is done, run /job linkedin for the rest.")
+    assert board_problems(other, "Follow [linkedin_browser.md](linkedin_browser.md) for the rest.")
+    assert not board_problems(other, "With `[linkedin] browser = true`, offer /job linkedin.")
+    assert not board_problems(other, "After `LINKEDIN GO`, follow linkedin_browser.md.")
+    assert board_problems("references/inbox.md", "Keep the alert link for later.")
+    assert not board_problems(other, "The resume lists linkedin.com/in/name as written.")
+    print("ok job-board hosts appear only in refusal or do-yourself wording; the LinkedIn mode only with its "
+          "setting or gate")
+
+
+def board_problems(name, text):
+    """The job-board problems of one doc (test_no_job_board_fetch)."""
+    problems = []
+    for para in re.split(r"\n\s*\n", text):
+        if para.lstrip().startswith("#"):
+            continue  # a heading names the site; the paragraphs under it are checked
+        # A resume's own profile link (linkedin.com/in/<name>) is content, never fetched.
+        body = para.replace("linkedin.com/in/", "")
+        host = INDEED_HOST if name == LINKEDIN_DOC else BOARD_HOST
+        if host.search(body) and not REFUSAL.search(para):
+            problems.append(f"{name}: {para.strip()[:90]!r}")
+        if name != LINKEDIN_DOC and LINKEDIN_MODE.search(para) and not LINKEDIN_GATE.search(para):
+            problems.append(f"{name}: names the LinkedIn mode without its setting or gate: {para.strip()[:90]!r}")
+        if re.search(r"\b(store|save|keep)\b[^.]{0,40}\balert link", para, re.I) and \
+                not re.search(r"\bnever\b", para, re.I):
+            problems.append(f"{name}: stores an alert link: {para.strip()[:90]!r}")
+    return problems
+
+
+def test_linkedin_rule():
+    """The LinkedIn rule (v1.2.0: never automated). SKILL.md says what is and
+    is not automated under each [linkedin] browser setting; the mode is off
+    in the shipped settings; linkedin_browser.md states its gate and every
+    limit before its first step; setup asks once, with the risk in one plain
+    sentence, and only a clear yes turns it on; the README and the setup
+    guide carry that sentence; scripts and the runner refuse LinkedIn under
+    every setting, and the docs say so."""
+    import tomllib
+    import events
+    skill = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+    rules = skill.split("## Rules that hold everywhere", 1)[1].split("\n## ", 1)[0]
+    assert "**Never LinkedIn or Indeed.**" not in skill, "the v1.2.0 wording is replaced, not left beside the new rule"
+    need = {
+        "no script or fetch, ever": r"No script or fetch ever opens linkedin\.com",
+        "under every setting": r"refuse them under every setting",
+        "the default": r"`\[linkedin\] browser = false` \(the default\): never automated\. No browser\s+action "
+                       r"opens LinkedIn either",
+        "the opt-in": r"`\[linkedin\] browser = true` \(the user's own yes at setup\)",
+        "its reference": r"only as\s+\[references/linkedin_browser\.md\]\(references/linkedin_browser\.md\) says",
+        "its gate": r"only after `today_view\.py linkedin` prints `LINKEDIN GO`",
+        "its limits": r"never a profile, a message, a connection\s+request or anything about a person",
+        "a notice ends the day": r"a check or notice from LinkedIn\s+ends it for the day",
+        "Indeed never": r"Indeed and the other boards are never opened by any tool, under any\s+setting",
+        "the one link": r"plain\s+`linkedin\.com/jobs/view/<id>`, as its job key, never fetched",
+        "alert links": r"a link in one is never opened, stored, echoed or\s+hyperlinked",
+    }
+    for what, pat in need.items():
+        assert re.search(pat, rules), f"SKILL.md rules: {what}"
+    assert rules.index("browser = false") < rules.index("browser = true"), "the default comes first"
+
+    template = tomllib.loads((SKILL / "templates" / "settings.toml").read_text(encoding="utf-8"))
+    assert template["linkedin"] == {"browser": False, "per_day": 25, "min_seconds_between_actions": 4,
+                                    "stop_on_warning": True}, template.get("linkedin")
+    assert events.LINKEDIN_DEFAULTS == template["linkedin"], "the script's defaults are the template's"
+
+    doc = (SKILL / LINKEDIN_DOC).read_text(encoding="utf-8")
+    head, loop = doc.split("## The loop", 1)
+    need = {
+        "the opt-in setting": r"`\[linkedin\] browser = true`",
+        "off means not this file": r"With `browser =\s+false` \(the default\) nothing in this file is done",
+        "the gate": r"\*\*Only after `LINKEDIN GO`\.\*\*",
+        "any other line": r"Any other line:\s+say it in one plain sentence, open no LinkedIn page",
+        "the browser tool only": r"\*\*The browser tool only, in the user's own Chrome\.\*\*",
+        "never a script": r"Never the built-in\s+browser, a fetch tool, a script or the runner",
+        "scripts still refuse": r"refuse every LinkedIn link under every setting",
+        "never Submit": r"\*\*Never Submit\.\*\*",
+        "one tab": r"One LinkedIn tab, never two",
+        "the pace": r"wait at least the `pace=` seconds",
+        "per day": r"\*\*At most `per_day` a day\.\*\*",
+        "jobs only": r"Never a person's profile",
+        "no messages or connections": r"a message, InMail, connection request",
+        "nothing about people": r"Never read or keep anything about a person",
+        "the stop": r"`events\.py linkedin-stop --reason <code>`",
+        "what stops it": r"On a CAPTCHA or puzzle,\s+a sign-in or verification page, an \"unusual activity\"",
+        "never again today": r"open no LinkedIn page again today",
+        "never retry": r"Never retry, never work around it",
+        "the one link": r"`https://www\.linkedin\.com/jobs/view/<id>`, with nothing after the\s+number",
+        "no cookies or tokens": r"never store or print a\s+cookie, a token",
+        "sessions only": r"Never in job-morning or job-inbox",
+    }
+    for what, pat in need.items():
+        assert re.search(pat, head), f"{LINKEDIN_DOC} before its first step: {what}"
+    for code in events.LINKEDIN_STOPS:
+        assert f"`{code}`" in head or f"--reason {code}" in head, f"{LINKEDIN_DOC}: stop reason {code}"
+    need = {
+        "step 1 is the gate": r"1\. \*\*May I\?\*\* `today_view\.py linkedin`",
+        "the text file and the gates": r"`posting\.py --out\s.*--text-file\s.*--gate --args-file claude/args\.json`",
+        "the plain link as the key": r"\"_\":\s+\"https://www\.linkedin\.com/jobs/view/<id>\"",
+        "duplicates": r"`tracker\.py\s+check --posting",
+        "caps": r"`caps\.py check --family <family>",
+        "the employer's site": r"follow daily\.md \"/job add <link>\"",
+        "the row": r"--source LinkedIn\s+--found-via linkedin:browser",
+        "sensitive answers": r"Sensitive answers exactly as apply_batch\.md \"Sensitive confirmations\"",
+        "handed over, then Submit is the user's": r"status=\"Filled - awaiting\s+submit\".*click Submit\s+application, "
+                                                  r"then type s",
+        "a stop mid-job touches nothing more": r"touch\s+nothing more on LinkedIn",
+    }
+    for what, pat in need.items():
+        assert re.search(pat, loop, re.S), f"{LINKEDIN_DOC} loop: {what}"
+
+    setup = (SKILL / "references" / "setup.md").read_text(encoding="utf-8")
+    assert re.search(RISK + r"; this mode works slowly\s+in your own browser, and you click Submit", setup), \
+        "setup.md: the one plain sentence on the risk"
+    assert re.search(r"asked once", setup) and re.search(r"Only a clear yes turns it on", setup), "setup.md: once, a clear yes"
+    assert re.search(r"leave `browser =\s+false`, never guess", setup), "setup.md: anything else leaves it off"
+    settings = (SKILL / "references" / "settings.md").read_text(encoding="utf-8")
+    for key in ("`[linkedin] browser`", "`[linkedin] per_day`", "`[linkedin] min_seconds_between_actions`",
+                "`[linkedin] stop_on_warning`"):
+        assert key in settings, f"settings.md: {key}"
+    assert re.search(RISK, settings) and re.search(r"Only a clear\s+yes turns it on", settings), "settings.md: the notice"
+    for name in ("README.md", "SETUP_GUIDE.md"):
+        text = (ROOT / name).read_text(encoding="utf-8")
+        assert re.search(RISK, text), f"{name}: the risk sentence"
+        assert re.search(r"/job paste", text) and re.search(r"/job linkedin", text), f"{name}: both commands"
+    board = (SKILL / "references" / "ats" / "linkedin.md").read_text(encoding="utf-8")
+    assert re.search(r"`false` \(the default\): never automated", board), "ats/linkedin.md: the default, as v1.2.0"
+    assert re.search(r"No script and no fetch ever opens `linkedin\.com`", board) and \
+        re.search(r"under any setting", board), "ats/linkedin.md: scripts never, whatever the setting"
+    paste = (SKILL / "references" / "paste.md").read_text(encoding="utf-8")
+    assert re.search(r"Always available, whatever `\[linkedin\] browser` says", paste) and \
+        re.search(r"You open no page", paste), "paste.md: always available, nothing opened"
+    print("ok the LinkedIn rule: what is automated under each setting, off by default, the gate and limits before "
+          "any step, the risk sentence at setup and in the guides")
 
 
 def test_apply_batch_rules():
@@ -307,11 +449,16 @@ def test_setup_guide():
         "Submit is the user's": r"Submit is always yours",
         "network egress": r"Allow network\s+egress",
         "never a Project": r"Project",
+        "paste": r"`/job paste`",
+        "LinkedIn mode is a choice, off unless yes": r"optional, off unless you say yes",
+        "LinkedIn risk sentence": RISK + r"; this mode works slowly in your own browser, and\s+you\s+click Submit",
+        "LinkedIn stops for the day": r"stops using LinkedIn for the rest of that day",
+        "LinkedIn never messages": r"never messages anyone, never sends a connection request",
     }
     for what, pat in need.items():
         assert re.search(pat, text), what
     print("ok SETUP_GUIDE.md: plugin path (UNVERIFIED), runner, Trusted folders, browser, alerts, export, "
-          "usage, short days, weekly rejections, Submit is the user's; ASCII")
+          "usage, short days, weekly rejections, Submit is the user's, paste, the LinkedIn choice and its risk; ASCII")
 
 
 # ---------- build_zip.py ----------
@@ -480,6 +627,7 @@ def main():
     test_commands_match_argparse()
     test_output_lines_exist()
     test_no_job_board_fetch()
+    test_linkedin_rule()
     test_apply_batch_rules()
     test_setup_guide()
     test_walkthrough()

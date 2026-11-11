@@ -33,7 +33,7 @@ from dataclasses import asdict, dataclass, field, fields
 from datetime import date, datetime, timedelta, timezone, tzinfo
 from pathlib import Path
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 EVENT_SCHEMA = 1
 DEFAULT_TZ = "America/Los_Angeles"
 
@@ -50,6 +50,8 @@ SETTINGS_DEFAULTS = {
     "followups": {"tiers": ["A", "referral"], "days": 7},
     "apply": {"browser": "auto", "try_chrome_upload": True, "fill_mode": "sequential", "rounds_size": 5,
               "sensitive_confirm": "per_job", "screener": False, "mygreenhouse_autofill": False},
+    # the opt-in LinkedIn browser mode; events.linkedin_settings checks and bounds these values
+    "linkedin": {"browser": False, "per_day": 25, "min_seconds_between_actions": 4, "stop_on_warning": True},
     "caps": {"per_company_30d": 5, "per_family_per_company_30d": 2, "reject_reapply_days": 90,
              "ashby_one_open": True, "per_company_per_day": 2, "per_unit_30d": 2, "per_institution_30d": 15,
              "unit_segments": ["academic", "institute", "hospital", "government"],

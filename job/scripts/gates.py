@@ -19,7 +19,10 @@ The gates (list stage G1-G5 decide whether a detail call is made at all):
                   lead-only; robots. Every host is netfetch.host_of's canonical form.
     G2 seen       already pooled, queued, deferred, applied or closed: skipped, no log
     G3 location   [home] places, remote with a US restriction, or an unknown
-                  location (judged again on the detail). A second_ring place is
+                  location (judged again on the detail). A place of an enabled
+                  [[home.region]] (somewhere the user would move to) passes
+                  marked relocate: queued after the rest, under that region's
+                  own pay_floor. A second_ring place is
                   out until the widen step is on (reason location:second_ring when
                   title and age pass). An office label ('MBC Lab') of a watch-listed
                   employer is judged by that row's city.
@@ -33,6 +36,10 @@ The gates (list stage G1-G5 decide whether a detail call is made at all):
     G9 title      no require_any word in the requirements, or more avoid_any words
                   (another field's training: chemistry, formulation, biophysics,
                   LC-MS, machine learning) than require_any words, at least 2
+    G9 terms      a family's min_terms (a user's setting for a broad family):
+                  the posting names fewer of the user's terms (techniques.md
+                  and the family's terms, counted as fit counts them) than
+                  that: discard, reason title
     G9 seniority  judged against the user (R6): their years and title levels
                   from the achievement library's role headings, or [experience]
                   in settings.toml. Clearly beyond (a principal-level title two
@@ -42,6 +49,18 @@ The gates (list stage G1-G5 decide whether a detail call is made at all):
                   years, or DOMAIN_YEARS of a field the library never names):
                   kept as borderline, which the queue lists after the rest.
                   Industry-mode families only.
+    G9 work type  a temporary job when [gates] employment_types leaves out
+                  "temporary" (the title or the text says temp or temporary,
+                  and not also temp-to-hire, contract-to-hire or full-time):
+                  discard, reason employment:temporary (the title alone is
+                  judged at G4). Shift work (night, swing, 12-hour, weekend)
+                  is kept and marked low_rank when [gates] shift_work is
+                  "last": the queue lists it after everything else.
+    G9 pay        [gates] pay_floor (a yearly amount; 0 is off): a posting
+                  whose stated pay tops out below it is discarded, reason
+                  pay. Hourly rates count at 2,080 hours a year. A posting
+                  that states no pay is kept. A job in a relocation region
+                  ([[home.region]]) is judged by that region's pay_floor.
     G10 location  remote but not open to the US
     G11 AI text   text addressed to an AI: parked as needs-you, never queued
     G12 apply     no apply URL, or one G1 would refuse: discard; chat apply:
@@ -61,7 +80,10 @@ of them being 1.0. The queue lists the day's picks by fit, best first.
 Title terms (title_any, title_none, require_any, exclude_title_words) match whole
 words of the normalized title (jobkey.norm_title), so "capa" never hits
 "Capacity". "stem*" also matches longer words (microbiolog* -> microbiology),
-"a+b" needs every part, and "a|b" inside a part is either. An exclude word
+"a+b" needs every part, and "a|b" inside a part is either. A family's
+title_allow phrases are set aside before its title_none terms are tried
+("associate director" keeps an Associate Director title in a family whose
+title_none has "director"). An exclude word
 written in capitals of three letters or fewer ("IT", "HR", "VP") matches the
 title's own capitals only, never right after a number ('08-HR' is a shift).
 Of the families that match, the closest core or adjacent title wins (an
@@ -118,7 +140,11 @@ DUP_TITLE_SIM = 0.85      # the v1.1 SIMILAR ROLE threshold
 REPOST_BITS = 3
 BANDS = [(3, "0-3", 40), (7, "4-7", 25), (14, "8-14", 15), (30, "15-30", 5)]
 UNDATED = ("undated", 5)       # an undated posting the board has not shown to be new
-FILTER_REASONS = ("location", "title", "stale", "knockout", "seniority")
+FILTER_REASONS = ("location", "title", "stale", "knockout", "seniority", "pay", "employment")
+HOURS_PER_YEAR = 2080     # an hourly rate as a yearly amount (the pay floor)
+PAY_TEXT_MAX = 200_000    # the pay scan reads at most this much of a posting
+PAY_HITS_MAX = 60         # and at most this many dollar amounts
+SHIFT_TEXT_MAX = 60_000   # the shift and temporary scans read at most this much
 DISCARD_COLUMNS = ["date", "lane", "company", "role", "location", "host", "job_key", "gate", "reason",
                    "profile_hash"]
 ACADEMIC = {"academic", "institute", "government"}
@@ -288,6 +314,50 @@ def home_states(home):
     return frozenset(out)
 
 
+def amount(v):
+    """A yearly pay amount from a setting: a number from 0 to 10 million, else 0 (off)."""
+    return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and 0 < v <= 10_000_000 else 0.0
+
+
+def regions(home):
+    """The enabled [[home.region]] tables of [home]: places the user would
+    move to for the right job (off unless enabled = true). Each is {label,
+    places, states, pay_floor, unstated_pay}: pay_floor is that region's own
+    yearly floor (0: the [gates] floor), and unstated_pay says what happens
+    to a job there that states no pay ("drop", the default: moving needs a
+    stated range that reaches the floor; or "keep")."""
+    out = []
+    raw = (home or {}).get("region") or []
+    for r in raw if isinstance(raw, list) else []:
+        if not isinstance(r, dict) or r.get("enabled") is not True:
+            continue
+        places = [str(p) for p in r.get("places") or [] if str(p).strip()]
+        states = home_states(r)
+        label = str(r.get("label") or "").strip() or (places[0] if places else "/".join(sorted(states)))
+        if label and (places or states):
+            out.append({"label": label[:60], "places": places, "states": states,
+                        "pay_floor": amount(r.get("pay_floor")),
+                        "unstated_pay": "keep" if str(r.get("unstated_pay", "drop")).lower() == "keep" else "drop"})
+    return out
+
+
+def search_area(home, widen=()):
+    """(places, states) the board readers walk: [home] places (with the
+    second ring once widened) and states, plus every enabled region's."""
+    home = home or {}
+    places = [str(p) for p in home.get("places") or [] if str(p).strip()]
+    label = str(home.get("label") or "").split(",")[0].strip()
+    if label:
+        places.append(label)
+    if "second_ring" in widen:
+        places += [str(p) for p in home.get("second_ring") or [] if str(p).strip()]
+    states = set(home_states(home))
+    for r in regions(home):
+        places += [p for p in r["places"] if p not in places]
+        states |= r["states"]
+    return places, frozenset(states)
+
+
 class Rules:
     """search_profile.toml, profile.md and the widen state, ready for the gates."""
 
@@ -309,6 +379,12 @@ class Rules:
             ring = []
         self.second_ring = ring  # set aside (with their own discard reason) until the widen step is on
         self.home_states = home_states(self.home)
+        self.regions = regions(self.home)  # enabled [[home.region]] tables: places the user would move to
+        self.pay_floor = amount(gates.get("pay_floor"))  # yearly; 0 is off
+        kinds = gates.get("employment_types")
+        self.temp_ok = not isinstance(kinds, list) or any(str(k).strip().lower() in ("temporary", "temp")
+                                                          for k in kinds)
+        self.shift_last = str(gates.get("shift_work", "any")).strip().lower() == "last"
         self.remote_ok = str(self.home.get("remote", "us")).lower() == "us" or "remote_us" in self.widen
         self.families = [f for f in self.profile.get("family") or [] if self.family_on(f)]
         self.knockouts = [k for k in self.profile.get("knockout") or [] if k.get("id")]
@@ -333,6 +409,11 @@ class Rules:
                 "sponsorship": self.me["sponsorship"], "widen": self.widen}
         if me is not None:  # a seniority discard is judged again when the user's whole years or titles change
             body["experience"] = [int(me.years), int(me.industry_years), me.level, me.doctorate]
+        if any(f.get("min_terms") for f in self.families):  # and a min_terms discard when techniques.md changes
+            try:
+                body["techniques"] = hashlib.sha256(jobfs.Folder(self.root).techniques.read_bytes()).hexdigest()[:12]
+            except OSError:
+                body["techniques"] = ""
         canon = json.dumps(body, sort_keys=True, default=str, separators=(",", ":"))
         return hashlib.sha256(canon.encode("utf-8")).hexdigest()[:12]
 
@@ -569,6 +650,24 @@ def g1_host(p, v, fetcher):
 
 
 def place_verdict(part, rules, company_norm=""):
+    """home_place_verdict, and for a place that is out of the home area,
+    ('region', label) when it is in an enabled [[home.region]] (a place the
+    user would move to): one of that region's places with no state outside
+    the region beside it, or anywhere in its states when it lists no places."""
+    kind, what = home_place_verdict(part, rules, company_norm)
+    if kind == "out" and getattr(rules, "regions", None):
+        states, foreign, us = posting.region_of(part)
+        if not (foreign and not us and not states) and not re.search(r"\bremote\b", part, re.I):
+            pw = words(part)
+            for r in rules.regions:
+                if states and r["states"] and not states & r["states"]:
+                    continue
+                if any(term_hits(pl, pw) for pl in r["places"]) or (not r["places"] and states & r["states"]):
+                    return "region", r["label"]
+    return kind, what
+
+
+def home_place_verdict(part, rules, company_norm=""):
     """One place of a location field: ('in', place), ('remote', ''),
     ('unknown', why) or ('out', why). A place name counts only when no other
     state or country is named with it ('Dublin, Ireland', 'Newark, NJ',
@@ -603,7 +702,7 @@ def place_verdict(part, rules, company_norm=""):
         city = row.get("city") or ""
         if not city:
             return "unknown", "office label"
-        kind, what = place_verdict(city, rules)
+        kind, what = home_place_verdict(city, rules)
         if kind == "in":
             return "in", f"{what} (the watch list's city for {quote(part, 40)})"
         return "out", f"office label; the watch list's city {quote(city, 40)}"
@@ -640,6 +739,7 @@ def g3_location(p, v, rules):
     judged again on the detail record (detail_gates)."""
     loc = p.location or p.city or ""
     v.info["g3_loc"] = loc
+    v.info.pop("region", None)
     flags = v.info.setdefault("flags", [])
     if "location_unknown" in flags:
         flags.remove("location_unknown")
@@ -658,6 +758,11 @@ def g3_location(p, v, rules):
     hit = next((what for kind, what in verdicts if kind == "in"), None)
     if hit:
         v.gate_line("G3", True, f"{quote(loc)} place {quote(hit)}")
+        return None
+    region = next((what for kind, what in verdicts if kind == "region"), None)
+    if region:  # a place the user would move to: kept, marked, queued after the rest (pool_item)
+        v.info["region"] = region
+        v.gate_line("G3", True, f"{quote(loc)} relocate {quote(region)}")
         return None
     # 'Remote, Florida, USA' names the state the remote worker must live in;
     # a board's own remote flag with an office city ('Boston, MA') does not.
@@ -687,12 +792,25 @@ def family_match(fam, title):
     return tm, how
 
 
+def set_aside(title_words, allow):
+    """title_words with each title_allow phrase taken out, so a title_none
+    term no longer sees it: with title_allow ["associate director"] and
+    title_none ["director"], 'associate director msat' is kept and 'director
+    msat' (or 'associate director director msat') is not."""
+    out = f" {title_words} "
+    for phrase in allow or []:
+        w = words(str(phrase))
+        if w:
+            out = out.replace(f" {w} ", " _ ")
+    return out.strip()
+
+
 def family_score(fam, title):
     """(title_match, how, raw) for one family: raw is the token-set score of
     the core or adjacent title that matched (an exact title is 1.0), 0 for a
     title_any match or none."""
     tw = words(title)
-    none = first_hit(fam.get("title_none"), tw)
+    none = first_hit(fam.get("title_none"), set_aside(tw, fam.get("title_allow")))
     if none:
         return 0, f"title_none {none}", 0
     best = max(((dice(title, c), c) for c in fam.get("core_titles") or []), default=(0, ""))
@@ -750,6 +868,8 @@ def g4_title(p, v, rules):
     for word in rules.exclude:
         if exclude_hit(word, p.title, tw):
             return v.stop("G4", "discard", "title", f"exclude {quote(word)}")
+    if not getattr(rules, "temp_ok", True) and temp_marked(p.title):
+        return v.stop("G4", "discard", "employment:temporary", f"title {quote(p.title)}")
     fam, tm, how = pick_family(rules, p, p.lane)
     if not fam:
         return v.stop("G4", "discard", "title", quote(p.title))
@@ -863,6 +983,23 @@ def g9_words(p, v, fam):
     return None
 
 
+def g9_terms(p, v, fam, techniques, library_text=""):
+    """A family's min_terms (a user's own setting for a broad family; absent
+    or 0 is off): the posting must name at least that many of the user's
+    terms, counted as fit counts them (overlap: each techniques.md technique,
+    hands-on 1 and familiar 0.5, each family term, a general form at half).
+    A 'Scientist' posting that names none of the user's methods is another
+    specialty's. Not judged until techniques.md lists something."""
+    need = (fam or {}).get("min_terms")
+    if not isinstance(need, (int, float)) or isinstance(need, bool) or need <= 0 or not techniques:
+        return None
+    n = overlap(p.text, fam, techniques, library_text)
+    if n < need:
+        return v.stop("G9", "discard", "title", f"names {n:g} of your terms; {fam.get('id')} asks {need:g}")
+    v.gate_line("G9", True, f"names {n:g} of your terms")
+    return None
+
+
 # ---------- seniority against the user (R6) ----------
 #
 # Judged against the user, never by fixed words: the years and title levels
@@ -886,7 +1023,7 @@ GENERIC_FIELD = frozenset(
     "life biopharmaceutical biopharma advanced managing manage management projects project end hands on "
     "relevant cross functional functional team teams".split())
 LEVEL_WORDS = (("senior principal", 6), ("distinguished", 6), ("associate principal", 5), ("principal", 5),
-               ("senior staff", 5), ("staff", 4), ("senior", 3))
+               ("associate director", 5), ("senior staff", 5), ("staff", 4), ("senior", 3))
 LEVEL_NAMES = {0: "entry", 1: "entry", 2: "scientist", 3: "senior", 4: "staff", 5: "principal", 6: "senior principal"}
 ASSOCIATE_TRACK = re.compile(r"\b(research associate|associate scientist|research assistant|lab associate|"
                              r"laboratory associate|associate specialist|assistant|technician|technologist)\b")
@@ -1175,6 +1312,201 @@ def g9_seniority(p, v, fam, rules, unread=False):
     if verdict != "ok":
         v.info["seniority"] = "borderline"
         v.gate_line("G9", True, f"seniority borderline: {why}")
+    return None
+
+
+# ---------- work type and pay (the user's own limits) ----------
+#
+# All three read [gates] settings of search_profile.toml, so they are the
+# user's and never a preset's: employment_types (a temporary job is out when
+# "temporary" is not listed), shift_work ("last": shift jobs are queued after
+# everything else) and pay_floor (a yearly amount; 0 is off).
+
+TEMP = re.compile(r"(?i)\b(?:temp|temporary)\b")
+TEMP_KEEP = re.compile(r"(?i)\b(?:temp(?:orary)?[ -]to[ -](?:hire|perm\w*)|contract[ -]to[ -](?:hire|perm\w*)|"
+                       r"full[ -]?time|permanent)\b")
+TEMP_TEXT = re.compile(r"(?i)\b(?:this is an?|is an?|for an?|as an?)\s+(?:\d{1,2}[ -](?:month|week)s?\s+)?"
+                       r"(?:temporary|temp)\s+(?:position|role|assignment|job|opportunity|appointment|contract)\b|"
+                       r"\b(?:employment|job|position|worker|assignment|employee)\s+type\s*:?\s*(?:temporary|temp)\b")
+SHIFT_TITLE = re.compile(r"(?i)\b(?:night|nights|swing|graveyard|overnight|evening|evenings|weekend|weekends|pm|"
+                         r"2nd|second|3rd|third|rotating)\s*shifts?\b|\b(?:10|12)[ -]?h(?:ou)?rs?\b|"
+                         r"\b(?:nights|evenings|weekends|graveyard|overnight|swing)\b")
+SHIFT_TEXT = re.compile(r"(?i)\b(?:night|swing|graveyard|overnight|weekend|rotating|2nd|second|3rd|third|"
+                        r"12[ -]?hour)[ -]shifts?\b")
+SHIFT_MAYBE = re.compile(r"(?i)\b(?:may|might|occasional\w*|as needed|if needed|when needed|flexib\w+|willing\w*|"
+                         r"ability to|able to|some|including|or)\b")
+
+
+def temp_marked(title, text=""):
+    """The words that mark a temporary job, or '': 'temp' or 'temporary' in
+    the title, or a plain statement in the text ('This is a temporary
+    position', 'Employment type: Temporary'). Never when the title or the
+    text also says temp-to-hire, contract-to-hire, full-time or permanent
+    ('QA Associate - Temporary and Full Time' is both)."""
+    title, text = str(title or ""), str(text or "")[:SHIFT_TEXT_MAX]
+    m = TEMP.search(title)
+    if m:
+        return "" if TEMP_KEEP.search(title) else m.group(0)
+    m = TEMP_TEXT.search(text)
+    if m and not TEMP_KEEP.search(title) and not re.search(r"(?i)\b(?:temp(?:orary)?|contract)[ -]to[ -](?:hire|perm)",
+                                                          text):
+        return " ".join(m.group(0).split())
+    return ""
+
+
+def shift_marked(title, text=""):
+    """The words that mark shift work, or '': night, swing, graveyard,
+    evening, weekend, second or third shift, or 10- or 12-hour days, in the
+    title ('Night Shift', '- Evenings', '12-HR'), or stated as the job's own
+    schedule in the text ('This is a swing shift position'). 'May require
+    occasional weekend shifts' is not a shift job; a day shift is not marked."""
+    m = SHIFT_TITLE.search(str(title or ""))
+    if m:
+        return " ".join(m.group(0).split())
+    text = str(text or "")[:SHIFT_TEXT_MAX]
+    for i, m in enumerate(SHIFT_TEXT.finditer(text)):
+        if i >= 20:
+            break
+        if not SHIFT_MAYBE.search(text[max(0, m.start() - 80):m.start()]):
+            return " ".join(m.group(0).split())
+    return ""
+
+
+def g9_work_type(p, v, rules, unread=False):
+    """A temporary job the user does not take is discarded
+    (employment:temporary, a filter reason); shift work is marked low_rank so
+    the queue lists it after everything else. Unread postings are judged by
+    their title only."""
+    text = "" if unread else (p.text or "")
+    if not getattr(rules, "temp_ok", True):
+        why = temp_marked(p.title, text)
+        if why:
+            return v.stop("G9", "discard", "employment:temporary", quote(why))
+    if getattr(rules, "shift_last", False):
+        why = shift_marked(p.title, text)
+        if why:
+            low = v.info.setdefault("low_rank", [])
+            if "shift" not in low:
+                low.append("shift")
+            v.gate_line("G9", True, f"shift work {quote(why)}: listed after the rest")
+    return None
+
+
+MONEY = r"(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d{1,7}(?:\.\d{1,2})?)\s?([kK]\b)?"
+PAY_AMOUNT = re.compile(r"\$\s?" + MONEY + r"(?:\s*(?:-|\u2013|\u2014|to|and|through)\s*\$?\s?" + MONEY + r")?")
+# A pay word right beside the amount (PAY_STRONG, within 90 characters before or 40 after) makes it pay; a
+# weaker one further off (PAY_NEAR, within 220 before) only for a range ('... base salary range for the <long
+# title> role in the United States is: $155,600 - $233,400').
+PAY_STRONG = re.compile(r"(?i)\b(?:salary|salaries|compensation|wage|wages|hourly|pay range|pay rate|base pay|"
+                        r"pay scale|annually|annual|per year|a year|per hour|an hour|ote)\b|/(?:yr|year|hr|hour)\b")
+PAY_NEAR = re.compile(r"(?i)\b(?:salary|salaries|compensation|pay|paid|wage|wages|hourly|rate|base|earnings|"
+                      r"annually|annual|per year|a year|per hour|an hour|ote)\b|/(?:yr|year|hr|hour)\b")
+PAY_NOT = re.compile(r"(?i)\b(?:bonus|stipend|reimburs\w*|referral|sign[ -]?on|signing|relocation|tuition|equity|"
+                     r"grant\w*|award\w*|funding|raised|revenue|budget|401|savings|fee|fees|cost|costs|valued|quota|"
+                     r"allowance|insurance|coverage|contribution\w*|match\w*|discount\w*|credit\w*|"
+                     r"scholarship\w*|loan\w*|deductible)\b[^.$]{0,30}$")
+PAY_BIG = re.compile(r"(?i)^\s?(?:m\b|mm\b|b\b|bn\b|million|billion)")
+PAY_MONTHLY = re.compile(r"(?i)^\s*(?:usd\s*)?(?:/|per\s+|a\s+)\s*(?:mo|month)\b|\b(?:monthly|per month)\b[^.$]{0,60}$")
+
+
+def yearly(value, unit):
+    """A stated amount as a yearly one (HOURS_PER_YEAR hours, 12 months),
+    or None when it is no plausible pay: under $10 or over $500 an hour,
+    under $15,000 or over $3 million a year."""
+    if unit == "hour":
+        return value * HOURS_PER_YEAR if 10 <= value <= 500 else None
+    if unit == "month":
+        value *= 12
+    return value if 15_000 <= value <= 3_000_000 else None
+
+
+def pay_in_text(text):
+    """[(low, high)] yearly amounts for each pay range or single amount the
+    text states: a dollar amount with a pay word near it ('salary range',
+    'hourly rate', 'compensation', '/hr'), not a bonus, stipend, funding or
+    revenue figure. An amount under 1,000 with no 'k' is an hourly rate."""
+    text = " ".join(str(text or "")[:PAY_TEXT_MAX].split())
+    out, last = [], None
+    for i, m in enumerate(PAY_AMOUNT.finditer(text)):
+        if i >= PAY_HITS_MAX:
+            break
+        before, after = text[max(0, m.start() - 220):m.start()], text[m.end():m.end() + 60]
+        if PAY_BIG.match(after) or PAY_NOT.search(before):
+            continue
+        # a pay word near it, or another range right after one that had it ('... for a Scientist 3 and
+        # $124,800 to $231,800 for a Scientist 4')
+        if not (PAY_STRONG.search(before[-90:]) or PAY_STRONG.search(after[:40]) or
+                (m.group(3) and PAY_NEAR.search(before)) or (last is not None and m.start() - last <= 300)):
+            continue
+        nums = []
+        for raw, k in ((m.group(1), m.group(2)), (m.group(3), m.group(4))):
+            if raw:
+                nums.append((float(raw.replace(",", "")), bool(k)))
+        k_any = any(k for _, k in nums)
+        vals = [n * 1000 if (k or (k_any and n < 1000)) else n for n, k in nums]
+        if max(vals) < 1000:  # '$45 - $50', with or without 'per hour'
+            unit = "hour"
+        elif max(vals) < 15_000 and (PAY_MONTHLY.search(after) or PAY_MONTHLY.search(before)):
+            unit = "month"
+        else:  # '$77,000 - $85,000 USD per hour or annually' is a yearly amount
+            unit = "year"
+        vals = [y for y in (yearly(x, unit) for x in vals) if y is not None]
+        if vals:
+            out.append((min(vals), max(vals)))
+            last = m.end()
+    return out
+
+
+def stated_pay(p):
+    """(low, high, basis) the posting's stated pay as yearly US dollars, or
+    None when it states none: the reader's salary field (basis 'field'),
+    else the ranges in its text (basis 'text'; the lowest low and the
+    highest high of all of them, so a posting with a range per level or per
+    place is judged by its best one)."""
+    s = getattr(p, "salary", None)
+    if isinstance(s, dict) and str(s.get("currency") or "USD").strip().upper() in ("USD", "US$", "$"):
+        period = str(s.get("period") or "").lower()
+        vals = [float(x) for x in (s.get("min"), s.get("max"))
+                if isinstance(x, (int, float)) and not isinstance(x, bool) and x > 0]
+        if vals:
+            unit = "hour" if "hour" in period else "month" if "month" in period else \
+                "year" if ("year" in period or "annual" in period or max(vals) >= 1000) else "hour"
+            vals = [y for y in (yearly(x, unit) for x in vals) if y is not None]
+            if vals:
+                return min(vals), max(vals), "field"
+    ranges = pay_in_text(getattr(p, "text", "") or "")
+    if ranges:
+        return min(lo for lo, _ in ranges), max(hi for _, hi in ranges), "text"
+    return None
+
+
+def dollars(n):
+    return f"${n:,.0f}"
+
+
+def g9_pay(p, v, rules, unread=False):
+    """The pay floor: [gates] pay_floor, or for a job in a relocation region
+    that region's own pay_floor when it has one. A stated range that tops
+    out below the floor is discarded (pay, a filter reason: judged again
+    when the floor changes). No stated pay: kept, except in a relocation
+    region whose unstated_pay is "drop" (moving needs a stated range)."""
+    region = next((r for r in getattr(rules, "regions", []) if r["label"] == v.info.get("region")), None)
+    floor = (region or {}).get("pay_floor") or getattr(rules, "pay_floor", 0)
+    if not floor:
+        v.gate_line("G9", True, "no pay floor")
+        return None
+    pay = stated_pay(p)
+    where = f" for {region['label']}" if region else ""
+    if pay is None:
+        if region and region["unstated_pay"] == "drop" and not unread:
+            return v.stop("G9", "discard", "pay", f"no stated pay; the floor{where} is {dollars(floor)}")
+        v.gate_line("G9", True, "no stated pay")
+        return None
+    v.info["pay"] = [round(pay[0]), round(pay[1])]
+    if pay[1] < floor:
+        return v.stop("G9", "discard", "pay", f"tops out at {dollars(pay[1])} a year ({pay[2]}); "
+                                              f"the floor{where} is {dollars(floor)}")
+    v.gate_line("G9", True, f"pay up to {dollars(pay[1])} ({pay[2]})")
     return None
 
 
@@ -1505,7 +1837,11 @@ class GateRun:
         if v.ok and (unread or not self.recheck_simhash(p, v)):
             fam = next((f for f in self.rules.families if f.get("id") == v.info.get("family")), None)
             _ = (g7_knockouts(p, v, self.rules) or g8_other(p, v, self.rules)
-                 or (None if unread else g9_words(p, v, fam)) or g9_seniority(p, v, fam, self.rules, unread)
+                 or (None if unread else g9_words(p, v, fam))
+                 or (None if unread or not (fam or {}).get("min_terms") else
+                     g9_terms(p, v, fam, self.techniques(), self.library_text()))
+                 or g9_seniority(p, v, fam, self.rules, unread)
+                 or g9_work_type(p, v, self.rules, unread) or g9_pay(p, v, self.rules, unread)
                  or g10_remote(p, v) or g11_ai(v, ai_text)
                  or g12_route(p, v))
         self.finish(p, v, reading)
@@ -1594,6 +1930,14 @@ class GateRun:
                  posting_status=v.info.get("posting_status", "read"), markdown=md, ai_text=ai_text,
                  hidden=hidden, pooled_on=self.today.isoformat(), folder="",
                  seniority=v.info.get("seniority", ""))
+        low = list(v.info.get("low_rank") or [])
+        if v.info.get("region"):  # a place the user would move to: after the home jobs
+            d["relocate"] = v.info["region"]
+            low.append("relocate")
+        if low:  # the queue lists these after everything else (jobqueue.low_rank)
+            d["low_rank"] = low
+        if v.info.get("pay"):  # the stated pay as yearly dollars [low, high]
+            d["pay_stated"] = v.info["pay"]
         return d
 
     def save_trail(self, p, v):

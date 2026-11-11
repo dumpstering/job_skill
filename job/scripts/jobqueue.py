@@ -28,7 +28,9 @@ batch 1 (no-account Tier B items by fit, best first), the account block
 (new-account tenants grouped by tenant, only a tenant whose best job is at or
 above the day's median fit; another tenant's jobs take their places by fit),
 the rest by fit, the jobs whose seniority asks more than the user has
-(the gates' borderline mark, R6), and the prep_failed items last; never the
+(the gates' borderline mark, R6), then the jobs the gates marked low_rank
+(shift work when [gates] shift_work is "last"; a job in a relocation region),
+and the prep_failed items last; never the
 same employer twice in a row and at most 3 in a row on one ATS host.
 Borderline jobs are also taken last for the day's slots. Job folders get posting.md, posting.json and .runner_files. Folders
 of jobs that got no tracker row within 30 days move to
@@ -573,7 +575,7 @@ def mark_tiers(picked, ctx, tier_a):
             return 2, "fresh_fit"
         return 3, "fit"
     ranked = sorted((it for it in picked if not it.get("_held")),
-                    key=lambda it: (reason(it)[0], borderline(it), -float(it.get("fit") or 0), -it["_score"],
+                    key=lambda it: (reason(it)[0], late_rank(it), -float(it.get("fit") or 0), -it["_score"],
                                     it["job_key"]))
     chosen = {it["job_key"] for it in ranked[:tier_a]}
     for it in picked:
@@ -605,10 +607,23 @@ def borderline(it):
     return it.get("seniority") == "borderline"
 
 
+def low_rank(it):
+    """The gates' low_rank mark: shift work the user ranks last ([gates]
+    shift_work = "last") or a job in a relocation region ([[home.region]])."""
+    return bool(it.get("low_rank"))
+
+
+def late_rank(it):
+    """0 for most jobs, 1 for borderline seniority, 2 for a low_rank job:
+    the order they are taken and listed in, each group by fit."""
+    return 2 if low_rank(it) else 1 if borderline(it) else 0
+
+
 def sequence(picked, batch_size):
     """Jobs handed over on an earlier day with no `s` (to ask about), batch 1
     (no-account Tier B by fit, then score), the account block, the rest by
-    fit, the items whose seniority is borderline (R6), and last the items
+    fit, the items whose seniority is borderline (R6), the items marked
+    low_rank (shift work ranked last, relocation), and last the items
     waiting for a variant approval (prep_failed). A new-account tenant's
     items come forward as the account block (grouped, one account for
     several jobs) only when its best item is among the day's best by fit: at
@@ -626,7 +641,8 @@ def sequence(picked, batch_size):
     ordered = by_fit(picked)
     first = [it for it in ordered if it.get("_carried")]
     last = [it for it in ordered if it.get("_held") and not it.get("_carried")]
-    late = [it for it in ordered if borderline(it) and it not in first and it not in last]
+    late = [it for it in ordered if late_rank(it) and it not in first and it not in last]
+    late.sort(key=late_rank)  # stable: borderline seniority by fit, then the low_rank jobs by fit
     ordered = [it for it in ordered if it not in first and it not in last and it not in late]
     new_items = [it for it in ordered if it["_account"] == "new"]
     tenants = list(dict.fromkeys(tenant_of(it) for it in new_items))
@@ -958,7 +974,7 @@ def build(root, today=None, pool_path=None, emit=print, prep=None):
     for it in cands:
         score(it, ctx)
     # borderline seniority (R6) is taken only after the rest, so it never holds a cap slot a better job could
-    cands.sort(key=lambda it: (ctx.borderline(it), -it["_score"], it["job_key"]))
+    cands.sort(key=lambda it: (2 if low_rank(it) else int(ctx.borderline(it)), -it["_score"], it["job_key"]))
     asm = Assembly(ctx, size)
     picked = asm.run(cands)
     mark_tiers(picked, ctx, asm.tier_a)
@@ -1064,7 +1080,7 @@ def addendum(root, today=None, pool_path=None, limit=None, emit=print):
     ctx.load_referrals(cands)
     for it in cands:
         score(it, ctx)
-    cands.sort(key=lambda it: (ctx.borderline(it), -it["_score"], it["job_key"]))
+    cands.sort(key=lambda it: (2 if low_rank(it) else int(ctx.borderline(it)), -it["_score"], it["job_key"]))
     asm = Assembly(ctx, limit)
     asm.tier_a = 0  # Tier A prep happens in the morning; late items are Tier B only
     picked = asm.run(cands, fill_held=False)  # `more` is for jobs it can send today

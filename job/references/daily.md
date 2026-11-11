@@ -37,7 +37,10 @@ Commands below are shortened (SKILL.md "Scripts"); each takes
    (`2 jobs on hold (#4, #9): ...`; the user's `/job variants` then follows
    variants.md "One correction, every family"), a line for tailored
    resumes being rebuilt after one (`1 tailored resume (#3) cites something
-   you corrected today; ...`; apply_batch.md step 1), on the day's first
+   you corrected today; ...`; apply_batch.md step 1), one LinkedIn line
+   while `[linkedin] browser` is on or LinkedIn was closed today (what was
+   sent there, how many more today, or that it is closed: "/job linkedin",
+   below), on the day's first
    card a line when no job-alert email has come in for 3 days (`... Type
    /job alerts ...`: setup.md "Alerts"), and it ends
    `Starting #<n> now.`, the same item `next` gives. With no job finder
@@ -209,6 +212,23 @@ in its turn like the runner's items.
   board link, ats/linkedin.md; any `DENY` link is never opened by any tool,
   the browser included; `gates.py explain --job-key <key>` names the gate
   that stopped one).
+
+## /job paste and /job linkedin (jobs from outside the list)
+
+The list alone gives a few applications a day; these two add the rest.
+Both count toward the day: `today_view.py progress` prints `OFFLIST
+linkedin=<n> other=<n>` and its closing line adds them.
+- **`/job paste`** ([paste.md](paste.md)), always available: the user pastes
+  several copied job pages; you prepare them as one batch and walk through
+  them one at a time. Nothing is opened.
+- **`/job linkedin`** ([linkedin_browser.md](linkedin_browser.md)), only
+  with `[linkedin] browser = true`: run `today_view.py linkedin` first and
+  act on LinkedIn only after `LINKEDIN GO`. Any other line (`LINKEDIN off`,
+  `STOPPED`, `DONE`, `WAIT`): say it in one plain sentence and offer `/job
+  paste`. Never in job-morning or job-inbox, and never on a short day
+  unless the user types it.
+- When the card carries the LinkedIn line and the list is done, offer
+  `/job linkedin` beside "more". Never start it unasked.
 
 ## /job status
 

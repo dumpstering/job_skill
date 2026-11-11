@@ -29,9 +29,18 @@ day. Two things you set up once add more, so do both:
 - **Two free keys, Adzuna and USAJOBS** (Day 2 step 2). About 5 minutes
   each.
 If no alert email has come in for 3 days, the morning card says so; type
-`/job alerts` and Claude fixes it with you. To reach 20 a day, add the
-do-it-yourself list Claude shows you, and LinkedIn's Easy Apply by hand;
-or say "more to one company" to loosen the per-company limits.
+`/job alerts` and Claude fixes it with you. To reach 20 a day you need
+LinkedIn too, and there are two ways:
+- **Paste (always works).** Copy several job pages in your own browser,
+  type `/job paste`, and paste them all. Claude prepares a resume and your
+  answers for each and takes you through them one at a time; you apply in
+  your own browser.
+- **LinkedIn in your own browser (optional, off unless you say yes).**
+  Claude finds and reads jobs on LinkedIn in your own Chrome and fills Easy
+  Apply for you. LinkedIn's rules do not allow automated tools, and it can
+  restrict an account; this mode works slowly in your own browser, and you
+  click Submit. See Day 2 step 6.
+You can also say "more to one company" to loosen the per-company limits.
 
 ## Day 1: install and set up (about 30-45 minutes)
 
@@ -64,8 +73,8 @@ or say "more to one company" to loosen the per-company limits.
 7. **Create job alerts on LinkedIn: they add jobs the employer list
    misses.** When Claude suggests them: 5 now, daily, by email, one per broad
    job title; Claude suggests 3 more each of the next few days, up to 20.
-   Claude never opens LinkedIn; it only reads the alert emails for the
-   company, title and place.
+   You create them yourself; Claude only reads the alert emails for the
+   company, title and place, and never opens a link in one.
 8. **Request your LinkedIn data export:** on LinkedIn, Me > Settings &
    Privacy > Data Privacy > Download your data. It can take up to 48 hours.
    Claude uses it to find people you know at the companies you apply to.
@@ -111,6 +120,25 @@ or say "more to one company" to loosen the per-company limits.
    claims into them.
 5. **Drop in the export.** When LinkedIn's email arrives, put the zip into
    `JobSearch\network\raw`. Nothing else to do; it is read on the next run.
+6. **LinkedIn in your own browser: your choice.** Claude asks once whether
+   to turn this on. LinkedIn's rules do not allow automated tools, and it
+   can restrict an account; this mode works slowly in your own browser, and
+   you click Submit. Say "yes" only if you accept that; "no" changes
+   nothing, and you can still use `/job paste`. If you say yes:
+   - Install the Claude in Chrome extension and stay signed in to LinkedIn
+     in that Chrome. (Whether the extension can work on LinkedIn is
+     UNVERIFIED; if it cannot, use `/job paste`.)
+   - Type `/job linkedin`. Claude searches your job titles near home, newest
+     first, skips jobs that do not fit or that you already applied to, and
+     fills Easy Apply one job at a time. You attach the file it names, look
+     it over, click Submit, and type `s`.
+   - It does at most 25 a day and waits a few seconds between every step.
+     It never messages anyone, never sends a connection request and never
+     opens a profile.
+   - If LinkedIn shows a CAPTCHA, a sign-in check or any warning, Claude
+     stops using LinkedIn for the rest of that day and tells you. It never
+     tries again that day.
+   - To turn it off, say "stop using LinkedIn".
 
 The job finder can be removed with `uninstall_runner.ps1`; that never
 touches your JobSearch folder.
@@ -187,6 +215,10 @@ spreadsheet is your record, not a filing.
 - `/job <link>` - one job from a link, with full tailoring: duplicate check,
   fit, a few questions, a tailored resume, then the form.
 - `/job add <link>` - put a job you found into today's list.
+- `/job paste` - paste several job pages you copied; Claude prepares them
+  all, then takes you through them one at a time.
+- `/job linkedin` - LinkedIn in your own Chrome, if you turned it on (Day 2
+  step 6).
 - `/job log` - tell Claude about a job you applied for on your own.
 - `/job status` - what is in flight and what is ready to follow up.
 - `/job prep` - interview prep from what you sent.
@@ -199,11 +231,13 @@ spreadsheet is your record, not a filing.
 - `/job alerts` - get job-alert emails coming again.
 In Cowork the plugin form is `/job-search:job` followed by the same words.
 
-LinkedIn and Indeed do not allow automated tools, so Claude never opens or
-fills them. For a job you found there, paste the posting text or the
-company's own application link. Easy Apply jobs go on a short do-yourself
-list with your answers written out, for you to apply in your own browser;
-type `log e1` afterwards.
+LinkedIn and Indeed do not allow automated tools. Claude never opens or
+fills Indeed. It opens LinkedIn only if you turned the LinkedIn mode on
+(Day 2 step 6), only in your own Chrome, and you click Submit. Otherwise,
+for a job you found there, paste the posting text (several at once with
+`/job paste`) or the company's own application link. Easy Apply jobs go on
+a short do-yourself list with your answers written out, for you to apply in
+your own browser; type `log e1` afterwards (`log e51` for a pasted one).
 
 ## What never leaves your PC
 

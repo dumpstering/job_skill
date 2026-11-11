@@ -498,6 +498,140 @@ def test_broken_unicode():
     print("ok a lone surrogate: refused in an event made in memory, U+FFFD in one read from a file")
 
 
+def test_linkedin_settings():
+    """[linkedin] in settings.toml (settings.md): off unless the live file
+    holds the TOML boolean true; per_day at most 50; never under 4 seconds
+    between actions; a file with a typo never turns LinkedIn on, even when
+    the runner's last good copy had it on."""
+    root = new_root()
+    f = jobfs.Folder(root)
+    off = {"browser": False, "per_day": 25, "min_seconds_between_actions": 4, "stop_on_warning": True}
+    assert events.linkedin_settings(root) == off, "no settings file: the defaults, off"
+    f.config.mkdir(parents=True)
+    template = (SCRIPTS.parent / "templates" / "settings.toml").read_text(encoding="utf-8")
+    f.settings_toml.write_text(template, encoding="utf-8")
+    assert events.linkedin_settings(root) == off, "the shipped template: off, 25 a day, 4 seconds, stop on a warning"
+
+    def with_table(body):
+        f.settings_toml.write_text('[runner]\nmode = "M"\n[linkedin]\n' + body, encoding="ascii")
+        return events.linkedin_settings(root)
+    assert with_table("browser = true\n") == dict(off, browser=True)
+    assert with_table("browser = true\nper_day = 10\nmin_seconds_between_actions = 9\nstop_on_warning = false\n") == {
+        "browser": True, "per_day": 10, "min_seconds_between_actions": 9, "stop_on_warning": False}
+    for body in ('browser = "true"\n', "browser = 1\n", 'browser = "yes"\n', "per_day = 25\n"):
+        assert with_table(body)["browser"] is False, body  # only the boolean true is a yes
+    for body, want in (("per_day = 250\n", 50), ("per_day = 0\n", 0), ("per_day = -3\n", 25),
+                       ('per_day = "40"\n', 25), ("per_day = 2.5\n", 25), ("per_day = true\n", 25)):
+        assert with_table("browser = true\n" + body)["per_day"] == want, body
+    for body, want in (("min_seconds_between_actions = 1\n", 4), ("min_seconds_between_actions = 0\n", 4),
+                       ("min_seconds_between_actions = 4.2\n", 5), ("min_seconds_between_actions = 600\n", 120),
+                       ('min_seconds_between_actions = "fast"\n', 4), ("min_seconds_between_actions = inf\n", 4)):
+        assert with_table("browser = true\n" + body)["min_seconds_between_actions"] == want, body
+    assert with_table('stop_on_warning = "no"\n')["stop_on_warning"] is True
+    # a typo while the last good copy says on: off (the live file must parse and say true)
+    good = f.last_good("settings.toml")
+    good.parent.mkdir(parents=True, exist_ok=True)
+    good.write_text("[linkedin]\nbrowser = true\n", encoding="ascii")
+    f.settings_toml.write_text("[linkedin]\nbrowser = true\nper_day = \n", encoding="ascii")
+    assert jobfs.settings(root).source == "last_good" and events.linkedin_settings(root)["browser"] is False
+
+
+def test_linkedin_stop():
+    """events.py linkedin-stop: the stop-for-the-day record. Written once
+    (the first reason stands), never cleared by any command, read back by
+    linkedin_stop; a file that cannot be read still closes the day; another
+    day is open again."""
+    root = new_root()
+    stop_file = jobfs.Folder(root).claude / TODAY / "linkedin_stop.json"
+    assert events.linkedin_stop(root) is None and not stop_file.exists()
+    out = run(EVENTS, "linkedin-stop", "--root", root, "--reason", "captcha", "--session", "s-1").strip()
+    assert out == f"LINKEDIN STOPPED {TODAY} captcha: no LinkedIn page is opened again today", out
+    rec = json.loads(stop_file.read_text(encoding="utf-8"))
+    assert (rec["v"], rec["date"], rec["reason"], rec["session"]) == (1, TODAY, "captcha", "s-1") and rec["at"], rec
+    out = run(EVENTS, "linkedin-stop", "--root", root, "--reason", "limit").strip()
+    assert out == f"LINKEDIN STOPPED {TODAY} captcha: no LinkedIn page is opened again today", "the first stop stands"
+    assert json.loads(stop_file.read_text(encoding="utf-8")) == rec
+    assert events.linkedin_stop(root) == {"at": rec["at"], "reason": "captcha"}
+    assert events.linkedin_stop(root, "2026-01-02") is None, "a stop holds for its own day"
+    out = run(EVENTS, "linkedin-stop", "--root", root, "--reason", "bored", code=1)
+    assert out.startswith("ERROR argument --reason: invalid choice"), out
+    for reason in events.LINKEDIN_STOPS:
+        r2 = new_root()
+        assert run(EVENTS, "linkedin-stop", "--root", r2, "--reason", reason, "--date", "2026-03-04").strip() == \
+            f"LINKEDIN STOPPED 2026-03-04 {reason}: no LinkedIn page is opened again today"
+        assert events.linkedin_stop(r2, "2026-03-04")["reason"] == reason
+    # fail closed: a stop file that is not JSON, or holds something else, is still a stop
+    for body in ("{not json", "[]", '{"reason": "made up"}', ""):
+        stop_file.write_text(body, encoding="ascii")
+        assert events.linkedin_stop(root) == {"at": "", "reason": "other"}, body
+    # no event file is written: the record holds at once, whatever the runner's version
+    assert not jobfs.Folder(root).events.exists() or not list(jobfs.Folder(root).events.glob("*.json"))
+
+
+def test_diy_add():
+    """events.py diy-add: a job the user applies for by hand (a pasted
+    posting, a LinkedIn Easy Apply job) joins the do-yourself list at once,
+    in every mode: its resume staged as upload/E<n>_..., an answer sheet with
+    no link, numbers from E51 that never meet the runner's E1.. and are
+    never reused that day."""
+    root = new_root()
+    f = jobfs.Folder(root)
+    (root / "profile.md").write_text("# Application profile\n\n## Contact\n- Legal first name: Jordan\n"
+                                     "- Legal last name: Avery\n- Email: jordan.q.avery@example.com\n",
+                                     encoding="ascii")
+    first = job_folder(root, f"{TODAY} Acme Bio - QC Scientist", POSTING_MD.replace(
+        "https://job-boards.greenhouse.io/acme/jobs/1234567", "https://www.linkedin.com/jobs/view/4012345678").replace(
+        "greenhouse:1234567", "linkedin:4012345678").replace("Acme Robotics", "Acme Bio"))
+    rel = first.relative_to(root).as_posix()
+    out = run(EVENTS, "diy-add", "--root", root, "--folder", rel, code=1)
+    assert out.startswith(f"ERROR --folder {rel} has no built resume yet"), out
+    assert not f.upload.exists() and not (f.claude / TODAY / "diy.json").exists(), "a refusal writes nothing"
+    (first / "resume_B.pdf").write_bytes(b"%PDF-1.4 base\n")
+    f.upload.mkdir(parents=True)
+    (f.upload / "E1_Avery_Resume_HooliHealth.pdf").write_bytes(b"%PDF E1")  # the runner's own first item
+    out = lines(run(EVENTS, "diy-add", "--root", root, "--folder", rel))
+    up = "upload/E51_Avery_Resume_AcmeBio.pdf"
+    assert out == [f"DIY E51 | Acme Bio | Senior Lab Scientist | Springfield, IL | {up} | {rel}",
+                   f"SHEET applications/_diy/{TODAY}/E51_Acme Bio.md"], out
+    assert (root / up).read_bytes() == b"%PDF-1.4 base\n"
+    sheet = (f.diy_dir(TODAY) / "E51_Acme Bio.md").read_text(encoding="utf-8")
+    assert "say `log e51`" in sheet and "upload\\E51_Avery_Resume_AcmeBio.pdf" in sheet, sheet
+    assert "jordan.q.avery@example.com" in sheet and "http" not in sheet and "linkedin.com" not in sheet, sheet
+    # a tailored build replaces the base under the same number; a second job takes the next one
+    (first / "Jordan Avery Resume.pdf").write_bytes(b"%PDF-1.4 tailored\n")
+    assert lines(run(EVENTS, "diy-add", "--root", root, "--folder", str(first)))[0].startswith("DIY E51 | Acme Bio")
+    assert (root / up).read_bytes() == b"%PDF-1.4 tailored\n"
+    second = job_folder(root, f"{TODAY} Globex Labs - Analyst", POSTING_MD.replace("Acme Robotics", "Globex Labs"))
+    (second / "resume_B.pdf").write_bytes(b"%PDF-1.4 two\n")
+    out = lines(run(EVENTS, "diy-add", "--root", root, "--folder", second.relative_to(root).as_posix()))
+    assert out[0].startswith("DIY E52 | Globex Labs | Senior Lab Scientist | Springfield, IL | "
+                             "upload/E52_Avery_Resume_GlobexLabs.pdf | "), out
+    assert [it["e"] for it in events.paste_items(root)] == [51, 52]
+    assert (f.upload / "E1_Avery_Resume_HooliHealth.pdf").read_bytes() == b"%PDF E1", "the runner's file is untouched"
+    # mode L and no runner at all: the same, at once (no event file, no request)
+    assert not f.events.exists() and not f.requests.exists()
+    for args, why in ((["--folder", "config"], "ERROR --folder config is not a job folder"),
+                      (["--folder", "../elsewhere"], "ERROR --folder ../elsewhere is outside"),
+                      (["--folder", "applications/_diy"], "ERROR --folder applications/_diy is not a job folder")):
+        out = run(EVENTS, "diy-add", "--root", root, *args, code=1)
+        assert out.startswith(why), (args, out)
+    # the record is a file under claude/: only entries of the expected shape are ever listed
+    path = f.claude / TODAY / "diy.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["items"] += [{"e": 3, "folder": rel, "company": "Low Number"},
+                      {"e": 60, "folder": "../outside", "company": "Outside"},
+                      {"e": 61, "folder": "applications/_diy", "company": "Not A Job"},
+                      {"e": 51, "folder": rel, "company": "Twice"}, "text", {"e": True, "folder": rel},
+                      {"e": 62, "folder": rel, "company": "Odd Upload", "upload": "upload/01_Avery_Resume_X.pdf"}]
+    path.write_text(json.dumps(data), encoding="ascii")
+    got = events.paste_items(root)
+    assert [(it["e"], it["company"], it["upload"]) for it in got] == [
+        (51, "Acme Bio", up), (52, "Globex Labs", "upload/E52_Avery_Resume_GlobexLabs.pdf"),
+        (62, "Odd Upload", "")], got
+    path.write_text("{not json", encoding="ascii")
+    assert events.paste_items(root) == []
+
+
 def main():
     b = test_parity()
     print("ok parity")
@@ -505,7 +639,8 @@ def main():
     print("ok overlay_reads_done")
     for fn in (test_rejections, test_emit_and_overlay, test_json_file_confined, test_deep_event_file,
                test_printed_values,
-               test_add_from_link, test_added_trust, test_broken_unicode):
+               test_add_from_link, test_added_trust, test_broken_unicode,
+               test_linkedin_settings, test_linkedin_stop, test_diy_add):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

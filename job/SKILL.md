@@ -12,7 +12,8 @@ approved base and checked. In a session you show the day's card, fill the
 applications one at a time in the browser, and stop before Submit, which is
 always the user's click. A pasted link still runs the full single-job flow
 (steps 1-9 below): duplicate check, fit, questions, a tailored resume, the
-fill. Gmail is read for replies; nothing is ever sent.
+fill. Several pasted job pages are prepared as one batch (`/job paste`).
+Gmail is read for replies; nothing is ever sent.
 
 **Sources** are the only things a claim may rest on: the master resume, the
 achievement library, `profile.md`, `answers.md`, `publications.md`,
@@ -24,12 +25,28 @@ come only from the posting.
 
 - **Never Submit.** Stop before the control that sends an application, every
   time, in every mode. The user clicks Submit and types `s`.
-- **Never LinkedIn or Indeed.** No script, fetch or browser action ever opens
-  linkedin.com (or its lnkd.in and licdn.com links), any indeed.* site,
-  glassdoor.*, simplyhired.*, ziprecruiter.* or remotive.com. Alert emails
-  give company, title and location only; a link in one is never opened,
-  stored, echoed or hyperlinked. Easy Apply jobs go on the user's
-  do-yourself list ([references/ats/linkedin.md](references/ats/linkedin.md)).
+- **LinkedIn and job boards.** No script or fetch ever opens linkedin.com
+  (or its lnkd.in and licdn.com links), any indeed.* site, glassdoor.*,
+  simplyhired.*, ziprecruiter.* or remotive.com: `posting.py`, `netfetch.py`
+  and the runner refuse them under every setting. Alert emails give company,
+  title and location only; a link in one is never opened, stored, echoed or
+  hyperlinked. The one LinkedIn link ever kept is a job's plain
+  `linkedin.com/jobs/view/<id>`, as its job key, never fetched. What the
+  browser may do depends on `config/settings.toml`:
+  - `[linkedin] browser = false` (the default): never automated. No browser
+    action opens LinkedIn either. Its jobs come as pasted text (`/job
+    paste`) or go on the user's do-yourself list
+    ([references/ats/linkedin.md](references/ats/linkedin.md)).
+  - `[linkedin] browser = true` (the user's own yes at setup): in a session
+    the browser tool, in the user's own signed-in Chrome, may search
+    LinkedIn Jobs, read job pages and fill Easy Apply up to Submit, only as
+    [references/linkedin_browser.md](references/linkedin_browser.md) says
+    and only after `today_view.py linkedin` prints `LINKEDIN GO`: slowly,
+    at most `per_day` a day, never a profile, a message, a connection
+    request or anything about a person, and a check or notice from LinkedIn
+    ends it for the day.
+  - Indeed and the other boards are never opened by any tool, under any
+    setting.
 - **robots.txt and lead-only hosts.** The runner obeys robots.txt and never
   calls the list endpoints of SmartRecruiters, iCIMS, UKG, Paycom, Paycor or
   ClearCompany. Their single postings come one at a time from a web search
@@ -63,6 +80,8 @@ Each entry point has one reference. Read it and follow it.
 | `/job short` | [references/daily.md](references/daily.md) | An easy day: no-account items, easiest first, no questions |
 | `/job <link>` | [references/apply.md](references/apply.md) | One job, steps 1-9 below; apply.md fills it |
 | `/job add <link>` | [references/daily.md](references/daily.md) | Put one posting into today's list |
+| `/job paste` | [references/paste.md](references/paste.md) | Several pasted job pages at once: a prepared batch, then one at a time |
+| `/job linkedin` | [references/linkedin_browser.md](references/linkedin_browser.md) | LinkedIn in the user's own Chrome, only with `[linkedin] browser = true` |
 | `/job inbox` | [references/inbox.md](references/inbox.md) | Replies in Gmail, tracker updates, urgent items first |
 | `/job log` | [references/apply.md](references/apply.md) | A job applied for by hand, or `log e1 e3` from the do-yourself list |
 | `/job status` | [references/daily.md](references/daily.md) | What is in flight, follow-ups ready, today's progress |
@@ -102,7 +121,7 @@ writer ([references/files.md](references/files.md) has the full table):
 | `master_resume.md`, `profile.md`, `achievement_library.md`, `answers.md`, `publications.md`, `techniques.md` (backup first) | `queue/<date>/` (queue.json, addenda, today.md, review.html, discards.csv, diy.md) |
 | `config/` (settings, search profile, watch list) and `variants/` | `state/`, `upload/`, `runner/out/`, `reports/funnel.csv`, `logs/` |
 | `runner/in/` files, create-only, through `events.py`, `leads.py` and `jobrunner.py request` | `applications.xlsx` in mode L (through `tracker.py apply-events`) |
-| `claude/session.json`, `claude/<date>/morning.json`, `claude/day_<date>/<step>.done` | in a job folder: posting.md, posting.json, fill_plan.json, terms.json, resume_B.*, cover_B.*, tune_log.json, `.runner_files` |
+| `claude/session.json`, `claude/<date>/morning.json`, `claude/day_<date>/<step>.done`, `claude/paste/`, `claude/linkedin/` (posting text) | in a job folder: posting.md, posting.json, fill_plan.json, terms.json, resume_B.*, cover_B.*, tune_log.json, `.runner_files` |
 | in a job folder: `.claimed`, resume.json and resume files (Tier A, with `final.json` from a `--strict` build that passed), notes.md, audit.md, filled.md, questions.json, cover_letter.*, `submitted/` | `applications/_diy/`, `applications/_not_sent/` |
 
 - Before changing `profile.md`, `achievement_library.md`, `answers.md` or a
@@ -111,7 +130,10 @@ writer ([references/files.md](references/files.md) has the full table):
 - Never move or rename files in `upload/`, never edit a runner file, and
   never run code from the folder. In a job folder write only your own files
   (left column), never one listed in its `.runner_files`; write `.claimed`
-  there when you start filling that item.
+  there when you start filling that item. The one thing a session adds on
+  the runner's side is a pasted or Easy Apply job's `upload/E<n>_` file and
+  its `applications/_diy/` sheet, and only through `events.py diy-add`
+  (numbers from E51).
 - **Today's date** is the user's local date, never the sandbox clock (UTC):
   `events.py overlay --root "<folder>"` prints it as `OVERLAY <date>`, and the
   card prints it as its first line.
@@ -153,11 +175,11 @@ first, printing one plain refusal line in its place (`SKIP #NN unsafe value
 command line.
 
 You run:
-- `today_view.py` - `card`, `next` (both `--short` on an easy day), `progress`, `diy` (`--all` past the first five), `drafts`: the day as printed lines.
+- `today_view.py` - `card`, `next` (both `--short` on an easy day), `progress`, `diy` (`--all` past the first five), `drafts`: the day as printed lines; `linkedin`: whether LinkedIn may be worked on now (`LINKEDIN GO`, or why not).
 - `tracker.py` - every read and write of `applications.xlsx`, through the transport (below).
-- `events.py` - `emit` queue events (started, handed_over, applied, skipped, later, parked, unparked, blocked, answer_used, usage); `add` (a job from a link into today's list); `overlay`.
+- `events.py` - `emit` queue events (started, handed_over, applied, skipped, later, parked, unparked, blocked, answer_used, usage); `add` (a job from a link into today's list); `diy-add` (a pasted or Easy Apply job onto the do-yourself list, its resume into `upload\`); `linkedin-stop` (LinkedIn closed for the day); `overlay`.
 - `caps.py check` - whether one more application to that company is allowed (`CAP ok`, `CAP DEFER ...`).
-- `posting.py` - a posting into `posting.md`.
+- `posting.py` - a posting into `posting.md`; `--gate` judges pasted text by the runner's gates (`GATES ok`, `GATES DROP ...`).
 - `build_resume.py` - a resume or letter JSON into .docx, .pdf and .txt, with the checks (`--strict`).
 - `library.py` - `ids`, `check`: stable `[L-0001]` IDs in the achievement library.
 - `variants.py` - `new`, `approve`, `check`, `tune`, `diff`, `tier-b`, `rebuild`: role-family base resumes.
@@ -222,12 +244,15 @@ say "done"; in mode L the events wait, nothing to do.
        name leads to a private address): a link posting.py refused is never
        opened or fetched by any tool, the browser included. Ask the user for
        the employer's own link or the posting text (rerun with --text-file
-       and no link).
+       and no link). The one exception is ats/linkedin.md's: a LinkedIn
+       job's plain link, in the browser, with `[linkedin] browser = true`.
      - Pasted text: save it as `_incoming/pasted.txt`, write `{"_":
        "<link>", "company": "<employer>", "role": "<title>", "location":
        "<city, state as the text gives it>"}` (no `"_"` without a link), and
        run `posting.py --out "<...>/_incoming/posting.md" --text-file
-       "<...>/_incoming/pasted.txt" --args-file claude/args.json`.
+       "<...>/_incoming/pasted.txt" --args-file claude/args.json`. Several
+       job pages pasted at once: follow [references/paste.md](references/paste.md)
+       instead.
      - Any other link: write `{"_": "<link>"}` and run `posting.py --out
        "<...>/_incoming/posting.md" --args-file claude/args.json`.
        Exit 3 with `TRY <link>` and `RERUN <flags>` (only ever a link the
@@ -340,8 +365,9 @@ In the day's fill loop ([references/apply_batch.md](references/apply_batch.md)):
 - `reopen` (only after "did it go through?"): fill it again; its handover
   reuses the row (daily.md, Interruptions).
 - `sent 1 2` referral asks went out; `ref 7 <url>` a contact's referral link
-  for item 7; `log e1 e3` do-yourself items done; `diy all` the whole
-  do-yourself list (`today_view.py diy --all`), past the first five.
+  for item 7; `log e1 e3` do-yourself items done (`log e51` a pasted one);
+  `diy all` the whole do-yourself list (`today_view.py diy --all`), past the
+  first five.
 - `approve <family>` approves a variant; `yes` to the base-resume changes
   you just showed after a correction approves every one of them, and
   nothing else (variants.md "One correction, every family").

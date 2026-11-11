@@ -4,7 +4,7 @@ Usage (every subcommand except `statuses` takes --root <JobSearch folder>):
     python tracker.py init --root R
     python tracker.py check --root R --company C --title T [--url U] [--job-key K] [--posting P]
     python tracker.py add --root R --company C --role ROLE [--location L] [--fit F]
-        [--status S] [--url U] [--folder F] [--source Skill|"By hand"|Runner]
+        [--status S] [--url U] [--folder F] [--source Skill|"By hand"|Runner|LinkedIn]
         [--applied YYYY-MM-DD] [--notes N] [--job-key K] [--tier A|B|"By hand"] [--family F]
         [--variant V] [--ats A] [--found-via W] [--posted D] [--req-id R] [--queue-date D]
         [--account none|exists|new] [--referral NAME] [--referral-url U] [--confirmed D]
@@ -72,6 +72,17 @@ adds a new row anyway, for a real second application).
     SIMILAR ROLE   same company, title at least 85% alike
     SAME COMPANY   same company, another role, started in the last 90 days
 It also prints IN QUEUE <date> #<n> when the job is in today's queue.
+
+Source is who filled the application: Skill (the single-job flow, the
+default), Runner (a list item filled in the loop), By hand (the user, /job
+log and `log e1`) or LinkedIn (an Easy Apply form Claude filled in the
+user's own browser, [linkedin] browser mode; today_view counts those rows
+toward that mode's per_day). A LinkedIn link in any value of a command line
+(a URL, a note, a quote) is kept only as the plain
+https://www.linkedin.com/jobs/view/<id>, or taken out when it names no job,
+before anything reads it (events.plain_linkedin_links): the workbook, the
+printed lines and an event file never hold a tracking parameter or a
+sign-in token.
 
 Exit codes: 0 ok, 1 bad input (ERROR ...), 2 openpyxl missing (pip install
 openpyxl), 4 applications.xlsx is open in Excel (LOCKED ...), 5 a backward
@@ -148,7 +159,8 @@ STATUSES = ["Started", "Not pursued", "Resume ready", "Filled - awaiting submit"
             "Applied", "No response", "Assessment", "Screen", "Interview", "Offer", "Rejected",
             "Withdrawn", "Closed"]
 FITS = ["Strong Fit", "Good Fit", "Stretch", "Long Shot"]
-SOURCES = ["Skill", "By hand", "Runner"]
+# LinkedIn: an Easy Apply form Claude filled in the user's own browser ([linkedin] browser mode).
+SOURCES = ["Skill", "By hand", "Runner", "LinkedIn"]
 TIERS = ["A", "B", "By hand"]
 ACCOUNT_STATES = ["none", "exists", "new"]
 KINDS = ["reply", "alert"]
@@ -380,7 +392,11 @@ def check_link(label, value, board_ok=False):
     """A link the tracker stores passes netfetch.web_refusal (R1), or the write
     is refused, writing nothing. A blank value stays blank. Only a job's own
     URL may be a job board's link (linkedin.md records LinkedIn postings by
-    their link); the board link is stored, never opened."""
+    their link); the board link is stored, never opened. A LinkedIn link is
+    stored only as the plain https://www.linkedin.com/jobs/view/<id>: any
+    other spelling of that job's link is stored in that form, and a LinkedIn
+    link that names no job is not stored at all (blank), so a token or a
+    tracking parameter never reaches the workbook."""
     v = (value or "").strip() if isinstance(value, str) else value
     if not v:
         return v
@@ -389,6 +405,8 @@ def check_link(label, value, board_ok=False):
     if why and not (board_ok and why.startswith("job-board ")):
         raise TrackerError(f"--{label} refused ({why}): leave it out, or use the employer's own "
                            "plain https:// link")
+    if why and events.is_linkedin_url(v):
+        return events.linkedin_plain(v)
     return v
 
 
@@ -2095,6 +2113,27 @@ def strip_root_args(argv):
     return out
 
 
+# Values that must be the employer's own link: a LinkedIn link there is refused as it always was
+# (check_link), so those tokens reach the parser as given and nothing is stored or sent.
+OWN_LINK_OPTIONS = ("--referral-url", "--employer-site", "--main-website")
+OWN_LINK_FIELDS = re.compile(r"^\s*(referral[\s_-]?url|employer[\s_-]?site)\s*=", re.I)
+
+
+def plain_argv(argv):
+    """The command line with every LinkedIn link in a value (the job's URL,
+    a note, a quote, a subject) put in its plain form, or taken out when it
+    names no job (events.plain_linkedin_links), before anything reads it:
+    the workbook, the printed lines and the event file never hold another
+    form. A value that must be the employer's own link is left as given, so
+    it is refused."""
+    out, prev = [], ""
+    for tok in argv:
+        own = prev in OWN_LINK_OPTIONS or tok.split("=", 1)[0] in OWN_LINK_OPTIONS or bool(OWN_LINK_FIELDS.match(tok))
+        out.append(tok if own else events.plain_linkedin_links(tok))
+        prev = tok
+    return out
+
+
 def event_job_key(a):
     if a.cmd == "add":
         return a.job_key if a.job_key is not None else jobkey.job_key(a.url)
@@ -2109,7 +2148,7 @@ def add_add_options(p):
     p.add_argument("--status", default="Started", help="default Started; see `statuses`")
     p.add_argument("--url", default="")
     p.add_argument("--folder", default="", help="job folder relative to --root")
-    p.add_argument("--source", default="Skill", help='"Skill" (default), "By hand" or "Runner"')
+    p.add_argument("--source", default="Skill", help='"Skill" (default), "By hand", "Runner" or "LinkedIn"')
     p.add_argument("--applied", help="YYYY-MM-DD; sets Follow-up to +7 days (Tier A and referral rows)")
     p.add_argument("--notes", default="")
     p.add_argument("--job-key", default=None, help="default: derived from --url")
@@ -2231,6 +2270,7 @@ def main(argv=None):
             pass
     ap = build_parser()
     argv = argfile.expand(argv, ap)  # outside text arrives in a JSON file, never inline
+    argv = plain_argv(argv)
     args = ap.parse_args(argv)
     args.store, args.pid, args.view, transport = None, None, "xlsx", "direct"
     try:

@@ -19,8 +19,10 @@ at the check lines, clicks Submit, and types `s`.
 - **Never store or type a password**, and never read or type an email or
   text-message verification code. Name the email subject to look for; the
   user types the code.
-- **Never LinkedIn or Indeed.** Those items are on the do-yourself list
-  (below), with no link.
+- **Never LinkedIn or Indeed in this loop.** Those items are on the
+  do-yourself list (below), with no link. LinkedIn is worked on only in
+  `/job linkedin`, with `[linkedin] browser = true`, by its own rules
+  ([linkedin_browser.md](linkedin_browser.md)); Indeed never, by any tool.
 - SSN, date of birth, bank and tax details, ID numbers, signatures,
   attestations and consent boxes are always the user's part, never asked
   for in chat.
@@ -71,7 +73,9 @@ and the proof path only, in single quotes).
    user has not approved; never fill them. `NEXT none`: the list is done;
    give the closing line from
    `today_view.py progress` and offer "more" (with a `WAIT` line, say the
-   card's base-resume line instead of "more"). Jobs added from a link today
+   card's base-resume line instead of "more"), and `/job linkedin` when the
+   card carried a LinkedIn line with "type /job linkedin" (`[linkedin]
+   browser = true`, with room left today). Jobs added from a link today
    (`events.py add`) are in the list at once, after the runner's items.
    `ANSWERS ... needs <ids>` lists only the questions still open (an id a
    morning draft fills, the bank answers, or that was answered and
@@ -280,8 +284,22 @@ at their own pace. `log e1 e3`: for each, write `{"company": "<company>",
 "role": "<title>", "location": "<location>"}` exactly as listed and run
 `tracker.py add --status Applied --applied <date> --source "By hand"
 --found-via alert:linkedin --tier "By hand" --args-file claude/args.json`;
-they count toward the day, and a logged job leaves the list (the others
-keep their numbers).
+they count toward the day (`today_view.py progress` prints `OFFLIST
+linkedin=<n> other=<n>` and adds them to its closing line), and a logged
+job leaves the list (the others keep their numbers).
+
+**Pasted and Easy Apply jobs (E51 and up).** A job from `/job paste`
+([paste.md](paste.md)), or an Easy Apply job prepared in `/job linkedin`
+(`[linkedin] browser = true`),
+joins the list through `events.py diy-add --folder "<job folder>"`: its own
+resume as `upload/E<n>_...pdf`, its sheet in `applications/_diy/<date>/`,
+numbered from E51 so the runner's E1 and up never move. `today_view.py diy`
+prints them after the runner's items, each line ending with its job folder,
+every one (the cut of five does not apply), until its tracker row says it
+was sent or dropped. `log e51`: that job already has a row (the one with
+that Folder in `tracker.py show --args-file claude/args.json`, the file
+`{"company": "<company>"}`), so run `tracker.py update <ID> status=Applied
+applied=<date>` and never a second `add`.
 
 ## Rounds (experiment, off)
 

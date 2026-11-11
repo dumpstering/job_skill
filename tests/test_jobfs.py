@@ -66,7 +66,7 @@ def test_settings():
     template = (ROOT / "job" / "templates" / "settings.toml").read_text(encoding="ascii")
     assert tomllib.loads(template) == jobfs.SETTINGS_DEFAULTS
     assert jobfs.settings() == jobfs.SETTINGS_DEFAULTS and jobfs.settings().source == "defaults"
-    assert (jobfs.VERSION, jobfs.EVENT_SCHEMA) == ("1.2.0", 1)
+    assert (jobfs.VERSION, jobfs.EVENT_SCHEMA) == ("1.3.0", 1)
     with tempfile.TemporaryDirectory(prefix="jobfs_") as tmp:
         f = jobfs.Folder(tmp)
         f.config.mkdir()

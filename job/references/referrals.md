@@ -4,9 +4,11 @@ People the user already knows, matched to the day's jobs, with short asks the
 user sends (spec 6.3, R11). A referral is never a gate: no job waits for one
 unless the user asks for that.
 
-**Never automated.** You never open LinkedIn, never send a message, and never
-fetch anything from the user's export. LinkedIn bans bots that send messages or
-download contacts; the user downloads their own export and sends every ask.
+**Never automated.** You never open LinkedIn for this, never send a message,
+and never fetch anything from the user's export. LinkedIn bans bots that send
+messages or download contacts; the user downloads their own export and sends
+every ask. `[linkedin] browser = true` changes none of it: that mode covers
+job pages only, never a profile, a message or a connection request.
 
 **Privacy.** `network\` holds other people's data and never leaves the
 user's folder. Read only the rows for the job in front of you: `network.py match

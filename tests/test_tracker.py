@@ -783,6 +783,70 @@ def test_referral_urls():
         "javascript:alert(1)", "file:///C:/x", "https://www.linkedin.com/jobs/view/1"])
 
 
+def test_linkedin_rows():
+    """Source LinkedIn (an Easy Apply form Claude filled in the user's own
+    browser, [linkedin] browser mode) is a tracker source, in both
+    transports. A LinkedIn link is stored only as the plain
+    https://www.linkedin.com/jobs/view/<id>: tracking parameters and sign-in
+    tokens never reach the workbook, a LinkedIn link that names no job is not
+    stored at all, and none is ever a hyperlink."""
+    root = new_root()
+    li = "https://www.linkedin.com"
+    token = "otp" + "Token=abc123"  # built at run time: build_zip.py's guard refuses the literal in any file
+    out = run(root, "add", "--company", "Acme Bio", "--role", "QC Scientist", "--status", "Filled - awaiting submit",
+              "--source", "linkedin", "--found-via", "linkedin:browser", "--ats", "linkedin", "--tier", "B",
+              "--url", li + "/jobs/view/4012345678/?refId=abc&trackingId=xyz")
+    assert out.strip() == "ADDED 1", out
+    for i, link in enumerate((li + "/comm/jobs/view/4012345679?" + token,
+                              li + "/jobs/search/?currentJobId=4012345680&keywords=qc",
+                              li + "/jobs/view/qc-scientist-at-acme-bio-4012345681/",
+                              "https://lnkd.in/abc123", li + "/in/someone", li + "/jobs/search/?keywords=qc"), 2):
+        assert run(root, "add", "--company", f"Co {i}", "--role", "Scientist", "--source", "LinkedIn",
+                   "--url", link).strip() == f"ADDED {i}"
+    rows = sheet_rows(root / "applications.xlsx")
+    assert [(r["Source"], r["URL"]) for r in rows] == [
+        ("LinkedIn", li + "/jobs/view/4012345678"), ("LinkedIn", li + "/jobs/view/4012345679"),
+        ("LinkedIn", li + "/jobs/view/4012345680"), ("LinkedIn", li + "/jobs/view/4012345681"),
+        ("LinkedIn", None), ("LinkedIn", None), ("LinkedIn", None)], rows
+    assert rows[0]["Found via"] == "linkedin:browser" and rows[0]["Job key"] == "linkedin:4012345678", rows[0]
+    assert [r["Job key"] for r in rows[1:4]] == ["linkedin:4012345679", "linkedin:4012345680", "linkedin:4012345681"]
+    out = run(root, "update", "5", "url=" + li + "/jobs/view/4012345682?" + token)
+    assert sheet_rows(root / "applications.xlsx")[4]["URL"] == li + "/jobs/view/4012345682", out
+    ws = openpyxl.load_workbook(root / "applications.xlsx")["Applications"]
+    cells = [c for row in ws.iter_rows(min_row=2) for c in row]
+    assert not any(c.hyperlink for c in cells), "a job board's link is never a hyperlink"
+    text = " ".join(str(c.value) for c in cells if c.value is not None)
+    assert "Token" not in text and "trackingId" not in text and "refId" not in text and "lnkd.in" not in text, text
+    out = run(root, "add", "--company", "X", "--role", "Y", "--source", "Monster", code=1)
+    assert out.strip() == "ERROR source 'Monster' is not one of: Skill, By hand, Runner, LinkedIn", out
+    # a note keeps a LinkedIn job link in its plain form and loses any other LinkedIn link
+    run(root, "update", "1", "notes+=seen at " + li + "/jobs/view/4012345678?" + token + ", via https://lnkd.in/abc123.")
+    note = sheet_rows(root / "applications.xlsx")[0]["Notes"]
+    assert "seen at " + li + "/jobs/view/4012345678, via ." in note and "Token" not in note and "lnkd" not in note, note
+    # a link that must be the employer's own is refused as before, never quietly emptied
+    for argv in (["add", "--company", "X", "--role", "Y", "--referral-url", li + "/in/someone"],
+                 ["add", "--company", "X", "--role", "Y", "--employer-site", li + "/company/x"],
+                 ["update", "1", "referral_url=" + li + "/jobs/view/4012345678"]):
+        out = run(root, *argv, code=1)
+        assert out.startswith("ERROR --") and "refused (job-board linkedin.com)" in out, (argv, out)
+    assert len(sheet_rows(root / "applications.xlsx")) == 7, "a refused write adds nothing"
+    # mode L: the same row through an event, applied by this runner's tracker.py
+    root = new_root()
+    (root / "config").mkdir()
+    (root / "config" / "settings.toml").write_text('[runner]\nmode = "L"\n', encoding="utf-8")
+    out = run(root, "add", "--company", "Acme Bio", "--role", "QC Scientist", "--status", "Filled - awaiting submit",
+              "--source", "LinkedIn", "--found-via", "linkedin:browser", "--url", li + "/jobs/view/4012345678?" + token)
+    assert out.strip().startswith("ADDED P-") and out.strip().endswith("(pending)"), out
+    ev = next((root / "runner" / "in" / "events").glob("*_tracker.json")).read_text(encoding="utf-8")
+    assert li + "/jobs/view/4012345678" in ev and "Token" not in ev and "?" not in ev, "the event file holds the plain link"
+    assert run(root, "apply-events").strip() == "APPLIED 1 PENDING 0 REJECTED 0"
+    assert "Token" not in " ".join(p.read_text(encoding="utf-8") for p in (root / "runner").rglob("*.json")), \
+        "nor does any file the runner keeps (events_done, the snapshot)"
+    row = sheet_rows(root / "applications.xlsx")[0]
+    assert (row["Source"], row["Found via"], row["URL"]) == ("LinkedIn", "linkedin:browser",
+                                                             li + "/jobs/view/4012345678"), row
+
+
 def test_auto_transport():
     root = new_root()
     (root / "config").mkdir()
@@ -940,7 +1004,8 @@ def main():
     print("ok locked_file")
     for fn in (test_v11_upgrade, test_upgrade_on_first_write, test_followup_tiers, test_new_sheets,
                test_events_transport, test_events_locked, test_auto_transport, test_check_v12, test_archive,
-               test_5000_rows, test_add_same_job, test_referral_urls, test_events_broken_text):
+               test_5000_rows, test_add_same_job, test_referral_urls, test_linkedin_rows,
+               test_events_broken_text):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

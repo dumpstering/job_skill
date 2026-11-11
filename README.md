@@ -22,7 +22,7 @@ zero-token work. Version 1.2.
 ## Where the daily volume comes from
 
 - **The watch list** (`config/watchlist.csv`; the life-science preset has
-  about 280 Bay Area employer boards) gives a backlog in the first week and
+  about 290 Bay Area employer boards) gives a backlog in the first week and
   then a few applications a day: on the live runs of 2026-11-06 and
   2026-11-10 about 5 eligible postings a day passed the per-company caps,
   about 3.7 of them jobs the user would want.
@@ -34,10 +34,25 @@ zero-token work. Version 1.2.
   postings too; their yield was not measured. SETUP_GUIDE.md puts both near
   the top, about 5 minutes each; running `install_runner.cmd` again asks for
   a key that was skipped.
-- **20 a day takes more than the queue.** The rest comes from the
-  do-it-yourself list, LinkedIn Easy Apply done by hand, or looser
-  per-company caps ("more to one company" in `/job settings`; with no caps
-  the 2026-11-10 pool gave about 7 a day).
+- **20 a day takes more than the queue.** LinkedIn is where the volume is,
+  and there are two ways to it:
+  - **`/job paste`** (always available): the user pastes several copied job
+    pages in one message; Claude runs each through the gates, the duplicate
+    check and the caps, prepares a resume and an answer sheet for each, and
+    walks through them one at a time. Claude opens nothing; the user applies
+    in their own browser and types `s`.
+  - **`/job linkedin`** (opt-in, off by default): Claude works on LinkedIn's
+    job pages in the user's own signed-in Chrome, finds and reads postings,
+    and fills Easy Apply up to Submit. LinkedIn's rules do not allow
+    automated tools, and it can restrict an account; this mode works slowly
+    in the user's own browser, and the user clicks Submit. `[linkedin]
+    browser = false` until the user says a clear yes at setup; at most 25 a
+    day, at least 4 seconds between actions, and a CAPTCHA, sign-in check
+    or notice ends it for the day. Whether the browser tool can work on
+    linkedin.com at all is UNVERIFIED; `/job paste` is the fallback.
+  The do-it-yourself list and looser per-company caps ("more to one
+  company" in `/job settings`; with no caps the 2026-11-10 pool gave about
+  7 a day) add the rest.
 - The card adds one line when no alert lead has arrived for 3 days, and
   `/job alerts` gets them coming again in one short exchange.
 
@@ -76,7 +91,10 @@ runner tick every 15 min: tracker.py apply-events -> applications.xlsx -> runner
   the checked address; https and a host allowlist for unattended runs;
   robots.txt for every unattended fetch; a hard deny of LinkedIn, Indeed,
   Glassdoor, SimplyHired and ZipRecruiter, and of the list endpoints of
-  SmartRecruiters, iCIMS, UKG, Paycom, Paycor and ClearCompany.
+  SmartRecruiters, iCIMS, UKG, Paycom, Paycor and ClearCompany. No setting
+  changes that: the opt-in LinkedIn mode is the browser tool in the user's
+  own Chrome only, and no script, fetch or runner step ever opens LinkedIn.
+  The one LinkedIn link ever stored is a job's plain `/jobs/view/<id>`.
 - **Truthfulness.** FACT (numbers and names against the sources), EVIDENCE
   (every bullet cites library IDs), VARIANT (Tier B text equals approved
   text), CITE (citations equal publications.md), page caps and lint, all
@@ -87,7 +105,7 @@ runner tick every 15 min: tracker.py apply-events -> applications.xlsx -> runner
 | Path | What |
 |---|---|
 | `job/SKILL.md` | The router: global rules, entry points, folder contract, scripts, the single-job steps |
-| `job/references/` | daily.md, apply_batch.md, apply.md, setup.md, settings.md, files.md, usage.md, runner.md, discovery.md, sources.md, variants.md, inbox.md, referrals.md, weekly.md, worksearch.md, interview_prep.md, fit_and_questions.md, writing_rules.md, cv_publications.md |
+| `job/references/` | daily.md, apply_batch.md, apply.md, paste.md, linkedin_browser.md, setup.md, settings.md, files.md, usage.md, runner.md, discovery.md, sources.md, variants.md, inbox.md, referrals.md, weekly.md, worksearch.md, interview_prep.md, fit_and_questions.md, writing_rules.md, cv_publications.md |
 | `job/references/ats/` | Per-site notes: Greenhouse, Lever, Ashby, Workday, Workable, BambooHR, JazzHR, SmartRecruiters, iCIMS, Oracle, USAJOBS, Dayforce, LinkedIn and job boards |
 | `job/templates/` | Starting profile, library, answers, publications, techniques, settings, search profile, header-only watch list and boards, work-search state presets |
 | `job/templates/presets/lifesci_bayarea/` | An opt-in preset: life-science title families, license knockouts, San Francisco Bay Area places, employer boards and job boards |
@@ -104,7 +122,7 @@ runner tick every 15 min: tracker.py apply-events -> applications.xlsx -> runner
 python -m venv .venv
 .venv\Scripts\python -m pip install python-docx reportlab pypdf openpyxl tzdata
 .venv\Scripts\python tests\run_all.py            # every tests\test_*.py; PASS <script> each, then ALL PASS
-python build_zip.py                              # writes dist\v1.2.0\ (refuses on a FAIL line)
+python build_zip.py                              # writes dist\v1.3.0\ (refuses on a FAIL line)
 ```
 
 One at a time (each prints `ok <name>` lines and `PASS`):
@@ -148,10 +166,10 @@ python job\scripts\today_view.py card --root <that copy> --date 2026-11-06
 It prints `DAILY ok queue=30 pool_left=41 discards=141 tier_b_built=30
 prep_failed=0`. `runner/README.md` has the installer commands.
 
-Release: `gh release create v1.2.0 dist/v1.2.0/* -R dumpstering/job_skill`.
+Release: `gh release create v1.3.0 dist/v1.3.0/* -R dumpstering/job_skill`.
 The release page is https://github.com/dumpstering/job_skill/releases/latest
 (setup.md and SETUP_GUIDE.md send the user there for `install_runner.cmd`).
-`install_runner.cmd` downloads `jobrunner-1.2.0.zip` from that release and
+`install_runner.cmd` downloads `jobrunner-1.3.0.zip` from that release and
 checks it against the SHA-256 build_zip.py wrote into it. Send
 `job-search-plugin.zip`, `install_runner.cmd` and `SETUP_GUIDE.md`;
 `job.zip` is the fallback.
@@ -220,6 +238,8 @@ v1.1 sources:
 - Answer scope and sensitive flag (HarshadLambate/workday-autofill;
   neonwatty/job-apply-plugin); never storing legal answers (ApplyPilot #108).
 - LinkedIn automation ban: linkedin.com/legal/user-agreement section 8.2.
+  The LinkedIn browser mode is the owner's decision, made knowing that
+  rule: off by default, one person's own account, the user's own Submit.
 - Fresh-context audit (job-candidacy application-verify;
   MadsLorentzen/ai-job-search); fact, read-back and keyword checks
   (srbhr/Resume-Matcher); Greenhouse's 2.5 MB parse limit.

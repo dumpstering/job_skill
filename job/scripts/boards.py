@@ -2031,19 +2031,14 @@ def family_searches(profile):
 
 
 def home_area(root, profile):
-    """(places, home states, remote within the US counts) from [home] and the
-    widen steps, as the gates read them."""
+    """(places, home states, remote within the US counts) from [home], its
+    enabled relocation regions and the widen steps, as the gates read them."""
     import gates  # same folder; gates imports boards only inside a function
     home = profile.get("home") or {}
-    places = [str(p) for p in home.get("places") or [] if str(p).strip()]
-    label = str(home.get("label") or "").split(",")[0].strip()
-    if label:
-        places.append(label)
     widen = gates.widen_steps(root) if root else []
-    if "second_ring" in widen:
-        places += [str(p) for p in home.get("second_ring") or [] if str(p).strip()]
+    places, states = gates.search_area(home, widen)  # with every enabled [[home.region]] (places to move to)
     remote = str(home.get("remote", "us")).lower() == "us" or "remote_us" in widen
-    return places, gates.home_states(home), remote
+    return places, states, remote
 
 
 def poll_skip(spec, health, settings, today, root):

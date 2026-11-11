@@ -43,7 +43,7 @@ import sys
 import zipfile
 from pathlib import Path
 
-VERSION = "1.2.0"
+VERSION = "1.3.0"
 DESC_MAX = 200
 SKILL_MAX_LINES = 500
 ZIP_TIME = (2026, 11, 5, 0, 0, 0)

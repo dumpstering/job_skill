@@ -10,6 +10,9 @@ Usage:
     python events.py add --root R --folder <job folder> --via pasted|add [--family F]
         [--date YYYY-MM-DD] [--session S]
     python events.py overlay --root R [--date YYYY-MM-DD]
+    python events.py diy-add --root R --folder <job folder> [--date YYYY-MM-DD]
+    python events.py linkedin-stop --root R --reason captcha|sign_in|unusual_activity|limit|restricted|other
+        [--date YYYY-MM-DD] [--session S]
 
 emit prints EVENT <id>. J is the payload object, or an object holding
 "payload" plus any of job_key, n, date, session. emit writes every type but
@@ -48,18 +51,44 @@ overlay prints the day's merged view of pending and applied events:
     USAGE after #<n> session <s>% weekly <w>% minutes <m>
     ANSWER USED <ANS-id> x<count>
 
+diy-add puts one job folder the user applies for by hand (a pasted posting
+with no employer link, or a LinkedIn Easy Apply job) on today's do-yourself
+list, in every mode and at once: it copies the folder's built resume (the
+one final.json names, else the newest "<Name> Resume.pdf", else
+resume_B.pdf) to upload/E<n>_<Last>_Resume_<Employer12>.pdf, writes the
+answer sheet applications/_diy/<date>/E<n>_<Company>.md (no link), and
+records the item in claude/<date>/diy.json. Its numbers start at E51 and are
+never reused that day, so they never meet the runner's own E1, E2, ...
+(positions in its list); a folder added again keeps its number and gets its
+newer resume. These two paths are the only ones a session writes under
+upload/ and applications/_diy/; the runner moves the files the next day.
+    DIY E51 | <company> | <title> | <location> | upload/E51_... | <job folder>
+    SHEET applications/_diy/<date>/E51_<Company>.md
+
+linkedin-stop closes LinkedIn for the day ([linkedin] browser mode,
+references/linkedin_browser.md): it writes claude/<date>/linkedin_stop.json
+once (the first stop of the day stands; nothing clears it) and prints
+    LINKEDIN STOPPED <date> <reason>: no LinkedIn page is opened again today
+The file is the session's own, not an event: it holds at once, in every mode,
+whatever version the PC's job finder is. A file there that cannot be read
+still counts as a stop. today_view.py linkedin and the card read it.
+
 The library (validate, emit, read_file, pending_files, recent, move_done,
 reject, note_failure, overlay, user_items) is what tracker.py apply-events,
-today_view, jobqueue and caps use. Stdlib only (add also reads the queue
+today_view, jobqueue and caps use; linkedin_settings, linkedin_stop and
+paste_items are what today_view reads. Stdlib only (add also reads the queue
 through jobqueue; an added event's link is checked with netfetch).
 
 Exit codes: 0 ok, 1 bad input (ERROR ...).
 """
 import argparse
+import hashlib
 import json
+import math
 import os
 import re
 import secrets
+import shutil
 import sys
 import time
 from datetime import datetime, timedelta
@@ -95,6 +124,16 @@ REASONS = ("closed", "login_required", "account_needed", "account_locked", "capt
 CONFIRMATIONS = ("page", "email", "none")
 PATH_KEYS = ("folder", "path", "file", "proof")
 BANNED_ARGS = ("--root", "--transport", "-h", "--help")
+
+# [linkedin] in config/settings.toml (settings.md): the opt-in browser mode.
+LINKEDIN_DEFAULTS = {"browser": False, "per_day": 25, "min_seconds_between_actions": 4, "stop_on_warning": True}
+LINKEDIN_PER_DAY_MAX = 50      # a larger per_day is read as this
+LINKEDIN_PACE = (4, 120)       # seconds between actions: never under the default, never over two minutes
+# Why LinkedIn was closed for the day (linkedin-stop --reason).
+LINKEDIN_STOPS = ("captcha", "sign_in", "unusual_activity", "limit", "restricted", "other")
+# Pasted do-yourself items take E51, E52, ...; the runner numbers its own list from E1.
+PASTE_E_FIRST = 51
+PASTE_E_RE = re.compile(r"^E(\d+)_")
 
 ID_RE = re.compile(r"^(\d{8}T\d{6}Z)_([0-9a-f]{8})$")
 NAME_RE = re.compile(r"^(\d{8}T\d{6}Z_[0-9a-f]{8})_([a-z_]+)\.json$")
@@ -681,6 +720,263 @@ def add(root, folder, via, family="", day=None, session=None):
     return f"ADDED #{n} {shown_key(key)} (addendum_user)", ev
 
 
+# ---------- LinkedIn links: the one form ever stored or printed (ats/linkedin.md) ----------
+
+LINKEDIN_HOSTS = ("linkedin.com", "lnkd.in", "licdn.com")  # the site, its link shortener and its media host
+LINKEDIN_VIEW = re.compile(r"https?://(?:www\.)?linkedin\.com/jobs/view/(?:[^/?#]*-)?([0-9]{1,20})/?", re.I)
+LINKEDIN_KEY = re.compile(r"linkedin:([0-9]{1,20})")
+LINK_IN_TEXT = re.compile(r"https?://[^\s<>\"'|]+", re.I)
+LINK_TAIL = ".,;:!?)]}"
+
+
+def is_linkedin_url(url):
+    """True for a link netfetch refuses as LinkedIn's: any spelling or reading
+    of the site, lnkd.in or licdn.com."""
+    if not isinstance(url, str) or not url:
+        return False
+    import netfetch  # stdlib and jobfs only
+    kind, _, board = (netfetch.web_refusal(url) or "").partition(" ")
+    return kind == "job-board" and board in LINKEDIN_HOSTS
+
+
+def linkedin_plain(url):
+    """The one form of a LinkedIn job link that is ever stored or printed:
+    https://www.linkedin.com/jobs/view/<id>, built from the job's number
+    alone (a /jobs/view/<id> link, or one whose currentJobId names it), so no
+    query string, tracking parameter or sign-in token survives. '' for a
+    LinkedIn link that names no job (a profile, a search, a short link), and
+    for any link that is not LinkedIn's."""
+    import jobkey
+    url = (url or "").strip() if isinstance(url, str) else ""
+    if not is_linkedin_url(url):
+        return ""
+    m = LINKEDIN_VIEW.fullmatch(url) or LINKEDIN_KEY.fullmatch(jobkey.job_key(url))
+    return f"https://www.linkedin.com/jobs/view/{m.group(1)}" if m else ""
+
+
+def plain_linkedin_links(text):
+    """text with every LinkedIn link in it put in its plain form, or taken
+    out when it names no job. Any other link, and text with no link, is
+    returned as it is. A pasted posting's text and every tracker command
+    line go through this, so no token or tracking parameter is ever written
+    to posting.md, an event file or the workbook."""
+    if not isinstance(text, str) or "://" not in text:
+        return text
+
+    def one(m):
+        url, tail = m.group(0), ""
+        while url and url[-1] in LINK_TAIL:
+            url, tail = url[:-1], url[-1] + tail
+        return (linkedin_plain(url) + tail) if is_linkedin_url(url) else m.group(0)
+    return LINK_IN_TEXT.sub(one, text)
+
+
+# ---------- LinkedIn browser mode: settings and the day's stop ----------
+
+def linkedin_settings(root):
+    """[linkedin] of config/settings.toml as checked values (settings.md).
+    browser is True only when the file itself parses (never a last-good copy
+    or the defaults) and holds the TOML boolean true: a word in quotes, a
+    number or a file with a typo never turns LinkedIn on. per_day is a whole
+    number from 0 to LINKEDIN_PER_DAY_MAX (a larger one is read as the
+    maximum, anything else as the default 25). min_seconds_between_actions
+    is read as whole seconds, never under 4 nor over 120. stop_on_warning is
+    False only for the TOML boolean false."""
+    out = dict(LINKEDIN_DEFAULTS)
+    try:
+        cfg = jobfs.settings(root)
+    except (jobfs.ConfigError, OSError, ValueError):
+        return out
+    raw = cfg.get("linkedin")
+    raw = raw if isinstance(raw, dict) else {}
+    out["browser"] = getattr(cfg, "source", "") == "file" and raw.get("browser") is True
+    n = raw.get("per_day")
+    if isinstance(n, int) and not isinstance(n, bool) and n >= 0:
+        out["per_day"] = min(n, LINKEDIN_PER_DAY_MAX)
+    s = raw.get("min_seconds_between_actions")
+    if isinstance(s, (int, float)) and not isinstance(s, bool) and math.isfinite(s):
+        out["min_seconds_between_actions"] = int(min(max(math.ceil(s), LINKEDIN_PACE[0]), LINKEDIN_PACE[1]))
+    out["stop_on_warning"] = raw.get("stop_on_warning") is not False
+    return out
+
+
+def _day(root, day):
+    return jobfs.iso_date(day) if day else jobfs.today(root).isoformat()
+
+
+def linkedin_stop_file(root, day=None):
+    return jobfs.Folder(root).claude / _day(root, day) / "linkedin_stop.json"
+
+
+def linkedin_stop(root, day=None):
+    """The day's stop as {"at", "reason"}, or None while LinkedIn is open.
+    The file being there is the stop: one that cannot be read, or that holds
+    something else, still closes LinkedIn for that day (reason "other")."""
+    try:
+        data = jobfs.read_json(linkedin_stop_file(root, day), MAX_BYTES)
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError, RecursionError):
+        return {"at": "", "reason": "other"}
+    if not isinstance(data, dict):
+        return {"at": "", "reason": "other"}
+    reason = data.get("reason")
+    return {"at": str(data.get("at") or "")[:40], "reason": reason if reason in LINKEDIN_STOPS else "other"}
+
+
+def stop_linkedin(root, reason, day=None, session=None):
+    """Close LinkedIn for the day. Create-only: the first stop of the day
+    stands and nothing here clears it. Returns (day, the stop as read back)."""
+    if reason not in LINKEDIN_STOPS:
+        raise EventError(f"--reason must be one of: {', '.join(LINKEDIN_STOPS)}")
+    session = session if session is not None else os.environ.get("JOB_SESSION", "")
+    if not isinstance(session, str) or len(session) > 300:
+        raise EventError("--session must be text")
+    day = _day(root, day)
+    rec = {"v": 1, "date": day, "at": jobfs.now_iso(root), "reason": reason, "session": session}
+    try:
+        jobfs.create_only(linkedin_stop_file(root, day), json.dumps(rec, ensure_ascii=True, indent=1) + "\n")
+    except FileExistsError:
+        pass
+    return day, linkedin_stop(root, day)
+
+
+# ---------- pasted jobs on the do-yourself list (paste.md) ----------
+
+def paste_file(root, day=None):
+    return jobfs.Folder(root).claude / _day(root, day) / "diy.json"
+
+
+def _text(value, limit=300):
+    return re.sub(r"\s+", " ", value).strip()[:limit] if isinstance(value, str) else ""
+
+
+def paste_items(root, day=None):
+    """The day's pasted do-yourself items in E order, each {e, folder, company,
+    role, location, upload, sheet}, from claude/<date>/diy.json. Only an
+    entry of the expected shape counts: a whole number from E51 to E999 (the
+    first of each number), a job folder under applications/ inside the root,
+    and an upload name that carries its own number. A file that cannot be
+    read is no list."""
+    try:
+        data = jobfs.read_json(paste_file(root, day), jobfs.MAX_FILE)
+    except (OSError, ValueError, RecursionError):
+        return []
+    out, seen = [], set()
+    for it in (data.get("items") or []) if isinstance(data, dict) else []:
+        e = it.get("e") if isinstance(it, dict) else None
+        if not isinstance(e, int) or isinstance(e, bool) or not PASTE_E_FIRST <= e <= 999 or e in seen:
+            continue
+        folder = it.get("folder")
+        folder = folder.replace("\\", "/") if isinstance(folder, str) else ""
+        parts = folder.split("/")
+        if len(parts) != 2 or parts[0] != "applications" or not parts[1] or parts[1].startswith("_") \
+                or not _inside(root, folder):
+            continue
+        upload = it.get("upload") if isinstance(it.get("upload"), str) else ""
+        if not re.fullmatch(rf"upload/E{e}_[A-Za-z0-9_]{{1,40}}\.pdf", upload):
+            upload = ""
+        sheet = it.get("sheet") if isinstance(it.get("sheet"), str) else ""
+        seen.add(e)
+        out.append({"e": e, "folder": folder, "company": _text(it.get("company")), "role": _text(it.get("role")),
+                    "location": _text(it.get("location")), "upload": upload, "sheet": sheet})
+    return sorted(out, key=lambda it: it["e"])
+
+
+def diy_line(it):
+    """One pasted item as the do-yourself list prints it: the runner's five
+    columns, then its job folder (the tracker row is found by it). A path a
+    command line must not carry is left out."""
+    import jobkey
+    parts = [f"DIY E{it['e']}", _text(it.get("company"), 80), _text(it.get("role"), 120),
+             _text(it.get("location"), 80)]
+    if it.get("upload") and jobkey.path_ok(it["upload"]):
+        parts.append(it["upload"])
+    if it.get("folder") and jobkey.path_ok(it["folder"]):
+        parts.append(it["folder"])
+    return " | ".join(parts)
+
+
+def resume_for(folder):
+    """The built resume a by-hand job sends: the tailored one (the strict
+    build final.json names, else the newest "<Name> Resume.pdf"), else the
+    tuned base resume_B.pdf; None before one is built. A tailored build that
+    cites a library entry corrected since is never sent, and never swapped
+    for the base without a word: EventError."""
+    import jobqueue  # read only: the same choice a job from a link gets
+    import library
+    folder = Path(folder)
+    final = jobqueue.read_json(folder / "final.json", {})
+    if final.get("v") == 1 and str(final.get("verdict", "")).lower() == "ok" and library.final_stale(folder, final):
+        raise EventError("its tailored resume cites something corrected since it was built: build it again "
+                         "first (SKILL.md step 5), then rerun")
+    tailored = jobqueue.user_resume(folder)
+    if tailored:
+        return Path(tailored)
+    base = folder / "resume_B.pdf"
+    return base if base.exists() else None
+
+
+def _sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for block in iter(lambda: fh.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def diy_add(root, folder, day=None):
+    """Put one job folder on today's do-yourself list as a pasted item: stage
+    its resume as upload/E<n>_..., write its answer sheet and record it.
+    Returns (lines to print, the item)."""
+    import jobqueue
+    import jobrunner  # the answer sheet the runner writes for its own do-yourself items
+    root = Path(root)
+    day = _day(root, day)
+    f = jobfs.Folder(root)
+    rel = job_folder_rel(root, folder)
+    head = jobqueue.posting_head(root / rel)
+    company = _text(head.get("Company")) or "Employer"
+    src = resume_for(root / rel)
+    if src is None:
+        raise EventError(f"--folder {rel} has no built resume yet: build one first (variants.py tier-b, or "
+                         "SKILL.md step 5), then rerun")
+    items = paste_items(root, day)
+    old = next((it for it in items if it["folder"] == rel), None)
+    if old is not None:
+        e = old["e"]
+    else:
+        staged = [int(m.group(1)) for m in (PASTE_E_RE.match(p.name) for p in f.upload.glob("E*_*.pdf")) if m] \
+            if f.upload.is_dir() else []
+        e = max([PASTE_E_FIRST - 1] + [it["e"] for it in items] + [n for n in staged if n >= PASTE_E_FIRST]) + 1
+        if e > 999:
+            raise EventError("the do-yourself list is full for today (E999)")
+    dest = f.upload_file(e, jobqueue.last_name(root), company, diy=True)
+    try:
+        if not dest.exists() or _sha256(dest) != _sha256(src):
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            tmp = dest.with_name(f".{dest.name}.{secrets.token_hex(4)}.tmp")
+            shutil.copyfile(src, tmp)
+            os.replace(tmp, dest)
+    except PermissionError:
+        raise EventError(f"upload/{dest.name} is open in another program: close it, then rerun")
+    upload = f"upload/{dest.name}"
+    sheet = f.diy_dir(day) / f"E{e}_{jobfs.ascii_name(company, 40)}.md"
+    jobfs.atomic_write_text(sheet, jobrunner.diy_sheet(f, company, _text(head.get("Role")),
+                                                       _text(head.get("Location")), f"upload\\{dest.name}", n=e))
+    item = {"e": e, "folder": rel, "company": company, "role": _text(head.get("Role")),
+            "location": _text(head.get("Location")), "upload": upload,
+            "sheet": sheet.relative_to(root).as_posix()}
+    items = sorted([it for it in items if it["e"] != e] + [item], key=lambda it: it["e"])
+    jobfs.atomic_write_text(paste_file(root, day),
+                            json.dumps({"v": 1, "date": day, "items": items}, ensure_ascii=True, indent=1) + "\n")
+    import jobkey
+    lines = [diy_line(item)]
+    if jobkey.path_ok(item["sheet"]):
+        lines.append(f"SHEET {item['sheet']}")
+    return lines, item
+
+
 # ---------- CLI ----------
 
 def load_json_arg(a):
@@ -736,6 +1032,23 @@ def cmd_add(a):
     return 0
 
 
+def cmd_diy_add(a):
+    if a.date and not DAY_RE.match(a.date):
+        raise EventError(f"--date must be YYYY-MM-DD, got '{a.date}'")
+    lines, _ = diy_add(a.root, a.folder, a.date)
+    for line in lines:
+        print(line)
+    return 0
+
+
+def cmd_linkedin_stop(a):
+    if a.date and not DAY_RE.match(a.date):
+        raise EventError(f"--date must be YYYY-MM-DD, got '{a.date}'")
+    day, stop = stop_linkedin(a.root, a.reason, a.date, a.session)
+    print(f"LINKEDIN STOPPED {day} {stop['reason']}: no LinkedIn page is opened again today")
+    return 0
+
+
 def build_parser():
     ap = Parser(prog="events.py", description="Event files for the runner (spec 2.5).", allow_abbrev=False)
     sub = ap.add_subparsers(dest="cmd", required=True, metavar="command")
@@ -763,6 +1076,20 @@ def build_parser():
     p.add_argument("--root", required=True)
     p.add_argument("--date")
     p.set_defaults(func=cmd_overlay)
+    p = sub.add_parser("diy-add", help="Put one job folder the user applies for by hand on today's do-yourself "
+                                       "list: its resume as upload/E<n>_..., an answer sheet, numbered from E51.",
+                       allow_abbrev=False)
+    p.add_argument("--root", required=True)
+    p.add_argument("--folder", required=True, help="the job folder (applications/<date> <Company> - <Role>)")
+    p.add_argument("--date")
+    p.set_defaults(func=cmd_diy_add)
+    p = sub.add_parser("linkedin-stop", help="Close LinkedIn for the day ([linkedin] browser mode); never undone.",
+                       allow_abbrev=False)
+    p.add_argument("--root", required=True)
+    p.add_argument("--reason", required=True, choices=LINKEDIN_STOPS)
+    p.add_argument("--date")
+    p.add_argument("--session")
+    p.set_defaults(func=cmd_linkedin_stop)
     return ap
 
 

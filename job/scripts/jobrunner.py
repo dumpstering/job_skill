@@ -22,7 +22,9 @@ Tier B build (variants.tier_b) and the fill plan (answers.plan), upload
 staging, the do-yourself files (upload/E<n>_... and applications/_diy/<date>/E<n>_<Company>.md),
 network import (when network/raw changed) and match, today.md, review.html,
 reports/funnel.csv, family weights on the weekly day, and
-runner/out/status.json. It prints the BOARD, SOURCE, RESOLVE, GATES, QUEUE,
+runner/out/status.json (every write also sets version, min_skill, mode and
+features: what this runner's tracker takes beyond v1.2.0, FEATURES, which a
+session checks before it sends such a write). It prints the BOARD, SOURCE, RESOLVE, GATES, QUEUE,
 MIX, STAGED and DIY lines (a failed optional step, staging and the funnel
 included, is a WARN line), answers the requests waiting (the long ones
 too), then
@@ -153,6 +155,11 @@ LONG_OPS = {"resolve_leads", "probe_url", "rebuild_queue"}   # answered by the d
 OFFLINE_PROBE_HOSTS = {"greenhouse": "boards-api.greenhouse.io", "lever": "api.lever.co",
                        "ashby": "api.ashbyhq.com", "workable": "apply.workable.com", "rippling": "api.rippling.com"}
 DAILY_TASK = "JobRunner-Daily"
+# What this runner's tracker.py apply-events takes beyond v1.2.0, written to
+# status.json "features": the session checks it before it sends a tracker
+# write an older runner would refuse (today_view.linkedin_lane).
+# linkedin_source: a row with Source "LinkedIn".
+FEATURES = ("linkedin_source",)
 RUNNER_STALE_HOURS = 26
 LIVENESS_HOURS = 24
 LIVENESS_NEXT = 3
@@ -416,7 +423,7 @@ class Run:
         """Merge keys into runner/out/status.json (tracker.py adds tracker_locked_since)."""
         data = self.status()
         data.update(values)
-        data.update(version=jobfs.VERSION, min_skill=jobfs.VERSION, mode=self.mode)
+        data.update(version=jobfs.VERSION, min_skill=jobfs.VERSION, mode=self.mode, features=list(FEATURES))
         data.setdefault("tracker_locked_since", None)
         jobfs.atomic_write_json(self.folder.status_json, data)
 
@@ -1150,9 +1157,10 @@ def stage_tier_a(run, item):
 def diy_rows(run, limit):
     """(company, title, location) of the day's do-yourself items: LinkedIn
     leads given up (resolve.py) and chat-apply postings from the pool, in the
-    order and cut the session reads (today_view.diy_rows), so E<n> is one job."""
+    order and cut the session reads (today_view.diy_rows), so E<n> is one job.
+    Never past E50: E51 and up are a session's pasted jobs (events.diy_add)."""
     import today_view
-    return today_view.diy_rows(run.root, run.day, limit)
+    return today_view.diy_rows(run.root, run.day, min(int(limit), events.PASTE_E_FIRST - 1))
 
 
 def family_for(profile, title):
@@ -1192,20 +1200,22 @@ def base_pdf(run, family, cache):
     return path
 
 
-def diy_sheet(run, company, title, location, upload):
-    """applications/_diy/<date>/E<n>_<Company>.md: what the user types, from the profile and the bank. No link (R2)."""
+def diy_sheet(folder, company, title, location, upload, n=None):
+    """applications/_diy/<date>/E<n>_<Company>.md: what the user types, from the profile and the bank. No link (R2).
+    folder is the jobfs.Folder; n (a pasted item's own number, events.diy_add) names it in the log line."""
     import answers
-    values, _ = answers.load_profile(run.folder.profile)
+    values, _ = answers.load_profile(folder.profile)
     lines = [f"# {company} - {title}", ""]
     if location:
         lines += [f"Location: {location}", ""]
     lines += ["Apply on the job site in your own browser" + (f" and attach {upload}." if upload else "."),
-              "When it is sent, say `log e<n>` in the session.", "", "## From your profile", ""]
+              f"When it is sent, say `log e{int(n) if n is not None else '<n>'}` in the session.", "",
+              "## From your profile", ""]
     lines += [f"- {k.replace('_', ' ')}: {v}" for k, v in sorted(values.items()) if str(v).strip()]
     lines += ["", "## Answers you gave before", ""]
     def slots(text):  # template answers name the employer and role
         return str(text).replace("{company}", company).replace("{role}", title)
-    lines += [f"- {slots(a.question)}: {slots(a.answer)}" for a in answers.load_bank(run.folder.answers)
+    lines += [f"- {slots(a.question)}: {slots(a.answer)}" for a in answers.load_bank(folder.answers)
               if a.answer.strip()]
     return "\n".join(lines) + "\n"
 
@@ -1237,7 +1247,7 @@ def stage_diy(run):
         # E<n>_<Company>.md, the same n as its upload file: two do-it-yourself
         # jobs at one employer get two sheets (SEC-12)
         sheet = run.folder.diy_dir(run.day) / f"E{i}_{jobfs.ascii_name(company or 'Employer', 40)}.md"
-        jobfs.atomic_write_text(sheet, diy_sheet(run, company, title, location,
+        jobfs.atomic_write_text(sheet, diy_sheet(run.folder, company, title, location,
                                                  f"upload\\{dest.name}" if pdf else ""))
     run.out(f"DIY {listed} item{'s' if listed != 1 else ''}, {staged} file{'s' if staged != 1 else ''} staged"
             + (f" ({len(rows) - listed} logged by hand)" if listed != len(rows) else ""))

@@ -29,9 +29,26 @@ second_ring = []            # nearby places used once you widen; until then thei
 remote = "us"               # none | us
 relocate = false
 
+# A second region you would move to for the right job: one table per region,
+# off until enabled = true. Its jobs are marked relocate and listed after the
+# home ones, under this region's own pay_floor (0: the [gates] floor). A job
+# there that states no pay is dropped unless unstated_pay = "keep". With no
+# places, anywhere in its states counts.
+# [[home.region]]
+# label = "Boston area"
+# enabled = false
+# states = ["MA"]
+# places = ["Boston", "Cambridge", "Waltham"]
+# pay_floor = 0
+# unstated_pay = "drop"
+
 [gates]
 exclude_title_words = ["Director", "Vice President", "VP", "Intern", "Internship", "Chief"]
-employment_types = ["full-time", "contract", "temporary"]
+employment_types = ["full-time", "contract", "temporary"]  # leave out "temporary" to drop temp jobs
+                                                           # (temp-to-hire and contract-to-hire stay)
+shift_work = "any"          # "last": night, swing, weekend and 12-hour shift jobs go after everything else
+pay_floor = 0               # yearly dollars; a job whose stated pay tops out below it is dropped
+                            # (hourly rates count at 2,080 hours; no stated pay: kept); 0 is off
 undated_policy = "first_seen_after_2_polls"
 
 # One table per license, certificate or other requirement you cannot meet.
@@ -45,7 +62,9 @@ undated_policy = "first_seen_after_2_polls"
 # preferred_patterns = ['(?i)example practitioner licen[cs]e preferred']
 # title_patterns = ['(?i)\bexample practitioner\b']
 
-# One table per title family you apply to.
+# One table per title family you apply to. A preset ships some families
+# paused: set status from your own roles (active for your field, proposed for
+# its neighbours, paused for the rest).
 # [[family]]
 # id = "example_family"     # ASCII; used in variants\, tracker Family, metrics
 # label = ""
@@ -55,9 +74,14 @@ undated_policy = "first_seen_after_2_polls"
 # adjacent_titles = []      # approved neighbors, title match 0.6
 # title_any = []            # title terms; one hit is enough
 # title_none = []           # title terms that rule the family out
+# title_allow = []          # phrases set aside before title_none is tried: ["associate director"]
+#                           # keeps an Associate Director title when title_none has "director"
 # require_any = []          # requirements terms; at least one must hit
 # avoid_any = []            # other fields' requirements terms: 2 or more, and more than the
 #                           # require_any hits, rule the job out (another field's training)
+# min_terms = 0             # for a broad family ("Scientist"): the posting must name at least
+#                           # this many of your own terms (techniques.md and this family's
+#                           # terms, counted as fit counts them); 0 is off
 # terms = []                # vocabulary for KEYWORD, tuning and fit (the day's order)
 # seniority_ok = []         # level words that fit (senior, ii, associate, ...)
 # needs_license = []        # knockout ids this family requires (only when held)

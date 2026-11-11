@@ -27,6 +27,10 @@ is Claude (a session or a scheduled task).
 | `claude/day_<date>/<step>.done` | you, create-only | empty markers: morning, inbox, intake, tier_a, weekly |
 | `claude/<date>/morning.json` | you, create-only | the card's questions (their saved flags), drafts (with the field's `question_id`), referral drafts, urgent and away lists; `"prepared": false` when job-morning ran before today's list existed |
 | `claude/<date>/sensitive_ok.json` | you (the session) | `{v, date, ok, blank}`: the jobs whose sensitive answers the user confirmed with `yes` today; `today_view.py next` builds each `SENSITIVE` and handover `Check:` line from it |
+| `claude/paste/<k>.txt`, `claude/linkedin/<id>.txt` | you (your file tool) | posting text for `posting.py --text-file`: pasted job pages (`/job paste`), and job pages read in LinkedIn browser mode, named by the job's number (one that exists was read before); text only, never a link |
+| `claude/<date>/diy.json` | you, through `events.py diy-add` | the day's pasted do-yourself items: `{e, folder, company, role, location, upload, sheet}`, numbered from E51 |
+| `claude/<date>/linkedin_stop.json` | you, through `events.py linkedin-stop`, create-only | LinkedIn was closed for the day: `{date, at, reason}`; its being there is the stop, and nothing clears it |
+| `upload/E<n>_...pdf` and `applications/_diy/<date>/E<n>_<Company>.md` with n of 51 and up | you, only through `events.py diy-add` | a pasted or Easy Apply job's own resume and answer sheet; the runner moves the file the next day like its own |
 | `reports/week_<date>.md`, `reports/usage.csv` | you (`report.py`) | the weekly summary; usage readings |
 | `worksearch/<STATE>_<from>_<to>.csv/.xlsx/.md` | you (`worksearch.py`, create-only; `_v2` for a re-export) | the work-search record |
 | `network/raw/` | the user (drops exports) | LinkedIn and Google exports, never opened by you |
@@ -46,8 +50,8 @@ is Claude (a session or a scheduled task).
 | `runner/out/results/<id>.json`, `requests_done/<date>/` | one result per request |
 | `runner/out/events_done/<date>/`, `events_rejected/` (with `.reason.txt`) | applied and refused events |
 | `runner/in/bad/` (with `.reason.txt`) | event and request files that could not be read as JSON (too big, nested too deep, not JSON); set aside, never deleted |
-| `upload/NN_<Last>_Resume_<Employer12>.pdf`, `NNc_..._Cover_...pdf`, `NNw_...docx`, `E<n>_...pdf`; `upload/_done/<date>/` | the files the user attaches; only the runner moves them |
-| `applications/_diy/<date>/E<n>_<Company>.md` | answer sheets for do-yourself items, one per item, numbered as its `upload/E<n>_` file (no links) |
+| `upload/NN_<Last>_Resume_<Employer12>.pdf`, `NNc_..._Cover_...pdf`, `NNw_...docx`, `E<n>_...pdf`; `upload/_done/<date>/` | the files the user attaches; only the runner moves them (E51 and up are added by `events.py diy-add`, above) |
+| `applications/_diy/<date>/E<n>_<Company>.md` | answer sheets for do-yourself items, one per item, numbered as its `upload/E<n>_` file (no links); E51 and up as above |
 | `applications/_not_sent/<YYYY-MM>/` | folders of queued jobs that never got a row in 30 days (moved, never deleted) |
 | `network/network.csv`, `matches_<date>.csv`, `past_applications.csv` | people from the export (IDs N-0001...), the day's matches, earlier LinkedIn applications |
 | `reports/funnel.csv`, `logs/runner_<date>.log` | daily metrics; the log, keys redacted |
@@ -84,7 +88,7 @@ reads it there but never writes in the folder.
 | 1 | bad input (`ERROR ...`), or a refusal (`REFUSED ...` from answers.py, variants.py, library.py); `ERROR --args-file ...`: write the file again under `claude/` and rerun |
 | 2 | a package is missing (`pip install` it) |
 | 3 | posting.py: a link the checks passed did not load (`TRY` / `RERUN`: a timeout or an HTTP error), or `ROBOTS <host>` (read it in the browser); boards.py `GONE` or `ERROR` |
-| 4 | tracker `LOCKED` (the workbook is open in Excel), or posting.py `JOB BOARD` or `REFUSED` (a job board, a link that is not a plain public web address, or one that leads to a private address, before the request, while connecting or in a redirect: never fetched or opened by any tool, the browser included, and no `TRY` line; ask for the employer's own link or the posting text) |
+| 4 | tracker `LOCKED` (the workbook is open in Excel), or posting.py `JOB BOARD` or `REFUSED` (a job board, a link that is not a plain public web address, or one that leads to a private address, before the request, while connecting or in a redirect: never fetched or opened by any tool, the browser included, and no `TRY` line; ask for the employer's own link or the posting text; the one browser exception is a LinkedIn job's plain link with `[linkedin] browser = true`, ats/linkedin.md) |
 | 5 | tracker `REFUSED` (a backward status move, or a second row for a job already sent), or posting.py `CLOSED` |
 | 6 | `STRICT-FAIL` (build_resume.py `--strict`), `VARIANT-FAIL` (variants.py diff), `PREP_FAILED` (tier-b), `PROBLEM` (variants.py rebuild: that family stays out of the plan) |
 | 7 | netfetch `DENY` (host policy, robots or a private address) |

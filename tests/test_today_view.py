@@ -132,7 +132,7 @@ def make_root(name, morning=MORNING, applied_yesterday=21, contacted=2, workday=
         shutil.copyfile(folder / "resume_B.pdf", up)
         if plans:
             write_plan(root, it, ([SALARY] if it["n"] in (3, 7, 12) else []) + [SPONSOR])
-    q = {"v": 1, "date": DAY, "built_at": "2026-11-12T05:41:07-08:00", "runner_version": "1.2.0", "target": 20,
+    q = {"v": 1, "date": DAY, "built_at": "2026-11-12T05:41:07-08:00", "runner_version": jobfs.VERSION, "target": 20,
          "size": len(items), "pool_left": 41, "items": items,
          "account_block": {"after_n": 10, "tenants": TENANTS if workday else []},
          "counts": {"seen": 212, "passed": 71, "discarded": 141, "deferred": 0}}
@@ -151,7 +151,7 @@ def make_root(name, morning=MORNING, applied_yesterday=21, contacted=2, workday=
                                              "email_log_ids": [], "referrals": refs, "employers": [],
                                              "activities": [], "settings": {}, "refs": {}, "applied_ids": [],
                                              "pending_rejected": []})
-    jobfs.atomic_write_json(f.status_json, {"version": "1.2.0", "mode": "L", "min_skill": "1.2.0",
+    jobfs.atomic_write_json(f.status_json, {"version": jobfs.VERSION, "mode": "L", "min_skill": jobfs.VERSION,
                                             "last_daily": {"at": "2026-11-12T05:41:07-08:00", "ok": True},
                                             "last_tick": "2026-11-12T08:45:00-08:00", "tracker_locked_since": None})
     return root
@@ -770,7 +770,7 @@ def test_no_runner_card():
     f.queue_json(DAY).unlink()
     lines = card(root).splitlines()
     assert lines[1:] == [today_view.NOT_INSTALLED, "No list today yet. Paste a job link with /job <link>."], lines
-    jobfs.atomic_write_json(f.status_json, {"version": "1.2.0", "mode": "L", "min_skill": "1.2.0",
+    jobfs.atomic_write_json(f.status_json, {"version": jobfs.VERSION, "mode": "L", "min_skill": jobfs.VERSION,
                                             "last_daily": {"at": "2026-11-12T05:41:07-08:00", "ok": True}})
     lines = card(root).splitlines()
     assert today_view.NOT_SWITCHED_ON in lines and not any("Double-click" in ln for ln in lines), lines
@@ -786,7 +786,7 @@ def test_runner_state_lines():
     root = make_root("building", morning=QUIET_MORNING, applied_yesterday=0, contacted=0, workday=False)
     f = jobfs.Folder(root)
     f.queue_json(DAY).unlink()
-    base = {"version": "1.2.0", "mode": "L", "min_skill": "1.2.0", "tracker_locked_since": None,
+    base = {"version": jobfs.VERSION, "mode": "L", "min_skill": jobfs.VERSION, "tracker_locked_since": None,
             "last_daily": {"at": "2026-11-11T05:41:07-08:00", "date": "2026-11-11", "ok": True}}
     jobfs.atomic_write_json(f.status_json, dict(base, daily_running={"at": "2026-11-12T08:30:00-08:00", "pid": 4}))
     lines = card(root).splitlines()
@@ -1229,6 +1229,176 @@ def test_unsafe_values():
     print("ok next skips an item whose key, code or path is unsafe on a command line; ordinary names pass")
 
 
+def linkedin_setup(root, body="browser = true\n", features=True):
+    """Turn the LinkedIn browser mode on in a mode L root whose runner says it takes LinkedIn rows."""
+    f = jobfs.Folder(root)
+    f.settings_toml.write_text('[runner]\nmode = "L"\n[linkedin]\n' + body, encoding="ascii")
+    st = json.loads(f.status_json.read_text(encoding="utf-8"))
+    st.pop("features", None)
+    if features:
+        st["features"] = ["linkedin_source"]
+    jobfs.atomic_write_json(f.status_json, st)
+
+
+def add_rows(root, rows):
+    f = jobfs.Folder(root)
+    tr = json.loads(f.tracker_json.read_text(encoding="utf-8"))
+    tr["applications"] += rows
+    jobfs.atomic_write_json(f.tracker_json, tr)
+
+
+def test_linkedin_lane():
+    """The LinkedIn browser mode ([linkedin] browser, off by default): with it
+    off the card and progress are the v1.2.0 ones; with it on, `linkedin`
+    prints LINKEDIN GO with what is left of per_day, tracker rows with
+    Source LinkedIn count toward the day (the card's line, the closing line),
+    per_day ends it (DONE), a runner that would refuse a LinkedIn row or an
+    unreadable tracker holds it (WAIT), and a stop closes it for the day."""
+    root = make_root("linkedin", morning=QUIET_MORNING, workday=False)
+    f = jobfs.Folder(root)
+    plain = card(root)
+    assert run_args(root, "linkedin") == ["LINKEDIN off: [linkedin] browser is not true in config/settings.toml, "
+                                          "so no LinkedIn page is opened (ats/linkedin.md)"]
+    assert "LinkedIn" not in plain, plain
+    progress_off = run_args(root, "progress")
+    linkedin_setup(root, 'browser = "true"\n')   # a word in quotes is not a yes
+    assert run_args(root, "linkedin")[0].startswith("LINKEDIN off:") and card(root) == plain
+
+    # on, but the PC's job finder (mode L) does not say it takes LinkedIn rows: wait, and say how to fix it
+    linkedin_setup(root, features=False)
+    assert run_args(root, "linkedin") == [
+        "LINKEDIN WAIT runner: the job finder on this PC is older than this skill and would refuse a LinkedIn "
+        "row; the user double-clicks the new install_runner.cmd first"]
+    assert ("LinkedIn waits for the job finder on your PC to be updated: double-click the new install_runner.cmd."
+            in card(root).splitlines())
+
+    linkedin_setup(root)
+    assert run_args(root, "linkedin") == ["LINKEDIN GO left=25 of 25 sent=0 waiting=0 pace=4s stop_on_warning=true"]
+    lines = card(root).splitlines()
+    assert "LinkedIn is on: up to 25 applications there today (type /job linkedin)." in lines, lines
+    assert [ln for ln in lines if not ln.startswith("LinkedIn")] == plain.splitlines(), "one added line, no other change"
+    assert run_args(root, "progress") == progress_off, "nothing sent on LinkedIn yet: the v1.2.0 lines"
+
+    def row(i, status, applied=None, day=DAY, source="LinkedIn"):
+        return {"ID": 500 + i, "Date": day, "Company": f"Linked Co {i}", "Role": "Scientist", "Status": status,
+                "Applied": applied, "Source": source, "Found via": "linkedin:browser",
+                "Job key": f"linkedin:40123456{i:02d}", "URL": f"https://www.linkedin.com/jobs/view/40123456{i:02d}",
+                "Folder": f"applications/{day} Linked Co {i} - Scientist"}
+    add_rows(root, [row(1, "Applied", DAY), row(2, "Applied", DAY), row(3, "Filled - awaiting submit"),
+                    row(4, "Applied", "2026-11-11", day="2026-11-11"),             # yesterday's: not today's count
+                    row(5, "Filled - awaiting submit", day="2026-11-11"),         # handed over yesterday, no s
+                    row(6, "Not pursued"),                                         # skipped: never an application
+                    row(7, "Applied", DAY, source="Skill")])                      # another lane's row
+    assert run_args(root, "linkedin") == ["LINKEDIN GO left=22 of 25 sent=2 waiting=1 pace=4s stop_on_warning=true"]
+    lines = card(root).splitlines()
+    assert "LinkedIn: 2 sent today, 1 waiting for your Submit; up to 22 more today (type /job linkedin)." in lines
+    assert lines[1].startswith("Yesterday: 22 applications sent"), lines[1]
+    emit(root, "applied", 1)
+    assert run_args(root, "progress") == [
+        "PROGRESS applied=1 handed_over=0 skipped=0 later=0 parked=0 blocked=0 left=23 of 24",
+        "OFFLIST linkedin=2 other=1", "Today: 4 applications sent."], run_args(root, "progress")
+    # a list item's own tracker row is never counted twice (same job key, or the same folder)
+    it = queue_items(root)[0]
+    add_rows(root, [{"ID": 600, "Date": DAY, "Company": it["company"], "Role": it["role"], "Status": "Applied",
+                     "Applied": DAY, "Source": "Runner", "Job key": it["job_key"], "Folder": it["folder"]},
+                    {"ID": 601, "Date": DAY, "Company": "Folder Only", "Role": "Scientist", "Status": "Applied",
+                     "Applied": DAY, "Source": "Runner", "Job key": "", "Folder": queue_items(root)[1]["folder"]}])
+    assert run_args(root, "progress")[1:] == ["OFFLIST linkedin=2 other=1", "Today: 4 applications sent."]
+
+    # per_day is the day's end; pace and stop_on_warning are read from the file (never under 4 seconds)
+    linkedin_setup(root, "browser = true\nper_day = 3\nmin_seconds_between_actions = 2\nstop_on_warning = false\n")
+    assert run_args(root, "linkedin") == [f"LINKEDIN DONE {DAY}: 3 of 3 today (sent=2 waiting=1); no more LinkedIn "
+                                          "applications today"]
+    assert "LinkedIn: 3 applications today, the day's limit there; more tomorrow." in card(root).splitlines()
+    linkedin_setup(root, "browser = true\nper_day = 9\nmin_seconds_between_actions = 2\nstop_on_warning = false\n")
+    assert run_args(root, "linkedin") == ["LINKEDIN GO left=6 of 9 sent=2 waiting=1 pace=4s stop_on_warning=false"]
+
+    # the stop-for-the-day record closes it at once, for every later command that day, and only that day
+    events.stop_linkedin(root, "sign_in", DAY)
+    assert run_args(root, "linkedin") == [f"LINKEDIN STOPPED {DAY} sign_in: no LinkedIn page is opened again today"]
+    assert ("LinkedIn is closed for today: it asked for a sign-in check. I'll leave it alone until tomorrow."
+            in card(root).splitlines())
+    assert run_args(root, "linkedin", "--date", "2026-11-13")[0].startswith("LINKEDIN GO left=9 of 9 sent=0")
+    # ... also after the mode was turned off the same day (an account notice turns it off: linkedin_browser.md)
+    linkedin_setup(root, "browser = false\n")
+    assert run_args(root, "linkedin")[0].startswith(f"LINKEDIN STOPPED {DAY} sign_in")
+    other = make_root("linkedin_notice", morning=QUIET_MORNING, workday=False)
+    linkedin_setup(other, "browser = false\n")
+    events.stop_linkedin(other, "unusual_activity", DAY)
+    assert ("LinkedIn is closed for today: it showed an unusual-activity notice. Look at your LinkedIn account "
+            "yourself before it is used again." in card(other).splitlines())
+
+    # no readable tracker: the count is unknown, so nothing is opened
+    blind = make_root("linkedin_blind", morning=QUIET_MORNING, workday=False)
+    linkedin_setup(blind)
+    jobfs.Folder(blind).tracker_json.unlink()
+    jobfs.prev_path(jobfs.Folder(blind).tracker_json).unlink(missing_ok=True)
+    assert run_args(blind, "linkedin") == ["LINKEDIN WAIT tracker: the tracker cannot be read here, so today's "
+                                           "count is unknown"]
+    # modes S and M have no older runner to wait for (S: the snapshot; M: the workbook itself)
+    r2 = make_root("linkedin_S", morning=QUIET_MORNING, workday=False)
+    jobfs.Folder(r2).settings_toml.write_text('[runner]\nmode = "S"\n[linkedin]\nbrowser = true\n', encoding="ascii")
+    assert run_args(r2, "linkedin")[0].startswith("LINKEDIN GO left=25 of 25"), run_args(r2, "linkedin")
+    r3 = TMP / "linkedin_M" / "JobSearch"
+    jobfs.Folder(r3).config.mkdir(parents=True)
+    jobfs.Folder(r3).settings_toml.write_text('[runner]\nmode = "M"\n[linkedin]\nbrowser = true\n', encoding="ascii")
+    assert run_args(r3, "linkedin")[0].startswith("LINKEDIN WAIT tracker:"), "no workbook yet"
+    tracker_py = [sys.executable, str(SCRIPTS / "tracker.py")]
+    for argv in (["init", "--root", str(r3)],
+                 ["add", "--root", str(r3), "--company", "Linked Co", "--role", "Scientist", "--status",
+                  "Filled - awaiting submit", "--source", "LinkedIn", "--found-via", "linkedin:browser",
+                  "--url", "https://www.linkedin.com/jobs/view/4012345678"]):
+        done = subprocess.run(tracker_py + argv, capture_output=True, text=True, encoding="utf-8",
+                              env=dict(os.environ, JOB_SKILL_NOW=NOW))
+        assert done.returncode == 0, (argv, done.stdout, done.stderr)
+    assert run_args(r3, "linkedin") == ["LINKEDIN GO left=24 of 25 sent=0 waiting=1 pace=4s stop_on_warning=true"]
+    print("ok the LinkedIn browser mode: off by default, GO with the day's count, DONE, WAIT, and the stop record")
+
+
+def test_pasted_diy():
+    """Pasted jobs on the do-yourself list (events.py diy-add): listed after
+    the runner's own items with their own numbers (E51 and up) and their job
+    folder, never cut by easy_apply_list_max, until the tracker row of that
+    folder says the job was sent or dropped."""
+    root = make_root("pasted_diy", morning=QUIET_MORNING, workday=False)
+    f = jobfs.Folder(root)
+    (root / "profile.md").write_text("# Application profile\n\n## Contact\n- Legal first name: Jordan\n"
+                                     "- Legal last name: Avery\n", encoding="ascii")
+    leads = {"leads": {"a1": {"lead_id": "a1", "status": "diy", "company": "Hooli Health", "title": "Lab Scientist",
+                              "location": "Springfield, IL", "done_on": "2026-11-11"}}}
+    f.state.mkdir(parents=True, exist_ok=True)
+    (f.state / "leads_state.json").write_text(json.dumps(leads), encoding="ascii")
+    (f.upload / "E1_Avery_Resume_HooliHealth.pdf").write_bytes(b"%PDF E1")
+    folders = []
+    for company in ("Acme Bio", "Globex Labs", "Initech Labs"):
+        folder = root / "applications" / f"{DAY} {company} - QC Analyst"
+        folder.mkdir(parents=True)
+        (folder / "posting.md").write_text(f"URL:\nCompany: {company}\nRole: QC Analyst\nLocation: Springfield, IL\n"
+                                           "Job key:\n\n## Description\n\nSynthetic.\n", encoding="ascii")
+        (folder / "resume_B.pdf").write_bytes(b"%PDF-1.4 B " + company.encode() + b"\n")
+        events.diy_add(root, folder, DAY)
+        folders.append(folder.relative_to(root).as_posix())
+    runner_row = "DIY E1 | Hooli Health | Lab Scientist | Springfield, IL | upload/E1_Avery_Resume_HooliHealth.pdf"
+    pasted = [f"DIY E{51 + i} | {c} | QC Analyst | Springfield, IL | upload/E{51 + i}_Avery_Resume_{c.replace(' ', '')}"
+              f".pdf | {folders[i]}" for i, c in enumerate(("Acme Bio", "Globex Labs", "Initech Labs"))]
+    assert run_args(root, "diy") == [runner_row] + pasted, run_args(root, "diy")
+    f.settings_toml.write_text('[runner]\nmode = "L"\n[daily]\neasy_apply_list_max = 0\n', encoding="ascii")
+    assert run_args(root, "diy") == pasted + ["DIY MORE 1 more waiting; say `diy all` to see them "
+                                              "(today_view.py diy --all)"], "the cut never hides a pasted job"
+    f.settings_toml.write_text('[runner]\nmode = "L"\n', encoding="ascii")
+    # sent (log e51) or dropped (k): the row of that folder takes it off the list; the others keep their numbers
+    add_rows(root, [{"ID": 700, "Date": DAY, "Company": "Acme Bio", "Role": "QC Analyst", "Status": "Applied",
+                     "Applied": DAY, "Source": "Skill", "Found via": "pasted", "Folder": folders[0]},
+                    {"ID": 701, "Date": DAY, "Company": "Globex Labs", "Role": "QC Analyst",
+                     "Status": "Answers ready - fill by hand", "Source": "Skill", "Folder": folders[1]},
+                    {"ID": 702, "Date": DAY, "Company": "Initech Labs", "Role": "QC Analyst", "Status": "Not pursued",
+                     "Source": "Skill", "Folder": folders[2]}])
+    assert run_args(root, "diy") == [runner_row, pasted[1]], run_args(root, "diy")
+    assert run_args(root, "progress")[1:] == ["OFFLIST linkedin=0 other=1", "Today: 1 application sent."]
+    assert run_args(root, "diy", "--date", "2026-11-13") == [runner_row], "the pasted list is the day's own"
+    print("ok pasted jobs on the do-yourself list: their own numbers and folder, until sent or dropped")
+
+
 def test_wording():
     for text in CARDS:
         assert report.check_wording(text) == [], report.check_wording(text)
@@ -1244,7 +1414,7 @@ def main():
              test_card_after_break, test_drafts, test_config_typo, test_no_runner_card, test_runner_state_lines,
              test_computed_checks, test_stale_upload_copy, test_no_variant_line, test_corrected_today,
              test_tier_a_corrected, test_open_link, test_open_needs, test_alert_line, test_unsafe_values,
-             test_wording)
+             test_linkedin_lane, test_pasted_diy, test_wording)
     try:
         for t in tests:
             if not only or t.__name__ in only or t.__name__.removeprefix("test_") in only:

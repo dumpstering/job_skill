@@ -110,7 +110,7 @@ function Get-AppVersion([string]$AppFolder) {
         $m = Select-String -LiteralPath $jobfs -Pattern '^VERSION = "([0-9.]+)"' | Select-Object -First 1
         if ($m) { return $m.Matches[0].Groups[1].Value }
     }
-    return '1.2.0'
+    return '1.3.0'
 }
 
 function Get-TomlString([string]$Text) {

@@ -20,6 +20,10 @@ keep the last good copy and say so in `runner/out/status.json`.
 | "read my Indeed alerts" | `[alerts] read_indeed_family` | false | first quote the notice below |
 | "read my ZipRecruiter alerts" | `[alerts] read_ziprecruiter` | false | its links carry sign-in tokens; still never opened |
 | "stop reading LinkedIn alerts" | `[alerts] read_linkedin` | true | with `senders` empty too, the card's alert line stops |
+| "apply on LinkedIn for me" / "stop using LinkedIn" | `[linkedin] browser` | false | on: first quote the LinkedIn notice below, and only a clear yes counts; off: at once, no question |
+| "15 LinkedIn applications a day" | `[linkedin] per_day` | 25 | never over 50 |
+| "go slower on LinkedIn" | `[linkedin] min_seconds_between_actions` | 4 | seconds between two actions there; never under 4 |
+| "ask me before stopping on a LinkedIn warning" | `[linkedin] stop_on_warning` | true | a CAPTCHA, sign-in check, unusual-activity or limit notice ends LinkedIn for the day whatever this says (below) |
 | "use Adzuna" / "use USAJOBS" | `[sources] adzuna` / `usajobs` | false | keys only through the installer's prompt (rerun `install_runner.cmd`: it asks only for a key not entered yet), never in chat |
 | "search Workable" / "use The Muse" | `[sources] workable_search` / `muse` | false | their terms are unknown; say so before turning one on |
 | "stop reading Dayforce boards" | `[sources] dayforce` | true | |
@@ -55,6 +59,31 @@ institution at the company caps. `[runner] mode` is set by setup (see
 data mining. With this on I read only company, title and location from
 Indeed, Glassdoor and SimplyHired alerts, never their links; you decide
 whether that is acceptable." Indeed Apply is never automated either way.
+
+**The LinkedIn notice** (quote it before turning `[linkedin] browser` on):
+"LinkedIn's rules do not allow automated tools, and it can restrict an
+account that uses them. With this on I work there slowly, in your own
+Chrome, on job pages only, and you click Submit. Turn it on?" Only a clear
+yes turns it on; anything else leaves it off. In plain words, the four
+settings:
+- `browser = false` (the default): nothing ever opens LinkedIn. Its jobs
+  come as pasted text (`/job paste`) or the do-yourself list, as before.
+- `browser = true`: `/job linkedin` works in the user's own signed-in
+  Chrome ([linkedin_browser.md](linkedin_browser.md)): it searches the
+  approved families' titles around home, reads each posting, passes over
+  what the gates, the duplicate check and the caps drop, and fills Easy
+  Apply up to Submit. Scripts and the job finder still never touch
+  LinkedIn. Only the boolean `true` in a file that parses counts: a word in
+  quotes or a file with a typo leaves it off.
+- `per_day`: how many LinkedIn applications a day, sent and waiting for
+  Submit together. A number over 50 is read as 50.
+- `min_seconds_between_actions`: the wait after every click, search or
+  typed field there. A number under 4 is read as 4.
+- `stop_on_warning`: a CAPTCHA, a sign-in check, an unusual-activity notice
+  or a limit notice always ends LinkedIn for the day (the card says so, and
+  it is never retried that day). This switch is for anything else that
+  reads as a warning: `true` ends the day on that too; `false` stops and
+  asks the user first.
 
 **The search profile** (`config/search_profile.toml`: families, places,
 knockouts, the widen ladder) changes the same way, backup first. After a

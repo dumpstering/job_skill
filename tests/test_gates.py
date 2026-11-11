@@ -13,6 +13,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
+from collections import Counter
 from datetime import date
 from pathlib import Path
 
@@ -1312,6 +1314,510 @@ def test_two_openings_one_title():
         assert "workday:stanford:R3" not in got and "workday:stanford:R4" not in got, sorted(got)
 
 
+# ---------- round 6: a second kind of user (bioprocess), pay, work type, a second region ----------
+
+BIO = FIX / "labeled_bioprocess_2026-11-10.json"
+# What setup would set for a bioprocess user: their field's families active, the neighbours proposed (they
+# join with the widen step), the rest paused. The preset itself ships the five new families paused.
+BIO_STATUS = {
+    "process_dev_fermentation": "active", "bioprocess_engineering_msat": "active", "gmp_manufacturing": "active",
+    "cmc_writing_project": "active", "bioprocess_field_support": "active", "lab_operations": "active",
+    "quality_validation": "active", "qc_micro_sterility": "active", "microbiologist": "active",
+    "industry_rd_scientist": "active", "assay_development": "active", "research_associate_lab_tech": "active",
+    "government_microbiologist": "active",
+    "academic_staff_research": "proposed", "biosafety": "proposed", "regulatory_affairs": "proposed",
+    "field_application_tech_support": "proposed",
+    "study_director_assoc_director": "paused", "postdoc": "paused", "clinical_research": "paused",
+    "medical_science_liaison": "paused", "medical_scientific_writing": "paused", "license_path_trainee": "paused",
+    "lecturer_teaching": "paused", "bioinformatics_comp_bio": "paused"}
+BIO_EXCLUDE = ["part-time", "part time", "per diem", "lab assistant", "laboratory assistant"]
+# A made-up bioprocess person: about 3 industry years after 9 years running a university lab.
+BIO_LIBRARY = ("# Achievement library\n\nSynthetic test data: every name and number is made up.\n\n"
+               "### Scientist II, Process Development | Northwind Biologics | Feb 2020 - Dec 2022\n\n"
+               "- [L-0001] Upstream process development and tech transfer of mammalian cell culture processes in "
+               "single-use bioreactors; master batch records for GMP manufacturing.\n\n"
+               "### Lab Manager | Springfield State University | Jan 2011 - Dec 2019\n\n"
+               "- [L-0002] Ran a microbiology research lab: ordering, inventory, safety, HPLC upkeep.\n"
+               "- [L-0003] Doctoral thesis on antibiotic natural products (PhD awarded 2019).\n"
+               "<!-- last-id: L-0003 -->\n")
+BIO_TECHNIQUES = ("# Techniques\n\n"
+                  "- mammalian cell culture | aliases: cell culture | level: hands-on | years_ok: yes | evidence: L-0001\n"
+                  "- single-use bioreactors | aliases: bioreactor | level: hands-on | years_ok: yes | evidence: L-0001\n"
+                  "- tech transfer | aliases: technology transfer | level: hands-on | years_ok: yes | evidence: L-0001\n"
+                  "- HPLC | level: hands-on | years_ok: no | evidence: L-0002\n")
+
+
+def user_profile(status=None, exclude=(), min_terms=None, home_extra="", **gate_values):
+    """The preset as one user's search_profile.toml: family statuses (and min_terms), [gates] values (pay_floor,
+    shift_work, employment_types), more exclude words, and text added to [home] (a [[home.region]] table)."""
+    out, fid, seen = [], None, set()
+    for line in PRESET.read_text(encoding="utf-8").splitlines():
+        if line.startswith('id = "'):
+            fid = line.split('"')[1]
+        if line.startswith('status = "') and fid in (status or {}):
+            line = f'status = "{status[fid]}"'
+            seen.add(fid)
+            if fid in (min_terms or {}):
+                line += f"\nmin_terms = {min_terms[fid]}"
+        if line.startswith('label = ""                  # setup fills'):
+            line = 'label = "Springfield, CA"'
+        if line == "[gates]" and home_extra:
+            line = home_extra.strip() + "\n\n[gates]"
+        for key, value in gate_values.items():
+            if line.startswith(f"{key} = "):
+                line = f"{key} = {json.dumps(value)}"
+        if line.endswith('"medical coding", "call center", "claims", "IT", "HR"]') and exclude:
+            line = line[:-1] + ", " + ", ".join(json.dumps(w) for w in exclude) + "]"
+        out.append(line)
+    assert seen == set(status or {}), set(status or {}) - seen
+    return "\n".join(out) + "\n"
+
+
+def user_root(tmp, text, widen=None, library=None, techniques=None):
+    """Rules for one user's profile text over the preset's watch list (and their library, when given)."""
+    root = Path(tmp)
+    (root / "config").mkdir(parents=True, exist_ok=True)
+    (root / "config" / "search_profile.toml").write_text(text, encoding="utf-8")
+    shutil.copyfile(WATCHLIST, root / "config" / "watchlist.csv")
+    if library:
+        (root / "achievement_library.md").write_text(library, encoding="ascii")
+    if techniques:
+        (root / "techniques.md").write_text(techniques, encoding="ascii")
+    cfg = jobfs.search_profile(root)
+    assert cfg.source == "file", cfg.error
+    return gates.Rules(root, DAY, widen=widen or [])
+
+
+def bioprocess_text(pay_floor=0, min_terms=None):
+    return user_profile(BIO_STATUS, exclude=BIO_EXCLUDE, min_terms=min_terms, pay_floor=pay_floor,
+                        employment_types=["full-time", "contract"], shift_work="last")
+
+
+def test_bioprocess_labels_r6():
+    """Round 6 on live day 4 (2026-11-10), labeled for a bioprocess user: the 215 pooled postings (83 yes: 48
+    in the field, 35 in the wide net; 132 no) and the 492 distinct bioprocess-looking titles the v1.2 gates
+    dropped by title or requirements (21 yes, 471 no). That day every pooled posting was kept and every one of
+    those discards dropped. By title, place and work type (what this fixture can show without the texts):
+    the preset as shipped (the new families paused) still keeps the pool and picks up one discarded yes (a
+    CQV engineer); a bioprocess user's profile keeps 73 of the pool's 83 yes (the 10 it leaves are in the
+    academic research and biosafety families, proposed for this user: all 83 with the widen step on) and
+    drops 70 of its 132 no, and keeps all 21 discarded yes with 45 of the 471 no (4 of those yes and 25 of
+    those no had been dropped by G9: they pass the title as they did that day and the texts decide them
+    again). With the texts (after_text, judged against a person of this kind, no pay floor): 71 of the
+    pool's yes and 39 of its no are kept, and of the 55 discards read again 17 of 17 yes and 3 of 38 no
+    (4 more yes could not be read again). A pay floor of $125,000 then drops 27 of the pool's 71 kept yes
+    and 7 of the discards' 17 (entry manufacturing, research associate, QC and lab operations roles state
+    ranges that top out below it), and 5 of the 42 kept no; 19 of the 88 kept yes state no pay and stay."""
+    data = json.loads(BIO.read_text(encoding="ascii"))
+    items = data["items"]
+    pool_items = [it for it in items if it["group"] == "pool"]
+    disc_items = [it for it in items if it["group"] == "discard"]
+    assert (len(pool_items), len(disc_items)) == (215, 492)
+    assert Counter((it["group"], it["label"], it.get("tier", "")) for it in items) == {
+        ("pool", "yes", "core"): 48, ("pool", "yes", "wide"): 35, ("pool", "no", ""): 132,
+        ("discard", "yes", "core"): 21, ("discard", "no", ""): 471}
+
+    def run(rules):
+        return [list_verdict(rules, it["company"], it["title"], it["location"], i) for i, it in enumerate(items)]
+
+    def tally(verdicts, group, label, origin=None):
+        return sum(1 for it, (ok, _) in zip(items, verdicts)
+                   if ok and it["group"] == group and it["label"] == label
+                   and (origin is None or (it.get("was") == "G9") == (origin == "G9")))
+    with tempfile.TemporaryDirectory() as tmp:
+        shipped = run(preset_root(tmp))
+    with tempfile.TemporaryDirectory() as tmp:
+        user = run(user_root(tmp, bioprocess_text()))
+    with tempfile.TemporaryDirectory() as tmp:
+        wide = run(user_root(tmp, bioprocess_text(), widen=["adjacent_families"]))
+    got = {"shipped": [tally(shipped, "pool", "yes"), tally(shipped, "pool", "no"),
+                       tally(shipped, "discard", "yes", "G4"), tally(shipped, "discard", "no", "G4")],
+           "user": [tally(user, "pool", "yes"), tally(user, "pool", "no"),
+                    tally(user, "discard", "yes"), tally(user, "discard", "no")],
+           "user_g9_origin": [tally(user, "discard", "yes", "G9"), tally(user, "discard", "no", "G9")],
+           "widened": [tally(wide, "pool", "yes"), tally(wide, "pool", "no")]}
+    assert got == BIO_PINS, got
+    # no yes in the field is lost by title or place, and the temporary and part-time ones are out
+    lost = [it["title"] for it, (ok, _) in zip(items, user) if it["label"] == "yes" and not ok
+            and it["family"] not in ("academic_staff_research", "biosafety")]
+    assert not lost, lost
+    for it, (ok, v) in zip(items, user):
+        if "(Temporary)" in it["title"] or "Part-Time" in it["title"] or "Part-time" in it["title"]:
+            assert not ok, (it["title"], v.lines)
+    # the texts, as recorded when they were read (after_text)
+    texts = Counter((it["group"], it["label"], it["after_text"] == "kept") for it in items if "after_text" in it)
+    assert texts == {("pool", "yes", True): 71, ("pool", "yes", False): 12, ("pool", "no", True): 39,
+                     ("pool", "no", False): 93, ("discard", "yes", True): 17, ("discard", "no", True): 3,
+                     ("discard", "no", False): 35}, texts
+    # the pay floor on the stated ranges of what the texts kept
+    with tempfile.TemporaryDirectory() as tmp:
+        rules = user_root(tmp, bioprocess_text(pay_floor=125000))
+    assert rules.pay_floor == 125000 and not rules.temp_ok and rules.shift_last
+    paid = Counter()
+    for it in items:
+        if it.get("after_text") != "kept":
+            continue
+        p = jobfs.Posting(job_key="k", title=it["title"],
+                          text=f"Salary range: ${it['pay'][0]:,} to ${it['pay'][1]:,} a year." if "pay" in it else "")
+        v = gates.Verdict()
+        dropped = gates.g9_pay(p, v, rules) is not None
+        assert dropped == ("pay" in it and it["pay"][1] < 125000), (it["title"], it.get("pay"), v.lines)
+        paid[(it["group"], it["label"], "below" if dropped else "stated" if "pay" in it else "none")] += 1
+    assert paid == BIO_PAY, paid
+    print(f"   bioprocess labels: pool yes kept {got['user'][0]} of 83 by title (83 widened; 71 on the texts), no "
+          f"kept {got['user'][1]} of 132 (39 on the texts); discards yes kept {got['user'][2]} of 21, no "
+          f"{got['user'][3]} of 471; a $125,000 floor drops {paid[('pool', 'yes', 'below')]} of the pool's 71 kept "
+          f"yes and {paid[('discard', 'yes', 'below')]} of the discards' 17")
+
+
+# [pool yes, pool no, discard yes, discard no] kept by title, place and work type
+BIO_PINS = {"shipped": [83, 132, 1, 0], "user": [73, 62, 21, 45], "user_g9_origin": [4, 25], "widened": [83, 66]}
+# of the postings the texts kept: stated pay that tops out below $125,000, stated pay that reaches it, none stated
+BIO_PAY = {("pool", "yes", "below"): 27, ("pool", "yes", "stated"): 29, ("pool", "yes", "none"): 15,
+           ("pool", "no", "below"): 4, ("pool", "no", "stated"): 24, ("pool", "no", "none"): 11,
+           ("discard", "yes", "below"): 7, ("discard", "yes", "stated"): 6, ("discard", "yes", "none"): 4,
+           ("discard", "no", "below"): 1, ("discard", "no", "stated"): 2}
+
+
+def test_bioprocess_families():
+    """Round 6 title rules for a bioprocess user's profile, and the same titles under the preset as shipped
+    (the new families paused): nothing changes for the user the earlier rounds tuned. Process engineer,
+    manufacturing and lab-operations titles pass by title and are told apart on the requirements text (G9)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        shipped = preset_root(tmp)
+    with tempfile.TemporaryDirectory() as tmp:
+        user = user_root(tmp, bioprocess_text())
+
+    def fam(title, rules):
+        p = jobfs.Posting(job_key="k", title=title, company="Acme Bio", company_norm="acme bio")
+        v = gates.Verdict()
+        return None if gates.g4_title(p, v, rules) else v.info["family"]
+    A, B, C, F, L = ("bioprocess_engineering_msat", "gmp_manufacturing", "cmc_writing_project",
+                     "bioprocess_field_support", "lab_operations")
+    want = {  # title: (the user's family, the shipped preset's)
+        "Process Engineer II (Downstream Process Development)": (A, None),
+        "Senior Process Engineer, MSAT": (A, None), "Process Engineer III": (A, None),
+        "Associate Director, Drug Substance Manufacturing - Upstream Process": (A, None),
+        "Director, MSAT": (None, None), "Senior Director, Technology Transfer & Business Development": (None, None),
+        "Engineer II, Conjugation Development and Manufacturing": (A, None),
+        "Technology Transfer Specialist": (A, None), "QMS Process Engineer": (None, None),
+        "Process Control Engineer": (None, None), "Complex Facility Process Engineer": (None, None),
+        "Manufacturing Engineer II": (None, None), "Development Engineer": (None, None),
+        "Scientist, Process Engineering": (A, None),
+        "Manufacturing Associate, NGS TE Production": (B, None), "MFG Senior/Master, Downstream, Day Shift": (B, None),
+        "Drug Product Team Lead": (B, None), "Manager, Reagent Manufacturing": (B, None),
+        "Oligonucleotide Manufacturing Specialist": (B, None), "Manufacturing Lead": (B, None),
+        "Manufacturing Engineering Manager": (None, None), "Manager, Manufacturing Planning": (None, None),
+        "Senior Counsel, Pharmaceutical Development and Manufacturing": (None, None),
+        "(CW) Manufacturing Associate (Temporary/Contract)": (None, None),
+        "QA Associate - Temporary and Full Time": ("quality_validation", "quality_validation"),
+        "Associate Director, CMC Project Management": (C, None), "CMC Technical Writer": (C, None),
+        "Technical Writer": (None, None), "Program Manager": (None, None),
+        "Associate Director, CMC Regulatory": (None, None), "Sr Manager, Regulatory Affairs CMC": (None, None),
+        "Senior Scientist, CMC Analytical Development": ("industry_rd_scientist", "industry_rd_scientist"),
+        "Field Application Specialist, Bioprocess": (F, "field_application_tech_support"),
+        "Applications Engineer, Chromatography": (F, None),
+        "Lab Manager": (L, "research_associate_lab_tech"), "Lab Operations Specialist": (L, "research_associate_lab_tech"),
+        "Operations Manager": (None, None), "Lab Supervisor - Molecular Genetic Pathology": (None, None),
+        "Clinical Trials Regulatory Lab Manager": (None, None),
+        "Lab Assistant": (None, "research_associate_lab_tech"),
+        "Part-Time Clinical Research Coordinator": (None, "clinical_research"),
+        "CQV Engineer": ("quality_validation", "quality_validation"),
+        "Scientist, Natural Products Discovery": ("microbiologist", "microbiologist"),
+        "Antimicrobial Stewardship Pharmacist": (None, None),
+        "Scientist II, Downstream Viral Vector Process Development": ("process_dev_fermentation",) * 2,
+        "Downstream Purification Associate": ("process_dev_fermentation",) * 2,
+    }
+    for title, (mine, theirs) in want.items():
+        assert fam(title, user) == mine, (title, fam(title, user), mine)
+        assert fam(title, shipped) == theirs, (title, fam(title, shipped), theirs)
+    assert gates.set_aside("associate director msat", ["associate director"]) == "_ msat"
+    assert gates.title_level("Associate Director, MSAT") == 5 and gates.title_level("Process Engineer II") == 0
+    # G9 on the requirements: a bioprocess word is needed, and device, chip, refinery or clinical-lab words
+    # must not outnumber them
+    blurb = "About us: a great company with a great culture in a regulated industry. " * 3
+
+    def text(body):
+        return blurb + "\n\nRequirements\n" + body + "\n\nBenefits\nHealth plan.\n"
+    cases = [
+        (A, "single-use bioreactors, chromatography and TFF at pilot scale; tech transfer into cGMP "
+            "manufacturing; BS in chemical or mechanical engineering. " * 2, True),
+        (A, "medical device manufacturing under ISO 13485 and 21 CFR 820; injection molding, SolidWorks and "
+            "GD&T; lean and Six Sigma; GMP. " * 2, False),
+        (A, "semiconductor wafer processing, lithography and thin film deposition; statistical process "
+            "control. " * 2, False),
+        (A, "refinery process units, hydrocarbon processing and petroleum products; process safety. " * 2, False),
+        (A, "NGS library prep workflows and sequencer flow cells; lab automation and LIMS. " * 2, False),
+        (B, "cGMP biologics manufacturing: cell culture, buffer preparation, aseptic technique, batch "
+            "records; BS in biology. " * 2, True),
+        (B, "reagent manufacturing for NGS kits: pipetting, DNA and oligo handling, SOPs; BS in biology or "
+            "biochemistry. " * 2, True),
+        (B, "assemble medical devices under ISO 13485; soldering and mechanical assembly; device history "
+            "records; GMP. " * 2, False),
+        (L, "manage a BSL-2 molecular biology lab: inventory, vendors, equipment, biosafety and EHS. " * 2, True),
+        (L, "supervise CLIA laboratory staff; Joint Commission and CAP readiness; CLS license; patient "
+            "specimens. " * 2, False),
+        ("process_dev_fermentation", "downstream process development for viral vectors (AAV, lentiviral): "
+                                     "chromatography, TFF and depth filtration. " * 2, True),
+        ("process_dev_fermentation", "process chemistry and organic synthesis of small molecule APIs; "
+                                     "crystallization and scale-up in the pilot plant. " * 2, False),
+    ]
+    by_id = {f["id"]: f for f in user.families}
+    for fid, body, ok in cases:
+        p = jobfs.Posting(job_key="k", title="x", text=text(body))
+        v = gates.Verdict()
+        assert (gates.g9_words(p, v, by_id[fid]) is None) == ok, (fid, body[:50], v.lines)
+
+
+def test_bioprocess_seniority():
+    """R6 for a person with about 3 industry years after 9 years running a university lab (the doctorate
+    earned along the way): the lab years count as years of experience (they are no student role) and at half
+    weight toward the level, so a Scientist II is judged at senior level. A senior or staff title is kept
+    (staff as borderline), a principal title is beyond unless the text asks a modest bar, a plain '8+ years
+    of experience' is met, '5+ years in industry' is borderline and '8+ years in industry' beyond. With a
+    senior scientist title on the library the same years are judged at staff level, and an associate
+    director title (a principal-level one) is borderline, never beyond."""
+    with tempfile.TemporaryDirectory() as tmp:
+        me = user_root(tmp, bioprocess_text(), library=BIO_LIBRARY, techniques=BIO_TECHNIQUES).experience
+    assert (me.level, me.effective, me.doctorate, me.source) == (2, 3, True, "library"), me
+    assert (me.years, me.industry_years) == (11.9, 2.9), me
+    fam = {"mode": "industry"}
+
+    def verdict(title, line, who=me):
+        return gates.seniority(title, "Requirements\n" + line + "\n", fam, who)[0]
+    cases = [("Senior Scientist, Process Development", "- PhD with 2+ years of industry experience", "ok"),
+             ("Senior Process Engineer", "- 8+ years of relevant experience", "ok"),
+             ("Senior Scientist", "- PhD and 5+ years of industry experience", "borderline"),
+             ("Staff Scientist, MSAT", "- PhD; process characterization", "borderline"),
+             ("Process Engineer III", "- 8+ years of industry experience in biologics", "beyond"),
+             ("Principal Scientist, Purification", "- PhD with 10+ years of experience", "beyond"),
+             ("Principal Scientist, Purification", "- PhD with 3 years of experience", "borderline"),
+             ("Associate Director, MSAT", "- PhD with 8 years of experience", "beyond"),
+             ("Manufacturing Associate II", "- BS and 1 year of GMP experience", "ok")]
+    for title, line, want in cases:
+        assert verdict(title, line) == want, (title, line, verdict(title, line))
+    senior = BIO_LIBRARY.replace("### Scientist II, Process Development | Northwind Biologics | Feb 2020 - Dec 2022",
+                                 "### Senior Scientist | Northwind Biologics | Feb 2020 - Dec 2022")
+    with tempfile.TemporaryDirectory() as tmp:
+        sr = user_root(tmp, bioprocess_text(), library=senior).experience
+    assert (sr.level, sr.effective) == (3, 4), sr
+    assert verdict("Associate Director, MSAT", "- PhD with 8 years of experience", sr) == "borderline"
+    assert verdict("Principal Scientist, Purification", "- PhD with 10+ years of experience", sr) == "borderline"
+    assert verdict("Associate Director, MSAT", "- PhD and 10+ years of industry experience", sr) == "beyond"
+    assert verdict("Staff Scientist, MSAT", "- PhD; process characterization", sr) == "ok"
+
+
+def test_pay_floor():
+    """[gates] pay_floor: a posting whose stated pay tops out below the user's floor is dropped (reason pay, a
+    filter reason: judged again when the floor changes), one that states no pay is kept, hourly rates count
+    at 2,080 hours, and the floor is the user's setting (0, the shipped value, is off). Dollar figures that
+    are not pay (funding, revenue, a bonus, a 401k match) are not read as pay."""
+    pt = gates.pay_in_text
+    assert pt("Salary Range: $120,000-155,000*. Offers depend on experience.") == [(120000.0, 155000.0)]
+    assert pt("The base compensation range for this role is $40-45. Base pay") == [(83200.0, 93600.0)]
+    assert pt("The expected hourly range for this role is $50 to $60.50 depending on skills") == [(104000.0, 125840.0)]
+    assert pt("BUDGETED SALARY: $32.43/hr POSITION SUMMARY") == [(32.43 * 2080, 32.43 * 2080)]
+    assert pt("base salary $150k-$180k plus a sign-on bonus of $10,000") == [(150000.0, 180000.0)]
+    assert pt("monthly salary of $6,500 - $8,200 per month") == [(78000.0, 98400.0)]
+    assert pt("Compensation Range $18.33" + chr(0x2013) + "$25 USD") == [(18.33 * 2080, 25 * 2080.0)]  # an en dash
+    assert pt("The base salary range for this position is $120,000 - $140,000 + bonus + equity.") == \
+        [(120000.0, 140000.0)]
+    assert pt("the base salary range is approximately $77,000 - $85,000 USD per hour or annually") == \
+        [(77000.0, 85000.0)]
+    long_title = "Senior Staff Medical Science Liaison in Genetic Disease Testing and Reproductive Health, US"
+    assert pt(f"The estimated base salary range for the {long_title} role based in the United States of America "
+              "is: $155,600 - $233,400. Should the level change") == [(155600.0, 233400.0)]
+    assert pt("We offer competitive compensation and company-paid life insurance of $50,000.") == []
+    assert pt("The salary range is $100,400 to $186,400 for a Scientist 3 and $124,800 to $231,800 for a "
+              "Scientist 4.") == [(100400.0, 186400.0), (124800.0, 231800.0)]
+    for not_pay in ("From $0 to $400M+ annualized revenue run-rate in 6 years.", "We raised >$80M from investors.",
+                    "Our 401k match is up to $6,000 a year.", "A $20K sign-on bonus is offered.",
+                    "Tuition reimbursement of $5,250 a year.", "No dollar figure here."):
+        assert pt(not_pay) == [], (not_pay, pt(not_pay))
+    start = time.perf_counter()  # bounded work: many amounts and long runs of spaces stay fast
+    pt(("$1 " + " " * 300) * 5000 + "salary $100,000")
+    assert time.perf_counter() - start < 2, time.perf_counter() - start
+    P = jobfs.Posting
+    assert gates.stated_pay(P(job_key="k", salary={"min": 45.0, "max": 50.0, "period": "per-hour-wage",
+                                                   "currency": "USD"})) == (93600.0, 104000.0, "field")
+    assert gates.stated_pay(P(job_key="k", salary={"min": 80000.0, "max": 150000.0, "period": None,
+                                                   "currency": "USD"}))[:2] == (80000.0, 150000.0)
+    assert gates.stated_pay(P(job_key="k", salary={"min": 70000, "max": 90000, "period": "year", "currency": "EUR"},
+                              text="no pay words")) is None
+    assert gates.stated_pay(P(job_key="k", text="Requirements: a PhD.")) is None
+    with tempfile.TemporaryDirectory() as tmp:
+        off = preset_root(tmp)
+    with tempfile.TemporaryDirectory() as tmp:
+        rules = user_root(tmp, user_profile(pay_floor=125000))
+    assert off.pay_floor == 0 and rules.pay_floor == 125000 and off.hash != rules.hash
+    cases = [("Salary range: $105,000 - $115,000 a year.", False), ("Salary range: $110,000 - $140,000.", True),
+             ("The hourly rate for this contract is $55 to $60 per hour.", False),   # $124,800 a year
+             ("The hourly rate for this contract is $58 to $65 per hour.", True),    # $135,200 a year
+             ("Requirements: cell culture. No pay is stated.", True),
+             ("We raised $80M. Requirements: cell culture.", True)]
+    for body, ok in cases:
+        v = gates.Verdict()
+        kept = gates.g9_pay(P(job_key="k", title="Scientist", text=body), v, rules) is None
+        assert kept == ok, (body, v.lines)
+        if not ok:
+            assert v.reason == "pay" and gates.is_filter("pay") and "$125,000" in v.lines[-1], v.lines
+        assert gates.g9_pay(P(job_key="k", title="Scientist", text=body), gates.Verdict(), off) is None
+    # through a whole pass: one discard line with reason pay, and the kept posting carries its stated pay
+    with tempfile.TemporaryDirectory() as tmp:
+        root = copy_root(tmp)
+        path = root / "config" / "search_profile.toml"
+        toml = path.read_text(encoding="utf-8")
+        assert "[gates]" in toml and "pay_floor" not in toml
+        path.write_text(toml.replace("[gates]", "[gates]\npay_floor = 125000", 1), encoding="utf-8")
+        mk = make_gates_root.posting
+        low = mk("greenhouse:900501", "QC Microbiologist", make_gates_root.gh(900501),
+                 text=make_gates_root.MICRO + " The salary range for this role is $90,000 to $110,000.")
+        high = mk("greenhouse:900502", "Microbiologist II", make_gates_root.gh(900502),
+                  text=make_gates_root.MICRO + " The salary range for this role is $120,000 to $150,000.")
+        none = mk("greenhouse:900503", "Senior Microbiologist", make_gates_root.gh(900503))
+        run_all(root, postings=[low, high, none])
+        rows = {r["job_key"]: r for r in discards(root)}
+        assert rows["greenhouse:900501"]["gate"] == "G9" and rows["greenhouse:900501"]["reason"] == "pay", rows
+        assert rows["greenhouse:900501"]["profile_hash"], "a pay discard is judged again when the floor changes"
+        items = pool(root)
+        assert items["greenhouse:900502"]["pay_stated"] == [120000, 150000] and "greenhouse:900503" in items
+        assert "pay_stated" not in items["greenhouse:900503"]
+
+
+def test_work_type():
+    """Temporary jobs and shift work are the user's settings. With "temporary" out of [gates]
+    employment_types a title or text marked temp or temporary is dropped (employment:temporary, a filter
+    reason) unless it is also temp-to-hire, contract-to-hire or full-time; contract jobs stay. With
+    shift_work = "last" a night, swing, weekend or 12-hour job is kept and marked low_rank for the queue.
+    The shipped values change nothing."""
+    tm, sm = gates.temp_marked, gates.shift_marked
+    assert tm("(CW) Manufacturing Associate (Temporary/Contract)") and tm("Research Associate I/II (Temporary)")
+    assert tm("Lab Support Specialist - Temp") and not tm("QA Associate - Temporary and Full Time")
+    assert not tm("Manufacturing Associate (Temp-to-Hire)") and not tm("Bioprocess Specialist - CONTRACT")
+    assert not tm("Contemporary Art Curator") and not tm("Scientist", "Maintain temporary storage of samples.")
+    assert tm("Scientist", "This is a 6-month temporary position in our lab.")
+    assert tm("Manufacturing Associate I (Contract)", "You will join us for a temporary assignment of 6 months.")
+    assert not tm("Scientist", "This is a temporary position; contract-to-hire for the right person.")
+    for title in ("MFG Associate, Downstream, Swing Shift, Fremont CA", "Hospital Lab Technician 1 - Evenings",
+                  "Lab Tech - 12-HR Nights", "Clinical Lab Scientist (3rd Shift, Tues-Sat)",
+                  "Laboratory Associate II, Pre-Clinical (Night Shift)", "Research Associate - PM Shift (Contract)"):
+        assert sm(title), title
+    for title in ("MFG Senior/Master, Downstream, Fremont CA, Day Shift", "Research Associate - 8 HR Days",
+                  "Clinical Research Coordinator 2 (08-HR)", "Scientist, Process Development"):
+        assert not sm(title), title
+    assert sm("Scientist", "This is a swing shift position: Wednesday 3pm to 11:30pm.")
+    assert not sm("Scientist", "Must be willing to work night shifts as needed.")
+    with tempfile.TemporaryDirectory() as tmp:
+        shipped = preset_root(tmp)
+    with tempfile.TemporaryDirectory() as tmp:
+        user = user_root(tmp, user_profile(employment_types=["full-time", "contract"], shift_work="last"))
+    assert shipped.temp_ok and not shipped.shift_last and not user.temp_ok and user.shift_last
+    P = jobfs.Posting
+
+    def g4(title, rules):
+        v = gates.Verdict()
+        gates.g4_title(P(job_key="k", title=title, company="Acme Bio", company_norm="acme bio"), v, rules)
+        return v
+    v = g4("Research Associate I/II (Temporary), Ex Vivo & Assays", user)
+    assert not v.ok and v.reason == "employment:temporary" and gates.is_filter(v.reason), v.lines
+    assert g4("Research Associate I/II (Temporary), Ex Vivo & Assays", shipped).ok
+    assert g4("QA Associate - Temporary and Full Time", user).ok and g4("QC Analyst - CONTRACT", user).ok
+    for rules, low in ((user, ["shift"]), (shipped, None)):
+        v = gates.Verdict()
+        p = P(job_key="k", title="QC Microbiologist (Night Shift)", text="Requirements: aseptic technique.")
+        assert gates.g9_work_type(p, v, rules) is None and v.info.get("low_rank") == low, v.lines
+    v = gates.Verdict()
+    p = P(job_key="k", title="QC Microbiologist", text="This is a temporary position for six months.")
+    assert gates.g9_work_type(p, v, user) is not None and v.reason == "employment:temporary", v.lines
+    assert gates.g9_work_type(p, gates.Verdict(), shipped) is None
+
+
+def test_second_region():
+    """A second region the user would move to ([[home.region]], off unless enabled = true): its places pass
+    G3 marked relocate, are pooled with low_rank relocate (the queue lists them after the home jobs) and are
+    judged by the region's own pay_floor; there a job that states no pay is dropped unless unstated_pay is
+    "keep". Home places come first, another state's or country's namesake is still out, and a region that is
+    not enabled changes nothing."""
+    region = ('[[home.region]]\nlabel = "Boston area"\nenabled = {on}\nstates = ["MA"]\n'
+              'places = ["Boston", "Cambridge", "Waltham"]\npay_floor = 200000\n\n'
+              '[[home.region]]\nlabel = "North Carolina"\nenabled = {on}\nstates = ["NC"]\nunstated_pay = "keep"\n')
+    with tempfile.TemporaryDirectory() as tmp:
+        off = user_root(tmp, user_profile(home_extra=region.format(on="false"), pay_floor=125000))
+    with tempfile.TemporaryDirectory() as tmp:
+        on = user_root(tmp, user_profile(home_extra=region.format(on="true"), pay_floor=125000))
+    assert off.regions == [] and [r["label"] for r in on.regions] == ["Boston area", "North Carolina"]
+    assert on.regions[0]["pay_floor"] == 200000 and on.regions[0]["unstated_pay"] == "drop"
+    assert on.regions[1]["pay_floor"] == 0 and on.regions[1]["unstated_pay"] == "keep" and off.hash != on.hash
+    cases = {"Cambridge, MA": "Boston area", "Boston, Massachusetts, United States": "Boston area",
+             "Waltham": "Boston area", "Durham, NC": "North Carolina", "US - North Carolina - Sanford": "North Carolina",
+             "Cambridge, United Kingdom": None, "Boston, Lincolnshire, UK": None, "Worcester, MA": None,
+             "Austin, TX": None, "Remote - Massachusetts": None}
+    for loc, want in cases.items():
+        ok, v = list_verdict(on, "Acme Bio", "QC Microbiologist", loc)
+        assert (v.info.get("region") if ok else None) == want, (loc, ok, v.lines)
+        assert not list_verdict(off, "Acme Bio", "QC Microbiologist", loc)[0], loc
+    ok, v = list_verdict(on, "Acme Bio", "QC Microbiologist", "South San Francisco, CA | Cambridge, MA")
+    assert ok and "region" not in v.info, v.lines  # a home place among them: a home job
+    P = jobfs.Posting
+
+    def pay(text, where):
+        v = gates.Verdict(info={"region": where} if where else {})
+        return gates.g9_pay(P(job_key="k", title="Scientist", text=text), v, on) is None, v
+    assert pay("Salary range: $150,000 to $190,000.", None)[0]              # home: over the $125,000 floor
+    kept, v = pay("Salary range: $150,000 to $190,000.", "Boston area")     # moving needs $200,000
+    assert not kept and v.reason == "pay" and "Boston area" in v.lines[-1], v.lines
+    assert pay("Salary range: $180,000 to $230,000.", "Boston area")[0]
+    kept, v = pay("Requirements: cell culture.", "Boston area")             # no stated pay: not worth a move
+    assert not kept and "no stated pay" in v.lines[-1], v.lines
+    assert pay("Requirements: cell culture.", "North Carolina")[0]           # unstated_pay = "keep"
+    assert not pay("Salary range: $90,000 to $110,000.", "North Carolina")[0]  # the [gates] floor applies there
+    # through a whole pass, and the places the board readers walk
+    with tempfile.TemporaryDirectory() as tmp:
+        root = copy_root(tmp)
+        path = root / "config" / "search_profile.toml"
+        toml = path.read_text(encoding="utf-8")
+        assert "[gates]" in toml
+        path.write_text(toml.replace("[gates]", '[[home.region]]\nlabel = "Brockway"\nenabled = true\n'
+                                                'places = ["Brockway"]\nunstated_pay = "keep"\n\n[gates]', 1),
+                        encoding="utf-8")
+        there = make_gates_root.posting("greenhouse:900601", "QC Microbiologist", make_gates_root.gh(900601),
+                                        location="Brockway, IL", city="Brockway")
+        run_all(root, postings=[there])
+        item = pool(root)["greenhouse:900601"]
+        assert item["relocate"] == "Brockway" and item["low_rank"] == ["relocate"], item
+        import boards
+        places, states, _ = boards.home_area(root, jobfs.search_profile(root))
+        assert "Brockway" in places and "Springfield" in places
+    assert gates.search_area({"places": ["Springfield"], "states": ["IL"], "region": [
+        {"label": "x", "enabled": True, "states": ["MA"], "places": ["Boston"]},
+        {"label": "y", "enabled": False, "states": ["NC"], "places": ["Durham"]}]}) == (
+        ["Springfield", "Boston"], frozenset({"IL", "MA"}))
+
+
+def test_min_terms():
+    """A family's min_terms (a user's setting for a broad family): a posting that names fewer of the user's
+    own terms than that is another specialty's and is dropped (reason title); not judged while techniques.md
+    is empty, and off in the preset as shipped. The profile hash follows techniques.md once it is set."""
+    import library
+    with tempfile.TemporaryDirectory() as tmp:
+        rules = user_root(tmp, bioprocess_text(min_terms={"industry_rd_scientist": 2}), library=BIO_LIBRARY,
+                          techniques=BIO_TECHNIQUES)
+        techniques = library.load_techniques(Path(tmp) / "techniques.md")
+        plain = user_root(Path(tmp) / "plain", bioprocess_text(), library=BIO_LIBRARY, techniques=BIO_TECHNIQUES)
+        assert rules.hash != plain.hash
+    fam = next(f for f in rules.families if f["id"] == "industry_rd_scientist")
+    assert fam["min_terms"] == 2 and "min_terms" not in next(f for f in plain.families if f["id"] == fam["id"])
+    P = jobfs.Posting
+    mine = P(job_key="k", title="Scientist", text="Requirements: mammalian cell culture in single-use bioreactors; HPLC.")
+    theirs = P(job_key="k", title="Scientist", text="Requirements: multiparameter flow cytometry of immune cells.")
+    assert gates.g9_terms(mine, gates.Verdict(), fam, techniques, BIO_LIBRARY) is None
+    v = gates.Verdict()
+    assert gates.g9_terms(theirs, v, fam, techniques, BIO_LIBRARY) is not None and v.reason == "title", v.lines
+    assert "names 0.5 of your terms" in v.lines[-1], v.lines  # 'flow cytometry' is a family term, not one of theirs
+    assert gates.g9_terms(theirs, gates.Verdict(), fam, [], BIO_LIBRARY) is None       # no techniques yet
+    assert gates.g9_terms(theirs, gates.Verdict(), dict(fam, min_terms=0), techniques) is None
+
+
 def main():
     for fn in (test_every_gate, test_knockouts, test_freshness_and_repost, test_undated_board,
                test_ai_text_parked_once, test_profile_edit_reopens, test_two_stage_keep, test_dormant_board, test_explain, test_terms,
@@ -1322,7 +1828,8 @@ def main():
                test_fit_overlap, test_office_labels, test_second_ring_set_aside, test_labeled_pools_r6,
                test_seniority_rules, test_shift_lengths_not_hr, test_exact_core_title_first, test_regional_remote,
                test_robots_refused_by_policy, test_link_refusal_r1, test_fit_general_form, test_posted_values,
-               test_other_field_postdocs):
+               test_other_field_postdocs, test_bioprocess_labels_r6, test_bioprocess_families,
+               test_bioprocess_seniority, test_pay_floor, test_work_type, test_second_region, test_min_terms):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

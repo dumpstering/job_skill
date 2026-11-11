@@ -40,6 +40,11 @@ rounds_size = 5
 sensitive_confirm = "per_job"   # per_job (v1.1 semantics, batched) | daily (owner opt-in)
 screener = false
 mygreenhouse_autofill = false   # oss A27 experiment
+[linkedin]                  # opt-in (references/linkedin_browser.md): LinkedIn's rules do not allow automated tools
+browser = false             # true: Claude works on LinkedIn in your own Chrome, slowly; you click Submit
+per_day = 25                # LinkedIn applications a day, at most (never over 50)
+min_seconds_between_actions = 4   # never under 4
+stop_on_warning = true      # any other warning ends LinkedIn for the day too (a CAPTCHA, sign-in check or notice always does)
 [caps]                      # R7; no source gives a number except Google's: change these to taste
 per_company_30d = 5         # an Amazon recruiter's "up to five roles you fully meet"
 per_family_per_company_30d = 2

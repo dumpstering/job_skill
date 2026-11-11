@@ -95,6 +95,6 @@ JSONL lines are `jobfs.Posting` dicts plus `ai_text` and `hidden` lists (G11 rea
 
 ## Presets
 
-`templates/watchlist.csv` and `templates/boards.csv` hold the header only. `templates/presets/lifesci_bayarea/` holds the research-run-2 lists for San Francisco Bay Area life-science employers and boards. Setup offers it when the field and region match. `ref` points into the research files (`employers#<n>`, finding IDs).
+`templates/watchlist.csv` and `templates/boards.csv` hold the header only. `templates/presets/lifesci_bayarea/` holds the research-run-2 lists for San Francisco Bay Area life-science employers and boards. Setup offers it when the field and region match. `ref` points into the research files (`employers#<n>`, finding IDs); `r6-bioprocess` rows (round 6) are makers and contract manufacturers of biologics and cell and gene therapies, bioprocess equipment and reagent makers, and industrial biotech, each kept only because its board answered a list call through `netfetch` on the day it was added. Cytiva and Pall postings come through the Danaher row, and Thermo Fisher's bioproduction roles through its own.
 
 A row's `city` is the employer's main site. G3 uses it when a posting names an office or lab instead of a place ('MBC Lab', a street address, the employer's own name): that posting counts as being in the row's city, and as unknown when the row has no city. Rows in `second_ring` places (Novato, San Rafael) are polled every day; their postings wait until the user widens (discovery.md).

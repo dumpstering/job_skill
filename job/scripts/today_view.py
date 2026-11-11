@@ -6,6 +6,7 @@ Usage:
     python today_view.py progress --root R [--date YYYY-MM-DD]
     python today_view.py diy      --root R [--date YYYY-MM-DD] [--all]
     python today_view.py drafts   --root R [--date YYYY-MM-DD] [--n N]
+    python today_view.py linkedin --root R [--date YYYY-MM-DD]
 
 The day's items are queue/<date>/queue.json, its addenda, and the jobs from
 links (/job <link>, /job add <link>) whose added event the runner has not
@@ -126,9 +127,13 @@ drafts prints the free-text drafts of claude/<date>/morning.json in full
 (DRAFT #<n> (<label>), then the text), or DRAFTS none.
 
 progress prints PROGRESS applied=<n> handed_over=<n> skipped=<n> later=<n>
-parked=<n> blocked=<n> left=<n> of <n>, then the closing line
-("Today: 8 applications sent." plus people contacted when nonzero, or
-"Today: no applications sent yet.").
+parked=<n> blocked=<n> left=<n> of <n> (the list's items), then, when any
+application sent today is not an item of the list (a LinkedIn Easy Apply
+form, a pasted or do-yourself job, /job log: tracker rows with Applied
+today whose job key and folder no item has),
+    OFFLIST linkedin=<n> other=<n>
+then the closing line, which counts both ("Today: 8 applications sent."
+plus people contacted when nonzero, or "Today: no applications sent yet.").
 
 diy prints the do-yourself list in the order the runner stages it and
 diy.md lists it (diy_all: LinkedIn leads given up that pass the title and
@@ -138,6 +143,24 @@ chat-apply pool items by fit; at most easy_apply_list_max, every item with
     DIY E1 | <company> | <title> | <location> | upload/E1_... (when staged)
     DIY MORE <n> more waiting; say `diy all` to see them (today_view.py diy --all)
     DIY SET-ASIDE <n> leads whose title or place the gates would not take (not listed)
+After them come the day's pasted jobs (events.py diy-add; E51 and up, every
+one, with its job folder as a sixth column), until the tracker row of that
+folder says it was sent or dropped:
+    DIY E51 | <company> | <title> | <location> | upload/E51_... | <job folder>
+
+linkedin prints one line, the state of the LinkedIn browser mode for the
+day ([linkedin] in settings.toml, events.linkedin_settings). A session acts
+on LinkedIn only after a line that starts LINKEDIN GO:
+    LINKEDIN GO left=<n> of <per_day> sent=<n> waiting=<n> pace=<s>s stop_on_warning=<true|false>
+    LINKEDIN DONE <date>: <n> of <per_day> today (sent=<n> waiting=<n>); no more LinkedIn applications today
+    LINKEDIN STOPPED <date> <reason>: no LinkedIn page is opened again today
+    LINKEDIN WAIT runner: ...   (mode L and the PC's job finder would refuse a LinkedIn row)
+    LINKEDIN WAIT tracker: ...  (the tracker cannot be read, so today's count is unknown)
+    LINKEDIN off: ...           ([linkedin] browser is not true)
+sent counts tracker rows with Source LinkedIn applied today, waiting those
+handed over today with no s yet; both count toward per_day. The stop is
+claude/<date>/linkedin_stop.json (events.py linkedin-stop). The card carries
+the same state as one plain line while the mode is on or was stopped today.
 Stdlib only.
 
 Exit codes: 0 ok, 1 bad input (ERROR ...).
@@ -203,6 +226,16 @@ REBUILD_WHY = "its tailored resume cites something you corrected today; rerun th
 ALERT_DAYS = 3
 ALERT_LINE = ("No job-alert email has come in for 3 days, and alerts bring most new jobs. "
               "Type /job alerts and I'll fix it with you (about 2 minutes).")
+# The LinkedIn browser mode ([linkedin] browser = true): the card's words for a stop reason.
+LINKEDIN_WHY = {"captcha": "it showed a CAPTCHA", "sign_in": "it asked for a sign-in check",
+                "unusual_activity": "it showed an unusual-activity notice",
+                "limit": "it said the day's limit there was reached",
+                "restricted": "it said the account is restricted", "other": "it showed a notice"}
+LINKEDIN_LOOK = ("unusual_activity", "restricted")   # the user looks at the account before it is used again
+LINKEDIN_FEATURE = "linkedin_source"                 # status.json features (jobrunner.FEATURES)
+# A pasted do-yourself item leaves the list once its tracker row says it was sent or dropped.
+PASTE_DONE = {"applied", "no response", "assessment", "screen", "interview", "offer", "rejected", "withdrawn",
+              "closed", "not pursued"}
 # Shared decision 2: a job key or code next prints for a command line, and a path it prints
 # for double quotes (letters of any script, digits, spaces, and punctuation that bash and
 # PowerShell leave alone inside double quotes; never $ ` " \ or a control character).
@@ -1008,6 +1041,92 @@ def referral_line(root, day, m, settings):
     return f"{plural(n, 'person', 'people')} you could ask about a job: drafts after #{after}."
 
 
+def linkedin_rows(store, day):
+    """(sent, waiting) of the LinkedIn browser mode today: tracker rows with
+    Source LinkedIn applied today, and those handed over today (Filled -
+    awaiting submit) that still wait for the user's Submit."""
+    sent = waiting = 0
+    for r in store.app_rows() if store is not None else []:
+        if str(r.get("Source") or "").strip().lower() != "linkedin":
+            continue
+        if to_date(r.get("Applied")) == day:
+            sent += 1
+        elif str(r.get("Status") or "").strip().lower() == "filled - awaiting submit" \
+                and to_date(r.get("Date")) == day:
+            waiting += 1
+    return sent, waiting
+
+
+def linkedin_lane(root, day, settings=None, store=None, status=None):
+    """The LinkedIn browser mode's state for the day (linkedin_browser.md):
+    {state, line, sent, waiting, left, per_day, reason}. state is go (a
+    session may act on LinkedIn), done (per_day reached), stopped (closed for
+    the day by events.py linkedin-stop), wait (mode L with a job finder that
+    would refuse a LinkedIn row, or a tracker that cannot be read: the count
+    is unknown) or off ([linkedin] browser is not true). A stop comes first,
+    whatever the setting says now; every check fails closed."""
+    cfg = events.linkedin_settings(root)
+    iso = day.isoformat()
+    out = {"state": "off", "sent": 0, "waiting": 0, "left": 0, "per_day": cfg["per_day"], "reason": ""}
+    stop = events.linkedin_stop(root, day)
+    if stop is not None:
+        out.update(state="stopped", reason=stop["reason"],
+                   line=f"LINKEDIN STOPPED {iso} {stop['reason']}: no LinkedIn page is opened again today")
+        return out
+    if not cfg["browser"]:
+        out["line"] = ("LINKEDIN off: [linkedin] browser is not true in config/settings.toml, so no LinkedIn page "
+                       "is opened (ats/linkedin.md)")
+        return out
+    settings = settings if settings is not None else jobfs.settings(root)
+    if str(settings["runner"].get("mode", "L")).upper() == "L":
+        status = status if status is not None else verified(jobfs.Folder(root).status_json, {})
+        features = status.get("features")
+        if LINKEDIN_FEATURE not in (features if isinstance(features, list) else []):
+            out.update(state="wait", reason="runner",
+                       line="LINKEDIN WAIT runner: the job finder on this PC is older than this skill and would "
+                            "refuse a LinkedIn row; the user double-clicks the new install_runner.cmd first")
+            return out
+    store = store if store is not None else open_store(root)
+    if store is None:
+        out.update(state="wait", reason="tracker",
+                   line="LINKEDIN WAIT tracker: the tracker cannot be read here, so today's count is unknown")
+        return out
+    sent, waiting = linkedin_rows(store, day)
+    left = max(0, cfg["per_day"] - sent - waiting)
+    out.update(sent=sent, waiting=waiting, left=left)
+    if left <= 0:
+        out.update(state="done",
+                   line=f"LINKEDIN DONE {iso}: {sent + waiting} of {cfg['per_day']} today (sent={sent} "
+                        f"waiting={waiting}); no more LinkedIn applications today")
+        return out
+    out.update(state="go",
+               line=f"LINKEDIN GO left={left} of {cfg['per_day']} sent={sent} waiting={waiting} "
+                    f"pace={cfg['min_seconds_between_actions']}s "
+                    f"stop_on_warning={'true' if cfg['stop_on_warning'] else 'false'}")
+    return out
+
+
+def linkedin_card_line(lane):
+    """The card's one plain line for the LinkedIn browser mode; None while it
+    is off (the v1.2.0 card) or the tracker cannot be read."""
+    state, sent, waiting = lane["state"], lane["sent"], lane["waiting"]
+    if state == "stopped":
+        tail = ("Look at your LinkedIn account yourself before it is used again."
+                if lane["reason"] in LINKEDIN_LOOK else "I'll leave it alone until tomorrow.")
+        return f"LinkedIn is closed for today: {LINKEDIN_WHY.get(lane['reason'], LINKEDIN_WHY['other'])}. {tail}"
+    if state == "wait" and lane["reason"] == "runner":
+        return ("LinkedIn waits for the job finder on your PC to be updated: double-click the new "
+                "install_runner.cmd.")
+    if state == "done":
+        return f"LinkedIn: {plural(sent + waiting, 'application')} today, the day's limit there; more tomorrow."
+    if state != "go":
+        return None
+    if not sent and not waiting:
+        return f"LinkedIn is on: up to {plural(lane['left'], 'application')} there today (type /job linkedin)."
+    parts = ([f"{sent} sent today"] if sent else []) + ([f"{waiting} waiting for your Submit"] if waiting else [])
+    return f"LinkedIn: {', '.join(parts)}; up to {lane['left']} more today (type /job linkedin)."
+
+
 def draft_lines(m, done):
     out = []
     for d in drafts_of(m):
@@ -1443,7 +1562,8 @@ def card(root, day, short=False):
     lines += question_lines(root, day, m, cap, by_n, by_key)
     batch = int(settings["daily"].get("batch_size", 10))
     referral = referral_line(root, day, m, settings) if len(done) < batch else None
-    for line in [sensitive_line(root, day, items, by_n, by_key)] + draft_lines(m, done) + [referral]:
+    linkedin = linkedin_card_line(linkedin_lane(root, day, settings, store, status))
+    for line in [sensitive_line(root, day, items, by_n, by_key)] + draft_lines(m, done) + [referral, linkedin]:
         if line:
             lines.append(line)
     if first:
@@ -1680,6 +1800,31 @@ def next_item(root, day, short=False):
 
 # ---------- progress and diy ----------
 
+def offlist_sent(store, day, items):
+    """(linkedin, other): applications sent today that are not items of the
+    day's list, so no applied event counts them: tracker rows with Applied
+    today whose job key and folder no item has. linkedin are the rows with
+    Source LinkedIn (an Easy Apply form filled in the user's browser); other
+    are pasted and do-yourself jobs and /job log."""
+    if store is None:
+        return 0, 0
+    keys = {jobkey.safe_key(it.get("job_key")) for it in items if it.get("job_key")}
+    folders = {str(it.get("folder") or "").replace("\\", "/").strip("/") for it in items if it.get("folder")}
+    linkedin = other = 0
+    for r in store.app_rows():
+        if to_date(r.get("Applied")) != day:
+            continue
+        key = jobkey.safe_key(str(r.get("Job key") or "").strip())
+        folder = str(r.get("Folder") or "").replace("\\", "/").strip("/")
+        if (key and key in keys) or (folder and folder in folders):
+            continue
+        if str(r.get("Source") or "").strip().lower() == "linkedin":
+            linkedin += 1
+        else:
+            other += 1
+    return linkedin, other
+
+
 def progress(root, day):
     items, _ = queue(root, day)
     by_n, by_key, view = states(root, day)
@@ -1695,7 +1840,10 @@ def progress(root, day):
     if store is not None and getattr(store, "referrals", None) is not None:
         people = sum(1 for r in store.referrals.rows() if to_date(r.get("Date")) == day
                      and str(r.get("Status") or "") not in ("", "Drafted"))
-    sent = counts["applied"]
+    off_linkedin, off_other = offlist_sent(store, day, items)
+    if off_linkedin or off_other:
+        out.append(f"OFFLIST linkedin={off_linkedin} other={off_other}")
+    sent = counts["applied"] + off_linkedin + off_other
     parts = [f"{plural(sent, 'application')} sent"] if sent else []
     if people:
         parts.append(f"{plural(people, 'person', 'people')} contacted")
@@ -1778,15 +1926,31 @@ def diy_more_lines(more, aside):
     return out
 
 
+def paste_open(root, day):
+    """The day's pasted do-yourself items (events.py diy-add; E51 and up)
+    still to apply for: every one whose job folder has no tracker row saying
+    it was sent or dropped."""
+    items = events.paste_items(root, day)
+    if not items:
+        return []
+    store = open_store(root)
+    done = {str(r.get("Folder") or "").replace("\\", "/").strip("/")
+            for r in (store.app_rows() if store is not None else [])
+            if str(r.get("Status") or "").strip().lower() in PASTE_DONE}
+    return [it for it in items if it["folder"] not in done]
+
+
 def diy_list(root, day, show_all=False):
     """The list as staged, numbered as staged; a job already logged by hand
     keeps its number but leaves the list. show_all: every item, past the cut
-    too (those have no upload staged). Then diy_more_lines."""
+    too (those have no upload staged). Then the day's pasted items
+    (paste_open: their own numbers, never cut), then diy_more_lines."""
     f = jobfs.Folder(root)
     staged = {p.name.split("_", 1)[0]: p.name for p in f.upload.glob("E*_*.pdf")} if f.upload.exists() else {}
     every, aside = diy_all(root, day)
     limit = int(jobfs.settings(root)["daily"].get("easy_apply_list_max", 5))
-    rows = every if show_all else every[:limit]
+    # E51 and up are the pasted items' numbers (events.PASTE_E_FIRST): the runner's rows never reach them
+    rows = (every if show_all else every[:limit])[:events.PASTE_E_FIRST - 1]
     done = logged_by_hand(root) if rows else set()
     out = []
     for i, (company, title, loc) in enumerate(rows, 1):
@@ -1796,6 +1960,7 @@ def diy_list(root, day, show_all=False):
         if f"E{i}" in staged and path_ok(f"upload/{staged[f'E{i}']}"):
             line += f" | upload/{staged[f'E{i}']}"
         out.append(line)
+    out += [events.diy_line(it) for it in paste_open(root, day)]
     return (out or ["DIY none"]) + diy_more_lines(len(every) - len(rows), len(aside))
 
 
@@ -1807,7 +1972,8 @@ def build_parser():
     sub = ap.add_subparsers(dest="cmd", required=True, metavar="command")
     for name, hlp in (("card", "Print the day's card."), ("next", "Print the next item's handover data."),
                       ("progress", "Counts so far and the closing line."), ("diy", "The do-yourself list."),
-                      ("drafts", "The card's free-text drafts in full.")):
+                      ("drafts", "The card's free-text drafts in full."),
+                      ("linkedin", "The LinkedIn browser mode's state for the day: act on LINKEDIN GO alone.")):
         p = sub.add_parser(name, help=hlp, allow_abbrev=False)
         p.add_argument("--root", required=True)
         p.add_argument("--date")
@@ -1857,6 +2023,8 @@ def main(argv=None):
             lines = progress(root, day)
         elif args.cmd == "drafts":
             lines = drafts(root, day, args.n)
+        elif args.cmd == "linkedin":
+            lines = [linkedin_lane(root, day)["line"]]
         else:
             lines = diy_list(root, day, show_all=args.show_all)
     except (jobfs.ConfigError, OSError) as e:

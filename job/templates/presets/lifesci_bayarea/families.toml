@@ -75,6 +75,40 @@
 #   associate and industry scientist families by title, and the postdoc
 #   family's G9 words need a biology word in the posting and drop one whose
 #   text names more of those fields. Metabolic or strain engineering stays.
+#
+# Round 6 (a second kind of user: bioprocess and manufacturing sciences;
+# live day 4's pool and discards labeled for that profile,
+# tests/fixtures/pool/labeled_bioprocess_2026-11-10.json):
+# - Five families ship paused, for the user whose background they fit:
+#   bioprocess engineering / MSAT / tech transfer, GMP manufacturing, lab
+#   operations, CMC writing and project roles, and bioprocess field
+#   application and technical support. Setup sets each family's status from
+#   the user's own roles (active, proposed or paused); nothing here names a
+#   person. Every family the earlier rounds tuned keeps its titles.
+# - "Process engineer", "manufacturing associate" and the like are told
+#   apart on the requirements text (G9), never by the title: require_any
+#   names bioprocess words (bioreactor, cell culture, chromatography, viral
+#   vector, drug substance, ...) and avoid_any the words of device,
+#   semiconductor, chemical-plant and software work (medical device, ISO
+#   13485, injection molding, wafer, refinery, firmware, ...).
+# - The process development family's require_any had no downstream, viral
+#   vector or cell therapy word, so real postings were dropped ("Scientist
+#   II, Downstream Viral Vector Process Development", "Production Specialist
+#   II Cell Therapy Cell Culture"): those words are in, and its avoid_any
+#   keeps small-molecule process chemistry and sequencing-consumable process
+#   development out.
+# - title_allow ["associate director"] keeps an Associate Director title in
+#   a family whose title_none has "director"; the seniority rule then judges
+#   it as a principal-level title against the user's years.
+# - Quality and validation takes CQV, process and cleaning validation, batch
+#   record and batch release titles; the microbiologist family takes natural
+#   product, antibiotic and anti-infective discovery titles.
+# - Pay, temporary jobs and shift work are the user's own settings in
+#   [gates] (pay_floor, employment_types, shift_work), and a second region
+#   they would move to is a [[home.region]] table, off until enabled.
+# - A user can add min_terms to a broad family ("Scientist", assay
+#   development): a posting there must name that many of their own terms
+#   (techniques.md). No family here sets it.
 
 version = 1
 
@@ -97,6 +131,34 @@ second_ring = ["Vacaville", "Fairfield", "Vallejo", "Benicia", "Martinez", "Conc
 remote = "us"
 relocate = false
 
+# A second region you would move to for the right job: off until enabled =
+# true. Its jobs are marked relocate and listed after the home ones, and are
+# judged by this region's own pay_floor (0: the [gates] floor). A job there
+# that states no pay is dropped unless unstated_pay = "keep". One table per
+# region; with no places, anywhere in its states counts.
+# [[home.region]]
+# label = "Boston area"
+# enabled = false
+# states = ["MA"]
+# places = ["Boston", "Cambridge", "Waltham", "Lexington", "Bedford", "Watertown", "Woburn", "Framingham"]
+# pay_floor = 0
+# unstated_pay = "drop"
+#
+# [[home.region]]
+# label = "San Diego"
+# enabled = false
+# states = ["CA"]
+# places = ["San Diego", "La Jolla", "Carlsbad", "Oceanside", "Sorrento Valley", "Torrey Pines"]
+# pay_floor = 0
+#
+# [[home.region]]
+# label = "Research Triangle"
+# enabled = false
+# states = ["NC"]
+# places = ["Durham", "Raleigh", "Chapel Hill", "Cary", "Morrisville", "Research Triangle Park", "Holly Springs",
+#           "Sanford", "Clayton"]
+# pay_floor = 0
+
 [gates]
 # The global exclude (research design implication, plus the verifier's intern
 # and co-op leaks). Director is left to each family's title_none, so the
@@ -110,7 +172,11 @@ exclude_title_words = ["Vice President", "VP", "SVP", "EVP", "Chief", "head of",
                        "finance", "legal", "paralegal", "facilities", "security officer", "driver",
                        "warehouse", "retail", "insurance", "loan", "mortgage", "real estate", "billing",
                        "medical coding", "call center", "claims", "IT", "HR"]
-employment_types = ["full-time", "contract", "temporary"]
+employment_types = ["full-time", "contract", "temporary"]  # leave out "temporary" to drop temp jobs
+                                                           # (temp-to-hire and contract-to-hire stay)
+shift_work = "any"          # "last": night, swing, weekend and 12-hour shift jobs go after everything else
+pay_floor = 0               # yearly dollars; a job whose stated pay tops out below it is dropped
+                            # (hourly rates count at 2,080 hours; no stated pay: kept); 0 is off
 undated_policy = "first_seen_after_2_polls"
 
 # ---------- license knockouts (CDPH Laboratory Field Services; F07-F10) ----------
@@ -238,15 +304,189 @@ title_any = ["fermentation", "bioprocess*", "cell culture", "process development
              "strain engineering|strain development|strain engineer",
              "upstream|downstream|purification|scale up|scaleup+bio*|scientist|associate|protein*|cell*|ferment*"]
 title_none = ["director", "vp", "head of", "maintenance", "mechanic", "electrician", "software", "data", "supply chain",
-              "warehouse", "operator", "oil", "gas", "semiconductor", "process engineer"]
-require_any = ["bioreactor*", "fermentation", "fermenter*", "microb*", "cell culture", "biolog*", "protein*",
-               "yeast", "e coli", "strain*", "biologics"]
+              "warehouse", "operator", "oil", "gas", "semiconductor", "process engineer", "field application*",
+              "application specialist|applications specialist|application scientist|applications scientist",
+              "application engineer|applications engineer", "technical support"]
+require_any = ["bioreactor*", "fermentation", "fermenter*", "fermentor*", "microb*", "cell culture", "cell expansion",
+               "biolog*", "protein*", "yeast", "e coli", "strain*", "biologics", "bioprocess*", "biomanufactur*",
+               "viral vector*", "aav", "lentivir*", "adenovir*", "cell therapy", "cell therapies", "gene therapy",
+               "gene therapies", "drug substance", "upstream", "downstream", "chromatograph*", "tangential flow",
+               "tff", "ultrafiltration", "diafiltration", "single use", "perfusion", "fed batch", "harvest*",
+               "aseptic", "mammalian", "recombinant", "antibod*", "vaccine*", "plasmid*", "mrna", "enzyme*"]
+avoid_any = ["organic chemistry", "synthetic chemistry", "process chemistry", "medicinal chemistry",
+             "synthetic route*", "organic synthesis", "crystallization", "small molecule*", "oral solid*",
+             "tablet*", "medical device*", "iso 13485", "injection mold*", "semiconductor*", "wafer*",
+             "flow cell*", "library prep*", "sequencer*", "sequencing", "solidworks", "firmware", "refiner*",
+             "petroleum", "polymer*"]
 terms = ["fermentation", "bioreactor", "DoE", "tech transfer", "scale-up", "upstream", "downstream", "GMP",
-         "strain engineering", "metabolic engineering"]
+         "strain engineering", "metabolic engineering", "cell culture", "process characterization",
+         "viral vector", "purification", "chromatography", "single-use"]
 seniority_ok = ["i", "ii", "iii", "1", "2", "3", "senior", "associate"]
 needs_license = []
 priority = 1
 min_share = 0.10
+
+# Paused until setup turns it on for a user whose roles it fits (round 6).
+# Process engineer and operator titles are judged on the requirements text:
+# a bioprocess word must be there, and device, semiconductor, chemical-plant
+# or software words must not outnumber them.
+[[family]]
+id = "bioprocess_engineering_msat"
+label = "Bioprocess engineering / MSAT / tech transfer"
+status = "paused"
+mode = "industry"
+core_titles = ["Process Engineer", "Bioprocess Engineer", "MSAT Engineer", "MSAT Specialist",
+               "Fermentation Engineer", "Downstream Process Engineer", "Upstream Process Engineer"]
+adjacent_titles = []
+title_any = ["process engineer*", "msat", "manufacturing science*",
+             "tech transfer|technology transfer|technical transfer|process transfer",
+             "process science*|process scientist", "process validation|process characterization|ppq",
+             "process development+engineer*|associate|specialist|technician|lead|manager|principal",
+             "drug substance+scientist|engineer*|specialist|manager|lead|associate|manufacturing|development|process*|operations|technical",
+             "upstream|downstream|purification|cell culture|fermentation|bioprocess*|bioreactor*|conjugation+engineer*|lead|manager|supervisor|specialist|technician|operator|principal",
+             "technical development+scientist|engineer*",
+             "viral vector*|vector production|vector process*|vector manufacturing|vector core|aav+process*|production|manufacturing|development|engineer*|scientist|associate|specialist|lead|manager|core",
+             "cell therapy|gene therapy|cell and gene therapy+process*|manufacturing|production|msat|cmc|technical operations",
+             "pilot plant|pilot scale|pilot production|pilot facility", "scale up|scaleup",
+             "dsp|usp+engineer*|scientist|associate|technician|lead|manager", "precision fermentation",
+             "technical operations+scientist|engineer*|specialist|associate|manager|lead",
+             "biomanufacturing+engineer*|scientist|lead|manager|specialist"]
+title_none = ["director", "vp", "vice president", "head of", "software", "firmware", "hardware", "data",
+              "supply chain", "warehouse", "maintenance", "mechanic", "electrician", "oil", "gas", "refinery",
+              "petroleum", "semiconductor", "wafer", "robotic*", "surgical", "mechanical", "electrical", "packaging",
+              "device|devices", "qms", "erp", "sap", "marketing", "regulatory", "counsel", "licensing", "patent*",
+              "intellectual property", "nurse", "nursing", "payer", "chemistry", "chemist", "broadcast", "athletic*",
+              "it operations|it support", "quality", "qa", "qc", "facility", "facilities", "mass spectrometry",
+              "counsel", "supplier", "sourcing", "planning", "planner", "control", "controls", "field application*",
+              "application specialist|applications specialist|application scientist|applications scientist",
+              "application engineer|applications engineer", "technical support"]
+title_allow = ["associate director"]
+require_any = ["bioreactor*", "fermentation", "fermenter*", "fermentor*", "cell culture", "cell expansion",
+               "upstream", "downstream", "purification", "chromatograph*", "tangential flow", "tff",
+               "ultrafiltration", "diafiltration", "depth filtration", "viral vector*", "aav", "lentivir*",
+               "adenovir*", "biologic*", "bioprocess*", "biomanufactur*", "biopharma*", "monoclonal", "antibod*",
+               "vaccine*", "plasmid*", "mrna", "cell therapy", "cell therapies", "gene therapy", "gene therapies",
+               "drug substance", "single use", "perfusion", "fed batch", "harvest*", "centrifug*", "microbial",
+               "yeast", "e coli", "mammalian", "recombinant", "protein*", "enzyme*", "cell bank*", "aseptic",
+               "inoculat*", "msat", "tech transfer", "technology transfer", "precision fermentation", "biomass"]
+avoid_any = ["medical device*", "iso 13485", "cfr 820", "design control*", "dhf", "injection mold*", "solidworks",
+             "autocad", "gd t", "catheter*", "implant*", "electromechanical", "pcb*", "pcba", "semiconductor*",
+             "wafer*", "lithograph*", "thin film*", "cnc", "machining", "tooling", "fixture*", "weld*",
+             "sheet metal", "solder*", "refiner*", "petroleum", "petrochemical*", "hydrocarbon*", "oil and gas",
+             "polymer*", "extrusion", "embedded", "firmware", "software development", "surgical", "laser*",
+             "optic*", "sequencer*", "flow cell*", "ngs", "library prep*", "small molecule*", "oral solid*",
+             "tablet*", "organic synthesis", "synthetic chemistry", "process chemistry", "patient care", "nursing",
+             "apheresis", "payer*", "patent*", "licensing", "mass spectrometr*", "lc ms"]
+terms = ["tech transfer", "MSAT", "process characterization", "PPQ", "scale-up", "single-use bioreactor",
+         "upstream", "downstream", "chromatography", "TFF", "cGMP", "batch records", "deviations", "DoE",
+         "root cause analysis", "viral vector", "cell culture", "fermentation"]
+seniority_ok = ["i", "ii", "iii", "1", "2", "3", "senior", "staff", "lead", "principal"]
+needs_license = []
+priority = 1
+min_share = 0.10
+
+# Paused until setup turns it on (round 6). Biologics, cell and gene therapy
+# and reagent manufacturing, associate through supervisor and manager; device
+# assembly, food and small-molecule plants fall out on the requirements text.
+[[family]]
+id = "gmp_manufacturing"
+label = "GMP manufacturing (biologics, cell and gene therapy, reagents)"
+status = "paused"
+mode = "industry"
+core_titles = ["Manufacturing Associate", "Manufacturing Specialist", "Manufacturing Supervisor",
+               "Manufacturing Technician", "Biomanufacturing Associate", "Bioprocess Associate",
+               "Production Associate"]
+adjacent_titles = []
+title_any = ["manufacturing|mfg|biomanufacturing|production+associate|specialist|technician|supervisor|lead|leader|scientist|operator|manager|trainer",
+             "mfg+senior|master",
+             "bioprocess*+associate|specialist|technician|operator|supervisor",
+             "cell therapy|gene therapy|viral vector|drug substance|drug product|fill finish|aseptic+associate|specialist|technician|supervisor|lead|operator|manufacturing|production",
+             "upstream|downstream+associate|specialist|technician|supervisor|operator|mfg|manufacturing"]
+title_none = ["director", "vp", "vice president", "head of", "engineer*", "software", "erp", "sap", "planner",
+              "planning", "scheduler", "scheduling", "sourcing", "procurement", "buyer", "supply chain", "warehouse",
+              "maintenance", "mechanic*", "electrician", "calibration", "test", "packaging", "data", "analyst",
+              "analysis", "support", "content", "media", "video", "broadcast", "chemical", "food", "culinary",
+              "kitchen", "bakery", "accounting", "assembl*", "machine", "machinist", "welder", "cnc", "apparel",
+              "print*", "film", "music", "theater|theatre", "product manager", "program manager", "project manager",
+              "clinical", "quality", "regulatory", "counsel", "legal", "payer", "access", "nurse", "nursing",
+              "robotic*", "surgical", "digital", "marketing", "field application*", "application*", "applications",
+              "technical support"]
+require_any = ["bioreactor*", "fermentation", "cell culture", "cell expansion", "upstream", "downstream",
+               "purification", "chromatograph*", "tangential flow", "tff", "viral vector*", "aav", "lentivir*",
+               "biologic*", "bioprocess*", "biomanufactur*", "biopharma*", "biotech*", "antibod*", "vaccine*",
+               "plasmid*", "mrna", "cell therapy", "cell therapies", "gene therapy", "gene therapies",
+               "drug substance", "drug product", "single use", "harvest*", "centrifug*", "microbial", "mammalian",
+               "recombinant", "protein*", "enzyme*", "aseptic", "media prep*", "buffer prep*", "batch record*",
+               "reagent*", "oligo*", "dna", "rna", "pcr", "biolog*", "biochem*", "molecular", "pipett*",
+               "tech transfer", "technology transfer", "process development", "fill finish"]
+avoid_any = ["medical device*", "iso 13485", "cfr 820", "device history record*", "dhr", "assembl*", "solder*",
+             "catheter*", "electromechanical", "machin*", "injection mold*", "pcb*", "semiconductor*", "wafer*",
+             "weld*", "cnc", "haccp", "sqf", "food safety", "small molecule*", "oral solid*", "tablet*", "capsule*",
+             "pharmacy", "forklift"]
+terms = ["cGMP", "batch records", "aseptic technique", "cleanroom", "single-use bioreactor", "cell culture",
+         "media preparation", "buffer preparation", "chromatography", "TFF", "deviations", "SOPs", "gowning",
+         "fill finish", "harvest"]
+seniority_ok = []
+needs_license = []
+priority = 2
+min_share = 0.05
+
+# Paused until setup turns it on (round 6).
+[[family]]
+id = "cmc_writing_project"
+label = "CMC technical writing / CMC project roles"
+status = "paused"
+mode = "industry"
+core_titles = []
+adjacent_titles = []
+title_any = ["cmc+writer|writing|project|program|technical|documentation|author*|specialist|consultant|coordinator|lead|operations",
+             "technical writer|technical writing|documentation specialist|document specialist+cmc|process*|manufacturing|gmp|msat|validation|bioprocess*|biologic*|drug substance|technical operations",
+             "project manager|program manager|project management|program management+cmc|technical operations|process development|manufacturing|msat|drug substance|tech transfer|cdmo|external manufacturing"]
+title_none = ["director", "vp", "vice president", "head of", "regulatory+manager|director|head|lead", "software",
+              "api", "developer", "ux", "marketing", "copywriter", "counsel", "legal", "data", "quality control",
+              "analytical", "chemistry", "chemist", "formulation*", "statistic*", "erp", "sap", "it", "web",
+              "construction", "facilities"]
+title_allow = ["associate director"]
+require_any = ["cmc", "chemistry manufacturing and controls", "gmp", "cgmp", "ind", "bla", "regulatory submission*",
+               "drug substance", "drug product", "process development", "biologic*", "tech transfer",
+               "technology transfer", "batch record*", "bioprocess*", "biomanufactur*", "cdmo", "cmo"]
+avoid_any = ["lc ms", "uhplc", "karl fischer", "xrpd", "organic chemistry", "process chemistry", "synthetic route*",
+             "small molecule*", "oral solid*", "medical device*", "iso 13485", "software documentation",
+             "api documentation", "ux", "semiconductor*"]
+terms = ["CMC", "IND", "BLA", "technical reports", "process development reports", "batch records", "SOPs",
+         "tech transfer", "CDMO", "project management", "regulatory submissions", "GMP"]
+seniority_ok = []
+needs_license = []
+priority = 2
+min_share = 0.05
+
+# Paused until setup turns it on (round 6). Application and technical support
+# roles at bioprocess equipment and consumables makers; the title must name
+# the bioprocess side, and the text must not be about sequencing, cytometry,
+# mass spectrometry or software.
+[[family]]
+id = "bioprocess_field_support"
+label = "Bioprocess field application / technical support"
+status = "paused"
+mode = "industry"
+core_titles = []
+adjacent_titles = []
+title_any = ["field application*|application scientist|applications scientist|application specialist|applications specialist|application engineer|applications engineer|technical support|technical service*|technical specialist|product specialist|scientific support+bioprocess*|bioprocessing|bioproduction|upstream|downstream|chromatograph*|filtration|purification|cell culture|bioreactor*|fermentation|single use|biomanufactur*|biopharma*|separation*|viral vector*|cell therapy|gene therapy"]
+title_none = ["sales representative", "sales executive", "sales manager", "account manager", "account executive",
+              "director", "vp", "head of", "software", "saas", "it support", "help desk", "helpdesk",
+              "bioinformatic*", "computational", "field service"]
+require_any = ["bioreactor*", "fermentation", "cell culture", "upstream", "downstream", "purification",
+               "chromatograph*", "filtration", "tangential flow", "tff", "viral vector*", "biologic*",
+               "bioprocess*", "biomanufactur*", "biopharma*", "single use", "resin*", "media", "perfusion",
+               "cell therapy", "gene therapy", "drug substance", "process development"]
+avoid_any = ["flow cytometr*", "sequencing", "ngs", "mass spectrometr*", "microscop*", "genomic*", "spatial",
+             "single cell", "saas", "software development"]
+terms = ["bioreactor", "chromatography", "filtration", "TFF", "single-use", "cell culture media",
+         "customer training", "technical support", "process development", "scale-up", "troubleshooting"]
+seniority_ok = []
+needs_license = []
+priority = 2
+min_share = 0.05
 
 [[family]]
 id = "assay_development"
@@ -404,6 +644,9 @@ core_titles = ["Validation Scientist", "Validation Specialist", "QA Specialist",
                "Quality Systems Specialist", "CAPA Specialist", "Deviation Specialist"]
 adjacent_titles = []
 title_any = ["capa", "deviation specialist|deviation investigator|deviation analyst",
+             "deviation*+writer|lead|coordinator", "cqv", "commissioning+qualification|validation",
+             "process validation|cleaning validation|equipment validation|equipment qualification",
+             "batch record*", "batch disposition|lot disposition|batch release|lot release",
              "validation+scientist|specialist|engineer|associate|analyst",
              "quality assurance+specialist|associate|scientist|analyst|reviewer",
              "qa+specialist|associate|analyst|reviewer", "quality specialist", "quality systems specialist",
@@ -461,10 +704,12 @@ mode = "industry"
 core_titles = ["Microbiologist", "Microbiologist II", "Senior Microbiologist", "Research Microbiologist",
                "Food Microbiologist", "Microbiology Scientist"]
 adjacent_titles = []
-title_any = ["microbiologist", "microbiology", "microbiolog*"]
+title_any = ["microbiologist", "microbiology", "microbiolog*", "natural product*",
+             "antibiotic*|antimicrobial*|antibacterial*|antifungal*|anti infective*|antiinfective*+scientist|discovery|research|associate|microbio*|biolog*|chemist*"]
 title_none = ["clinical lab*", "clinical laboratory scientist", "cls", "public health microbiologist",
               "clinical microbiologist scientist", "clinical microbiology scientist", "medical lab*", "sales", "account",
-              "director", "vp", "head of", "lecturer", "instructor", "professor", "adjunct", "teaching"]
+              "director", "vp", "head of", "lecturer", "instructor", "professor", "adjunct", "teaching",
+              "stewardship", "pharmacist", "pharmacy", "coating*", "textile*"]
 require_any = []
 terms = ["microbiology", "aseptic technique", "bacterial culture", "GMP", "GLP", "USP <61>", "USP <62>", "USP <71>",
          "FSMA", "AOAC", "microbial identification"]
@@ -472,6 +717,38 @@ seniority_ok = ["i", "ii", "iii", "1", "2", "3", "senior", "associate"]
 needs_license = []
 priority = 1
 min_share = 0.10
+
+# Paused until setup turns it on (round 6): for a user who has run a lab.
+# Before the research associate family, so a 'Lab Manager' title is this
+# family's when both are on.
+[[family]]
+id = "lab_operations"
+label = "Lab manager / lab operations"
+status = "paused"
+mode = "industry"
+core_titles = ["Lab Manager", "Laboratory Manager", "Lab Supervisor"]
+adjacent_titles = []
+title_any = ["lab|laboratory|labs+manager|operations|supervisor|coordinator|lead", "lab ops",
+             "scientific operations|research operations|r d operations", "lab services|laboratory services"]
+title_none = ["director", "vp", "vice president", "head of", "clinical", "pathology", "histolog*", "mohs", "cls",
+              "medical lab*", "phlebotom*", "dental", "computer", "software", "engineer*", "technology", "client",
+              "product", "data", "sleep", "cath", "imaging", "radiology", "regulatory", "trial|trials", "nanofab*",
+              "environmental", "service center", "kitchen", "food", "photo*", "language", "teaching",
+              "instructional", "student", "pharmacy", "veterinar*", "animal", "vivarium", "machine shop",
+              "neurodiagnostic", "eeg", "inpatient", "outpatient"]
+title_allow = ["associate director"]
+require_any = ["biolog*", "biotech*", "life science*", "molecular", "cell culture", "tissue culture", "bsl",
+               "biosafety", "wet lab", "chemical inventory", "research lab*", "microbiolog*", "biochem*", "cell",
+               "cells"]
+avoid_any = ["nanofabrication", "semiconductor*", "machine shop", "gd t", "phlebotom*", "patient care",
+             "joint commission", "clia", "clinical laboratory", "clinical laboratory scientist", "cls",
+             "specimen*", "patient*"]
+terms = ["lab management", "inventory", "procurement", "equipment maintenance", "vendor management", "EHS",
+         "BSL-2", "biosafety", "SOPs", "budget", "onboarding", "lab safety", "facility", "commissioning"]
+seniority_ok = []
+needs_license = []
+priority = 2
+min_share = 0.05
 
 [[family]]
 id = "research_associate_lab_tech"

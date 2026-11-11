@@ -40,8 +40,9 @@ printed.
    [Workable](ats/workable.md), [BambooHR](ats/bamboohr.md),
    [JazzHR](ats/jazzhr.md), [SmartRecruiters](ats/smartrecruiters.md),
    [iCIMS](ats/icims.md), [Oracle](ats/oracle.md), [USAJOBS](ats/usajobs.md),
-   [Dayforce](ats/dayforce.md). LinkedIn and Indeed Easy Apply are never
-   automated ([ats/linkedin.md](ats/linkedin.md)).
+   [Dayforce](ats/dayforce.md). Indeed Apply is never automated, and
+   LinkedIn Easy Apply not on this path: only `/job linkedin` fills it, with
+   `[linkedin] browser = true` ([ats/linkedin.md](ats/linkedin.md)).
 
 With no browser tool connected, say so in one line, save `filled.md` with
 every answer you can source, ready to copy into the form, run `tracker.py
@@ -194,4 +195,5 @@ and any `location` and `url` to `claude/args.json` and run `tracker.py add
 --args-file claude/args.json`. A loose date ("last week") becomes your
 best single `YYYY-MM-DD`, with the user's words as `notes` in the file.
 `log e1 e3` logs do-yourself items the same way (apply_batch.md
-"Do-yourself list").
+"Do-yourself list"); a pasted one (E51 and up) already has its row, which
+is updated instead.
