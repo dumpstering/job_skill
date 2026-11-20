@@ -52,6 +52,9 @@ SETTINGS_DEFAULTS = {
               "sensitive_confirm": "per_job", "screener": False, "mygreenhouse_autofill": False},
     # the opt-in LinkedIn browser mode; events.linkedin_settings checks and bounds these values
     "linkedin": {"browser": False, "per_day": 25, "min_seconds_between_actions": 4, "stop_on_warning": True},
+    # the opt-in CalJOBS and UC careers browser modes; events.site_settings checks and bounds these values
+    "caljobs": {"browser": False, "per_day": 25, "min_seconds_between_actions": 6, "stop_on_warning": True},
+    "uc": {"browser": False, "per_day": 25, "min_seconds_between_actions": 6, "stop_on_warning": True},
     "caps": {"per_company_30d": 5, "per_family_per_company_30d": 2, "reject_reapply_days": 90,
              "ashby_one_open": True, "per_company_per_day": 2, "per_unit_30d": 2, "per_institution_30d": 15,
              "unit_segments": ["academic", "institute", "hospital", "government"],

@@ -853,6 +853,8 @@ def test_selftest():
     # session never sends one to an older runner (today_view.py linkedin: LINKEDIN WAIT runner)
     import jobrunner
     assert status["features"] == list(jobrunner.FEATURES) and "linkedin_source" in status["features"], status
+    # ... and a CalJOBS or UC row (today_view.py site: SITE <site> WAIT runner)
+    assert "site_sources" in status["features"], status
     code, lines, _ = run("selftest", root, offline=mock_net(TMP / "net_bad", robots_ok=False))
     assert code == 1 and any(ln.startswith("FAIL robots ") for ln in lines), lines
     assert lines[-1] == "SELFTEST FAIL robots", lines

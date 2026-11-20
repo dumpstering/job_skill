@@ -505,6 +505,59 @@ def test_pasted_linkedin_link():
         "https://www.link" + chr(0xAD) + "edin.com/jobs/view/4012345678")
 
 
+def test_pasted_site_link():
+    """A CalJOBS or UC careers link is read only by /job caljobs and /job uc:
+    without --text-file posting.py exits 4 with one BROWSER SITE line and
+    fetches, resolves and writes nothing (not with --json-file or --html-file
+    either); with --text-file the link is never kept (posting.md has no URL
+    and no job key from it, and a link inside the text is taken out)."""
+    caljobs = "https://www.caljobs.ca.gov/vosnet/jobbanks/jobdetails.aspx?enc=" + "A1b2C3" * 20
+    uc = "https://careerspub.universityofcalifornia.edu/psp/ucpc/EMPLOYEE/HRMS/c/HRS_HRAM_FL.HRS_CG_SEARCH_FL.GBL?x=1"
+    asked = []
+    real = posting.socket.getaddrinfo
+    posting.socket.getaddrinfo = lambda host, *a, **k: asked.append(host) or real("localhost", 1)
+    try:
+        with tempfile.TemporaryDirectory(prefix="posting_site_") as tmp:
+            out = Path(tmp) / "posting.md"
+            pasted = Path(tmp) / "pasted.txt"
+            pasted.write_text("About the job\nRun QC assays. See " + caljobs + " and " + uc
+                              + ".\nApply at https://careers.example-bio.com/jobs/7.\n", encoding="utf-8")
+            extra = Path(tmp) / "x.json"
+            extra.write_text("{}", encoding="utf-8")
+            for link, site in ((caljobs, "caljobs"), ("https://CALJOBS.ca.gov/vosnet/Default.aspx", "caljobs"),
+                               ("http://www.caljobs.ca.gov:443/x", "caljobs"), (uc, "uc"),
+                               ("https://careerspub.universityofcalifornia.edu", "uc")):
+                for more in ((), ("--json-file", str(extra), "--source", "greenhouse"), ("--html-file", str(extra))):
+                    buf = io.StringIO()
+                    with redirect_stdout(buf):
+                        assert posting.main([link, "--out", str(out), *more]) == 4, (link, more)
+                    assert buf.getvalue().splitlines() == [f"BROWSER SITE {site}: not fetched; use /job {site}"],                         buf.getvalue()
+                assert not out.exists()
+                code, lines, _ = run_cli(link, "--out", str(out))
+                assert (code, lines) == (4, [f"BROWSER SITE {site}: not fetched; use /job {site}"]), (code, lines)
+                buf = io.StringIO()
+                with redirect_stdout(buf):
+                    code = posting.main([link, "--out", str(out), "--text-file", str(pasted), "--company", "State of CA",
+                                         "--role", "QC Scientist", "--posted", "2026-01-05"])
+                lines = buf.getvalue().splitlines()
+                assert code == 0 and "JOB KEY (none: no link)" in lines and "POSTED 2026-01-05 (pasted)" in lines, lines
+                text = out.read_text(encoding="utf-8")
+                head = text.split("## Description")[0].splitlines()
+                assert head[0] == "URL:" and "Job key:" in head, head
+                assert "caljobs" not in text and "universityofcalifornia" not in text and "enc=" not in text, text
+                assert "See  and ." in text, text  # both links in the text are taken out
+                assert "https://careers.example-bio.com/jobs/7." in text, "any other link stays as written"
+                assert not any("caljobs" in ln or "universityofcalifornia" in ln for ln in lines), lines
+                out.unlink()
+            assert not asked, asked
+    finally:
+        posting.socket.getaddrinfo = real
+    assert posting.is_browser_site_url(caljobs) and posting.is_browser_site_url(uc)
+    assert not posting.is_browser_site_url("https://careers.example-bio.com/jobs/1")
+    assert not posting.is_browser_site_url("https://www.linkedin.com/jobs/view/1"), "a board is its own refusal"
+    assert not posting.is_browser_site_url("") and not posting.is_browser_site_url("https://www.ca.gov/")
+
+
 def test_pasted_gates():
     """--gate: a pasted posting meets the gates a read one does (place, title,
     age, knockouts, seniority, text addressed to an AI), judged with the
@@ -1235,7 +1288,7 @@ def main():
               test_readers_bounded, test_jsonld_odd_types, test_invisible_characters, test_refused_links,
               test_folder_line, test_city_state_codes, test_refusals_never_try,
               test_employer_site_never_a_board_or_social_page, test_posted_and_printed_values_safe,
-              test_pasted_linkedin_link, test_pasted_gates):
+              test_pasted_linkedin_link, test_pasted_site_link, test_pasted_gates):
         t()
         print("ok", t.__name__)
     if os.environ.get("JOB_SKILL_LIVE") == "1":

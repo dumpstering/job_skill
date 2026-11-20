@@ -32,7 +32,9 @@ and a company, title, place or link goes in `claude/args.json` with
      pasted text is the `--text-file`). A plain
      `linkedin.com/jobs/view/<id>` link is the job key and never opened. Any
      other LinkedIn or job-board link is left out
-     ([ats/linkedin.md](ats/linkedin.md)).
+     ([ats/linkedin.md](ats/linkedin.md)), and so is a CalJOBS or UC careers
+     link: the job key for those two is the job's own number (`caljobs:<job
+     #>` or `uc:<campus>:<job id>`, in `"job-key"` below), never a link.
 
 ## 2. Gates, duplicates and caps (each posting, no questions)
 

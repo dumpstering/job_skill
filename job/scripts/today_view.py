@@ -7,6 +7,7 @@ Usage:
     python today_view.py diy      --root R [--date YYYY-MM-DD] [--all]
     python today_view.py drafts   --root R [--date YYYY-MM-DD] [--n N]
     python today_view.py linkedin --root R [--date YYYY-MM-DD]
+    python today_view.py site --site caljobs|uc --root R [--date YYYY-MM-DD]
 
 The day's items are queue/<date>/queue.json, its addenda, and the jobs from
 links (/job <link>, /job add <link>) whose added event the runner has not
@@ -161,6 +162,21 @@ sent counts tracker rows with Source LinkedIn applied today, waiting those
 handed over today with no s yet; both count toward per_day. The stop is
 claude/<date>/linkedin_stop.json (events.py linkedin-stop). The card carries
 the same state as one plain line while the mode is on or was stopped today.
+
+site prints the same one line for the CalJOBS or the UC careers browser mode
+([caljobs] or [uc] in settings.toml, events.site_settings), with the same
+states and words, SITE <site> in place of LINKEDIN:
+    SITE caljobs GO left=<n> of <per_day> sent=<n> waiting=<n> pace=<s>s stop_on_warning=<true|false>
+    SITE caljobs DONE <date>: <n> of <per_day> today (sent=<n> waiting=<n>); no more CalJOBS applications today
+    SITE caljobs STOPPED <date> <reason>: no CalJOBS page is opened again today
+    SITE caljobs WAIT runner: ...   (mode L and the PC's job finder would refuse a CalJOBS or UC row)
+    SITE caljobs WAIT tracker: ...  (the tracker cannot be read, so today's count is unknown)
+    SITE caljobs off: ...           ([caljobs] browser is not true)
+sent counts tracker rows with Found via caljobs:browser (uc:browser for uc)
+applied today, waiting those handed over today with no s yet; both count
+toward per_day. The stop is claude/<date>/<site>_stop.json (events.py
+site-stop). The card carries one plain line for each site that is on or was
+stopped today, after the LinkedIn line.
 Stdlib only.
 
 Exit codes: 0 ok, 1 bad input (ERROR ...).
@@ -233,6 +249,13 @@ LINKEDIN_WHY = {"captcha": "it showed a CAPTCHA", "sign_in": "it asked for a sig
                 "restricted": "it said the account is restricted", "other": "it showed a notice"}
 LINKEDIN_LOOK = ("unusual_activity", "restricted")   # the user looks at the account before it is used again
 LINKEDIN_FEATURE = "linkedin_source"                 # status.json features (jobrunner.FEATURES)
+# The CalJOBS and UC careers browser modes ([caljobs] and [uc] browser = true): the same words for a stop reason.
+SITE_WHY = {"captcha": "it showed a CAPTCHA", "sign_in": "it asked for a sign-in check",
+            "bot_check": "it showed a bot check", "unusual_activity": "it showed an unusual-activity notice",
+            "limit": "it said the day's limit there was reached",
+            "restricted": "it said the account is restricted", "other": "it showed a notice"}
+SITE_LOOK = ("unusual_activity", "restricted")   # the user looks at the account before it is used again
+SITE_FEATURE = "site_sources"                    # status.json features (jobrunner.FEATURES)
 # A pasted do-yourself item leaves the list once its tracker row says it was sent or dropped.
 PASTE_DONE = {"applied", "no response", "assessment", "screen", "interview", "offer", "rejected", "withdrawn",
               "closed", "not pursued"}
@@ -1127,6 +1150,92 @@ def linkedin_card_line(lane):
     return f"LinkedIn: {', '.join(parts)}; up to {lane['left']} more today (type /job linkedin)."
 
 
+def site_rows(store, day, site):
+    """(sent, waiting) of a browser site's mode today (CalJOBS, UC careers):
+    tracker rows with Found via <site>:browser applied today, and those
+    handed over today (Filled - awaiting submit) that still wait for the
+    user's Submit."""
+    sent = waiting = 0
+    for r in store.app_rows() if store is not None else []:
+        if str(r.get("Found via") or "").strip().lower() != f"{site}:browser":
+            continue
+        if to_date(r.get("Applied")) == day:
+            sent += 1
+        elif str(r.get("Status") or "").strip().lower() == "filled - awaiting submit" \
+                and to_date(r.get("Date")) == day:
+            waiting += 1
+    return sent, waiting
+
+
+def site_lane(root, day, site, settings=None, store=None, status=None):
+    """The CalJOBS or UC careers browser mode's state for the day
+    (caljobs_browser.md, uc_browser.md), as linkedin_lane gives LinkedIn's:
+    {state, line, sent, waiting, left, per_day, reason}, with the same
+    states (go, done, stopped, wait, off) and the same order: a stop first,
+    then the setting, the job finder's features (site_sources) and the
+    count. Every check fails closed."""
+    cfg = events.site_settings(root, site)
+    iso, page = day.isoformat(), events.SITE_PAGES[site]
+    out = {"state": "off", "sent": 0, "waiting": 0, "left": 0, "per_day": cfg["per_day"], "reason": ""}
+    stop = events.site_stop(root, site, day)
+    if stop is not None:
+        out.update(state="stopped", reason=stop["reason"],
+                   line=f"SITE {site} STOPPED {iso} {stop['reason']}: no {page} page is opened again today")
+        return out
+    if not cfg["browser"]:
+        out["line"] = (f"SITE {site} off: [{site}] browser is not true in config/settings.toml, so no {page} "
+                       "page is opened")
+        return out
+    settings = settings if settings is not None else jobfs.settings(root)
+    if str(settings["runner"].get("mode", "L")).upper() == "L":
+        status = status if status is not None else verified(jobfs.Folder(root).status_json, {})
+        features = status.get("features")
+        if SITE_FEATURE not in (features if isinstance(features, list) else []):
+            out.update(state="wait", reason="runner",
+                       line=f"SITE {site} WAIT runner: the job finder on this PC is older than this skill and would "
+                            f"refuse a {page} row; the user double-clicks the new install_runner.cmd first")
+            return out
+    store = store if store is not None else open_store(root)
+    if store is None:
+        out.update(state="wait", reason="tracker",
+                   line=f"SITE {site} WAIT tracker: the tracker cannot be read here, so today's count is unknown")
+        return out
+    sent, waiting = site_rows(store, day, site)
+    left = max(0, cfg["per_day"] - sent - waiting)
+    out.update(sent=sent, waiting=waiting, left=left)
+    if left <= 0:
+        out.update(state="done",
+                   line=f"SITE {site} DONE {iso}: {sent + waiting} of {cfg['per_day']} today (sent={sent} "
+                        f"waiting={waiting}); no more {page} applications today")
+        return out
+    out.update(state="go",
+               line=f"SITE {site} GO left={left} of {cfg['per_day']} sent={sent} waiting={waiting} "
+                    f"pace={cfg['min_seconds_between_actions']}s "
+                    f"stop_on_warning={'true' if cfg['stop_on_warning'] else 'false'}")
+    return out
+
+
+def site_card_line(lane, site):
+    """The card's one plain line for a browser site's mode; None while it is
+    off or the tracker cannot be read (as linkedin_card_line)."""
+    state, sent, waiting, page = lane["state"], lane["sent"], lane["waiting"], events.SITE_PAGES[site]
+    if state == "stopped":
+        tail = (f"Look at your {page} account yourself before it is used again."
+                if lane["reason"] in SITE_LOOK else "I'll leave it alone until tomorrow.")
+        return f"{page} is closed for today: {SITE_WHY.get(lane['reason'], SITE_WHY['other'])}. {tail}"
+    if state == "wait" and lane["reason"] == "runner":
+        return (f"{page} waits for the job finder on your PC to be updated: double-click the new "
+                "install_runner.cmd.")
+    if state == "done":
+        return f"{page}: {plural(sent + waiting, 'application')} today, the day's limit there; more tomorrow."
+    if state != "go":
+        return None
+    if not sent and not waiting:
+        return f"{page} is on: up to {plural(lane['left'], 'application')} there today (type /job {site})."
+    parts = ([f"{sent} sent today"] if sent else []) + ([f"{waiting} waiting for your Submit"] if waiting else [])
+    return f"{page}: {', '.join(parts)}; up to {lane['left']} more today (type /job {site})."
+
+
 def draft_lines(m, done):
     out = []
     for d in drafts_of(m):
@@ -1563,7 +1672,8 @@ def card(root, day, short=False):
     batch = int(settings["daily"].get("batch_size", 10))
     referral = referral_line(root, day, m, settings) if len(done) < batch else None
     linkedin = linkedin_card_line(linkedin_lane(root, day, settings, store, status))
-    for line in [sensitive_line(root, day, items, by_n, by_key)] + draft_lines(m, done) + [referral, linkedin]:
+    sites = [site_card_line(site_lane(root, day, s, settings, store, status), s) for s in events.BROWSER_SITES]
+    for line in [sensitive_line(root, day, items, by_n, by_key)] + draft_lines(m, done) + [referral, linkedin] + sites:
         if line:
             lines.append(line)
     if first:
@@ -1973,10 +2083,14 @@ def build_parser():
     for name, hlp in (("card", "Print the day's card."), ("next", "Print the next item's handover data."),
                       ("progress", "Counts so far and the closing line."), ("diy", "The do-yourself list."),
                       ("drafts", "The card's free-text drafts in full."),
-                      ("linkedin", "The LinkedIn browser mode's state for the day: act on LINKEDIN GO alone.")):
+                      ("linkedin", "The LinkedIn browser mode's state for the day: act on LINKEDIN GO alone."),
+                      ("site", "The CalJOBS or UC careers browser mode's state for the day: act on SITE <site> GO "
+                               "alone.")):
         p = sub.add_parser(name, help=hlp, allow_abbrev=False)
         p.add_argument("--root", required=True)
         p.add_argument("--date")
+        if name == "site":
+            p.add_argument("--site", required=True, choices=events.BROWSER_SITES)
         if name == "next":
             p.add_argument("--short", action="store_true",
                            help="an easy day: no-account items, easiest first; none with an open question, "
@@ -2025,6 +2139,8 @@ def main(argv=None):
             lines = drafts(root, day, args.n)
         elif args.cmd == "linkedin":
             lines = [linkedin_lane(root, day)["line"]]
+        elif args.cmd == "site":
+            lines = [site_lane(root, day, args.site)["line"]]
         else:
             lines = diy_list(root, day, show_all=args.show_all)
     except (jobfs.ConfigError, OSError) as e:

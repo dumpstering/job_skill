@@ -568,6 +568,131 @@ def test_linkedin_stop():
     assert not jobfs.Folder(root).events.exists() or not list(jobfs.Folder(root).events.glob("*.json"))
 
 
+def test_site_settings():
+    """[caljobs] and [uc] in settings.toml (settings.md): the LinkedIn rules
+    with a default pace of 6 seconds: off unless the live file holds the TOML
+    boolean true, per_day at most 50, never under 4 seconds nor over 120, each
+    site its own table."""
+    assert events.BROWSER_SITES == ("caljobs", "uc")
+    root = new_root()
+    f = jobfs.Folder(root)
+    off = {"browser": False, "per_day": 25, "min_seconds_between_actions": 6, "stop_on_warning": True}
+    for site in events.BROWSER_SITES:
+        assert events.site_settings(root, site) == off, "no settings file: the defaults, off"
+    f.config.mkdir(parents=True)
+    template = (SCRIPTS.parent / "templates" / "settings.toml").read_text(encoding="utf-8")
+    f.settings_toml.write_text(template, encoding="utf-8")
+    for site in events.BROWSER_SITES:
+        assert events.site_settings(root, site) == off, "the shipped template: off, 25 a day, 6 seconds, stop"
+        assert jobfs.SETTINGS_DEFAULTS[site] == off == events.SITE_DEFAULTS
+    try:
+        events.site_settings(root, "linkedin")
+        raise AssertionError("LinkedIn has its own settings function")
+    except events.EventError:
+        pass
+
+    def with_table(site, body):
+        f.settings_toml.write_text(f'[runner]\nmode = "M"\n[{site}]\n' + body, encoding="ascii")
+        return events.site_settings(root, site)
+    for site in events.BROWSER_SITES:
+        assert with_table(site, "browser = true\n") == dict(off, browser=True)
+        assert with_table(site, "browser = true\nper_day = 10\nmin_seconds_between_actions = 9\n"
+                                "stop_on_warning = false\n") == {
+            "browser": True, "per_day": 10, "min_seconds_between_actions": 9, "stop_on_warning": False}
+        for body in ('browser = "true"\n', "browser = 1\n", 'browser = "yes"\n', "per_day = 25\n"):
+            assert with_table(site, body)["browser"] is False, body  # only the boolean true is a yes
+        for body, want in (("per_day = 250\n", 50), ("per_day = 50\n", 50), ("per_day = 0\n", 0),
+                           ("per_day = -3\n", 25), ('per_day = "40"\n', 25), ("per_day = 2.5\n", 25),
+                           ("per_day = true\n", 25)):
+            assert with_table(site, "browser = true\n" + body)["per_day"] == want, body
+        for body, want in (("min_seconds_between_actions = 1\n", 4), ("min_seconds_between_actions = 4\n", 4),
+                           ("min_seconds_between_actions = 4.2\n", 5), ("min_seconds_between_actions = 600\n", 120),
+                           ('min_seconds_between_actions = "fast"\n', 6), ("min_seconds_between_actions = inf\n", 6)):
+            assert with_table(site, "browser = true\n" + body)["min_seconds_between_actions"] == want, body
+        assert with_table(site, 'stop_on_warning = "no"\n')["stop_on_warning"] is True
+    # each site reads its own table, and LinkedIn's is untouched by either
+    f.settings_toml.write_text('[runner]\nmode = "M"\n[caljobs]\nbrowser = true\nper_day = 7\n', encoding="ascii")
+    assert events.site_settings(root, "caljobs")["per_day"] == 7
+    assert events.site_settings(root, "uc") == off and events.linkedin_settings(root)["browser"] is False
+    # a typo while the last good copy says on: off (the live file must parse and say true)
+    good = f.last_good("settings.toml")
+    good.parent.mkdir(parents=True, exist_ok=True)
+    good.write_text("[uc]\nbrowser = true\n", encoding="ascii")
+    f.settings_toml.write_text("[uc]\nbrowser = true\nper_day = \n", encoding="ascii")
+    assert jobfs.settings(root).source == "last_good" and events.site_settings(root, "uc")["browser"] is False
+
+
+def test_site_stop():
+    """events.py site-stop: the stop-for-the-day record of CalJOBS or the UC
+    careers site. Written once (the first reason stands), never cleared by
+    any command, read back by site_stop; a file that cannot be read still
+    closes the day; another day, and the other site, are open."""
+    root = new_root()
+    stop_file = jobfs.Folder(root).claude / TODAY / "caljobs_stop.json"
+    assert events.site_stop_file(root, "caljobs") == stop_file
+    assert events.site_stop(root, "caljobs") is None and not stop_file.exists()
+    out = run(EVENTS, "site-stop", "--root", root, "--site", "caljobs", "--reason", "captcha", "--session", "s-1").strip()
+    assert out == f"SITE caljobs STOPPED {TODAY} captcha: no CalJOBS page is opened again today", out
+    rec = json.loads(stop_file.read_text(encoding="utf-8"))
+    assert (rec["v"], rec["date"], rec["reason"], rec["session"]) == (1, TODAY, "captcha", "s-1") and rec["at"], rec
+    out = run(EVENTS, "site-stop", "--root", root, "--site", "caljobs", "--reason", "limit").strip()
+    assert out == f"SITE caljobs STOPPED {TODAY} captcha: no CalJOBS page is opened again today", "the first stop stands"
+    assert json.loads(stop_file.read_text(encoding="utf-8")) == rec
+    assert events.site_stop(root, "caljobs") == {"at": rec["at"], "reason": "captcha"}
+    assert events.site_stop(root, "caljobs", "2026-01-02") is None, "a stop holds for its own day"
+    assert events.site_stop(root, "uc") is None and events.linkedin_stop(root) is None, "each site is its own"
+    out = run(EVENTS, "site-stop", "--root", root, "--site", "caljobs", "--reason", "bored", code=1)
+    assert out.startswith("ERROR argument --reason: invalid choice"), out
+    out = run(EVENTS, "site-stop", "--root", root, "--site", "linkedin", "--reason", "captcha", code=1)
+    assert out.startswith("ERROR argument --site: invalid choice"), out
+    out = run(EVENTS, "site-stop", "--root", root, "--site", "uc", "--reason", "captcha", "--date", "June 3", code=1)
+    assert out.startswith("ERROR --date must be YYYY-MM-DD"), out
+    assert events.SITE_STOPS == ("captcha", "sign_in", "bot_check", "unusual_activity", "limit", "restricted", "other")
+    for reason in events.SITE_STOPS:
+        r2 = new_root()
+        assert run(EVENTS, "site-stop", "--root", r2, "--site", "uc", "--reason", reason, "--date", "2026-03-04").strip() == \
+            f"SITE uc STOPPED 2026-03-04 {reason}: no UC careers page is opened again today"
+        assert events.site_stop(r2, "uc", "2026-03-04")["reason"] == reason
+        assert (jobfs.Folder(r2).claude / "2026-03-04" / "uc_stop.json").is_file()
+    # fail closed: a stop file that is not JSON, or holds something else, is still a stop
+    for body in ("{not json", "[]", '{"reason": "made up"}', ""):
+        stop_file.write_text(body, encoding="ascii")
+        assert events.site_stop(root, "caljobs") == {"at": "", "reason": "other"}, body
+    # a LinkedIn-only reason is not a site's, and a site's own reason is not LinkedIn's
+    assert "bot_check" not in events.LINKEDIN_STOPS
+    try:
+        events.stop_site(root, "uc", "made_up")
+        raise AssertionError("an unknown reason is refused")
+    except events.EventError:
+        pass
+    try:
+        events.stop_site(root, "indeed", "captcha")
+        raise AssertionError("an unknown site is refused")
+    except events.EventError:
+        pass
+    # no event file is written: the record holds at once, whatever the runner's version
+    assert not jobfs.Folder(root).events.exists() or not list(jobfs.Folder(root).events.glob("*.json"))
+
+
+def test_site_links():
+    """A CalJOBS or UC careers link is never stored: events.drop_site_links
+    takes it out of text (any other link stays), and is_site_url knows both
+    sites by every spelling netfetch's refusal knows."""
+    caljobs = "https://www.caljobs.ca.gov/vosnet/jobbanks/jobdetails.aspx?enc=" + "A1b2C3" * 20
+    uc = "https://careerspub.universityofcalifornia.edu/psp/ucpc/EMPLOYEE/HRMS/c/HRS_HRAM_FL.HRS_CG_SEARCH_FL.GBL?x=1"
+    for url in (caljobs, uc, "https://CALJOBS.ca.gov/", "https://caljobs.ca.gov./x", "http://www.caljobs.ca.gov:443/x",
+                "https://jobs.caljobs.ca.gov/x", "https://careerspub.universityofcalifornia.edu"):
+        assert events.is_site_url(url), url
+    for url in ("https://www.ca.gov/", "https://universityofcalifornia.edu/jobs", "https://jobs.berkeley.edu/",
+                "https://evilcaljobs.ca.gov.example.com/", "https://www.linkedin.com/jobs/view/4012345678", "", None):
+        assert not events.is_site_url(url), url
+    text = f"Apply at {caljobs}, or see {uc}. Employer: https://boards.greenhouse.io/acme/jobs/1234567."
+    got = events.drop_site_links(text)
+    assert got == "Apply at , or see . Employer: https://boards.greenhouse.io/acme/jobs/1234567.", got
+    assert events.drop_site_links("no link here") == "no link here" and events.drop_site_links(None) is None
+    assert "caljobs" not in events.drop_site_links(f"<{caljobs}> and ({uc})")
+
+
 def test_diy_add():
     """events.py diy-add: a job the user applies for by hand (a pasted
     posting, a LinkedIn Easy Apply job) joins the do-yourself list at once,
@@ -640,7 +765,8 @@ def main():
     for fn in (test_rejections, test_emit_and_overlay, test_json_file_confined, test_deep_event_file,
                test_printed_values,
                test_add_from_link, test_added_trust, test_broken_unicode,
-               test_linkedin_settings, test_linkedin_stop, test_diy_add):
+               test_linkedin_settings, test_linkedin_stop, test_site_settings, test_site_stop, test_site_links,
+               test_diy_add):
         fn()
         print(f"ok {fn.__name__[5:]}")
     print("PASS")

@@ -32,7 +32,9 @@ never write them anywhere.
    <date>`). It writes `worksearch\CA_<from>_<to>.csv`, `.xlsx` and `.md`:
    - every application with an Applied date, by-hand logs included, every
      referral ask the user sent, and every Activities row (job fair, workshop,
-     RESEA);
+     RESEA); an application sent through `/job caljobs` is one of them too
+     (Source CalJOBS, no link, the job number in its Notes), and in California
+     it is a work-search entry as it stands: nothing more is logged by hand;
    - the columns of spec 6.6, one row per contact, grouped by claim week;
    - employer address, phone and main website from the Employers sheet;
      `posting_url` and `employer_main_website` are separate columns (North

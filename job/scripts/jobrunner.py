@@ -159,7 +159,8 @@ DAILY_TASK = "JobRunner-Daily"
 # status.json "features": the session checks it before it sends a tracker
 # write an older runner would refuse (today_view.linkedin_lane).
 # linkedin_source: a row with Source "LinkedIn".
-FEATURES = ("linkedin_source",)
+# site_sources: a row with Source "CalJOBS" or "UC" (today_view.site_lane).
+FEATURES = ("linkedin_source", "site_sources")
 RUNNER_STALE_HOURS = 26
 LIVENESS_HOURS = 24
 LIVENESS_NEXT = 3

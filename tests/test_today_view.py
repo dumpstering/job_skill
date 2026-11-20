@@ -1355,6 +1355,114 @@ def test_linkedin_lane():
     print("ok the LinkedIn browser mode: off by default, GO with the day's count, DONE, WAIT, and the stop record")
 
 
+def site_setup(root, site, body="browser = true\n", features=True):
+    """Turn a browser site's mode ([caljobs] or [uc]) on in a mode L root whose runner says it takes its rows."""
+    f = jobfs.Folder(root)
+    f.settings_toml.write_text(f'[runner]\nmode = "L"\n[{site}]\n' + body, encoding="ascii")
+    st = json.loads(f.status_json.read_text(encoding="utf-8"))
+    st.pop("features", None)
+    if features:
+        st["features"] = ["linkedin_source", "site_sources"]
+    jobfs.atomic_write_json(f.status_json, st)
+
+
+def test_site_lane():
+    """The CalJOBS and UC careers browser modes ([caljobs] and [uc], off by
+    default): with one off the card and progress are unchanged; with it on,
+    `site --site <site>` prints SITE <site> GO with what is left of per_day,
+    tracker rows with Found via <site>:browser count toward the day (the
+    card's line), per_day ends it (DONE), a runner that would refuse its row
+    or an unreadable tracker holds it (WAIT), and a stop closes it for the
+    day, for that site only."""
+    for site, page in (("caljobs", "CalJOBS"), ("uc", "UC careers")):
+        other_site = "uc" if site == "caljobs" else "caljobs"
+        root = make_root("site_" + site, morning=QUIET_MORNING, workday=False)
+        plain = card(root)
+        off = f"SITE {site} off: [{site}] browser is not true in config/settings.toml, so no {page} page is opened"
+        assert run_args(root, "site", "--site", site) == [off]
+        assert page not in plain, plain
+        progress_off = run_args(root, "progress")
+        site_setup(root, site, 'browser = "true"\n')   # a word in quotes is not a yes
+        assert run_args(root, "site", "--site", site) == [off] and card(root) == plain
+
+        # on, but the PC's job finder (mode L) does not say it takes the row: wait, and say how to fix it
+        site_setup(root, site, features=False)
+        assert run_args(root, "site", "--site", site) == [
+            f"SITE {site} WAIT runner: the job finder on this PC is older than this skill and would refuse a "
+            f"{page} row; the user double-clicks the new install_runner.cmd first"]
+        assert (f"{page} waits for the job finder on your PC to be updated: double-click the new "
+                "install_runner.cmd." in card(root).splitlines())
+
+        site_setup(root, site)
+        assert run_args(root, "site", "--site", site) == [
+            f"SITE {site} GO left=25 of 25 sent=0 waiting=0 pace=6s stop_on_warning=true"]
+        assert run_args(root, "site", "--site", other_site)[0].startswith(f"SITE {other_site} off:"), "per site"
+        lines = card(root).splitlines()
+        assert f"{page} is on: up to 25 applications there today (type /job {site})." in lines, lines
+        assert [ln for ln in lines if not ln.startswith(page)] == plain.splitlines(), "one added line"
+        assert run_args(root, "progress") == progress_off, "nothing sent there yet"
+
+        def row(i, status, applied=None, day=DAY, via=f"{site}:browser"):
+            return {"ID": 700 + i, "Date": day, "Company": f"Site Co {i}", "Role": "Scientist", "Status": status,
+                    "Applied": applied, "Source": "CalJOBS" if site == "caljobs" else "UC", "Found via": via,
+                    "Job key": f"{site}:30560{i}-449{i}", "Folder": f"applications/{day} Site Co {i} - Scientist"}
+        add_rows(root, [row(1, "Applied", DAY), row(2, "Applied", DAY), row(3, "Filled - awaiting submit"),
+                        row(4, "Applied", "2026-11-11", day="2026-11-11"),         # yesterday's: not today's count
+                        row(5, "Filled - awaiting submit", day="2026-11-11"),     # handed over yesterday, no s
+                        row(6, "Not pursued"),                                     # skipped: never an application
+                        row(7, "Applied", DAY, via="linkedin:browser"),             # another lane's row
+                        row(8, "Applied", DAY, via=f"{other_site}:browser")])       # the other site's row
+        assert run_args(root, "site", "--site", site) == [
+            f"SITE {site} GO left=22 of 25 sent=2 waiting=1 pace=6s stop_on_warning=true"]
+        assert f"{page}: 2 sent today, 1 waiting for your Submit; up to 22 more today (type /job {site})." in \
+            card(root).splitlines()
+
+        # per_day is the day's end; pace and stop_on_warning are read from the file (never under 4 seconds)
+        site_setup(root, site, "browser = true\nper_day = 3\nmin_seconds_between_actions = 2\nstop_on_warning = false\n")
+        assert run_args(root, "site", "--site", site) == [
+            f"SITE {site} DONE {DAY}: 3 of 3 today (sent=2 waiting=1); no more {page} applications today"]
+        assert f"{page}: 3 applications today, the day's limit there; more tomorrow." in card(root).splitlines()
+        site_setup(root, site, "browser = true\nper_day = 9\nmin_seconds_between_actions = 2\nstop_on_warning = false\n")
+        assert run_args(root, "site", "--site", site) == [
+            f"SITE {site} GO left=6 of 9 sent=2 waiting=1 pace=4s stop_on_warning=false"]
+
+        # the stop-for-the-day record closes it at once, that site only, that day only
+        events.stop_site(root, site, "bot_check", DAY)
+        assert run_args(root, "site", "--site", site) == [
+            f"SITE {site} STOPPED {DAY} bot_check: no {page} page is opened again today"]
+        assert f"{page} is closed for today: it showed a bot check. I'll leave it alone until tomorrow." in \
+            card(root).splitlines()
+        assert run_args(root, "site", "--site", site, "--date", "2026-11-13")[0].startswith(
+            f"SITE {site} GO left=9 of 9 sent=0")
+        assert run_args(root, "linkedin")[0].startswith("LINKEDIN off:"), "LinkedIn is its own"
+        # ... also after the mode was turned off the same day (an account notice turns it off)
+        site_setup(root, site, "browser = false\n")
+        assert run_args(root, "site", "--site", site)[0].startswith(f"SITE {site} STOPPED {DAY} bot_check")
+        notice = make_root(site + "_notice", morning=QUIET_MORNING, workday=False)
+        site_setup(notice, site, "browser = false\n")
+        events.stop_site(notice, site, "restricted", DAY)
+        assert (f"{page} is closed for today: it said the account is restricted. Look at your {page} account "
+                "yourself before it is used again." in card(notice).splitlines())
+
+        # no readable tracker: the count is unknown, so nothing is opened
+        blind = make_root(site + "_blind", morning=QUIET_MORNING, workday=False)
+        site_setup(blind, site)
+        jobfs.Folder(blind).tracker_json.unlink()
+        jobfs.prev_path(jobfs.Folder(blind).tracker_json).unlink(missing_ok=True)
+        assert run_args(blind, "site", "--site", site) == [
+            f"SITE {site} WAIT tracker: the tracker cannot be read here, so today's count is unknown"]
+        # mode S has no older runner to wait for
+        r2 = make_root(site + "_S", morning=QUIET_MORNING, workday=False)
+        jobfs.Folder(r2).settings_toml.write_text(f'[runner]\nmode = "S"\n[{site}]\nbrowser = true\n', encoding="ascii")
+        assert run_args(r2, "site", "--site", site)[0].startswith(f"SITE {site} GO left=25 of 25"), \
+            run_args(r2, "site", "--site", site)
+    bad = subprocess.run([sys.executable, str(SCRIPTS / "today_view.py"), "site", "--root", str(root), "--site", "indeed"],
+                         capture_output=True, text=True, encoding="utf-8")
+    assert bad.returncode != 0, "only caljobs and uc"
+    print("ok the CalJOBS and UC careers browser modes: off by default, GO with the day's count, DONE, WAIT, and "
+          "the stop record, each its own")
+
+
 def test_pasted_diy():
     """Pasted jobs on the do-yourself list (events.py diy-add): listed after
     the runner's own items with their own numbers (E51 and up) and their job
@@ -1414,7 +1522,7 @@ def main():
              test_card_after_break, test_drafts, test_config_typo, test_no_runner_card, test_runner_state_lines,
              test_computed_checks, test_stale_upload_copy, test_no_variant_line, test_corrected_today,
              test_tier_a_corrected, test_open_link, test_open_needs, test_alert_line, test_unsafe_values,
-             test_linkedin_lane, test_pasted_diy, test_wording)
+             test_linkedin_lane, test_site_lane, test_pasted_diy, test_wording)
     try:
         for t in tests:
             if not only or t.__name__ in only or t.__name__.removeprefix("test_") in only:

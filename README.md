@@ -54,6 +54,19 @@ zero-token work. Version 1.3.
     day, at least 4 seconds between actions, and a CAPTCHA, sign-in check
     or notice ends it for the day. Whether the browser tool can work on
     linkedin.com at all is UNVERIFIED; `/job paste` is the fallback.
+  - **`/job caljobs`** and **`/job uc`** (opt-in, off by default, each
+    offered once at setup when home is in California): the same kind of
+    browser mode for CalJOBS, California's state job bank, and the University
+    of California careers site (`careerspub.universityofcalifornia.edu`, a
+    PeopleSoft site). CalJOBS's robots.txt asks automated tools to stay out,
+    so no script or fetch ever opens either site; this is the user browsing
+    slowly in their own Chrome and their own signed-in account, who makes the
+    account and clicks Submit. `[caljobs] browser` and `[uc] browser` stay
+    false until a clear yes; at most 25 a day each, at least 6 seconds
+    between actions by default, and a check, CAPTCHA or sign-in page ends the
+    site for the day. The pages' controls are UNVERIFIED beyond the CalJOBS
+    ones read on 2026-11-20 (as a guest); no link from either site is kept,
+    only the job's own number.
   The do-it-yourself list and looser per-company caps ("more to one
   company" in `/job settings`; with no caps the 2026-11-10 pool gave about
   7 a day) add the rest.
@@ -94,7 +107,8 @@ runner tick every 15 min: tracker.py apply-events -> applications.xlsx -> runner
 - **Network policy** (`netfetch.py`): public addresses only, connecting to
   the checked address; https and a host allowlist for unattended runs;
   robots.txt for every unattended fetch; a hard deny of LinkedIn, Indeed,
-  Glassdoor, SimplyHired and ZipRecruiter, and of the list endpoints of
+  Glassdoor, SimplyHired and ZipRecruiter, of CalJOBS and the UC careers
+  site (browser sites), and of the list endpoints of
   SmartRecruiters, iCIMS, UKG, Paycom, Paycor and ClearCompany. No setting
   changes that: the opt-in LinkedIn mode is the browser tool in the user's
   own Chrome only, and no script, fetch or runner step ever opens LinkedIn.

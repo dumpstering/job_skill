@@ -45,6 +45,16 @@ browser = false             # true: Claude works on LinkedIn in your own Chrome,
 per_day = 25                # LinkedIn applications a day, at most (never over 50)
 min_seconds_between_actions = 4   # never under 4
 stop_on_warning = true      # any other warning ends LinkedIn for the day too (a CAPTCHA, sign-in check or notice always does)
+[caljobs]                   # opt-in (references/caljobs_browser.md): CalJOBS asks automated tools not to crawl it
+browser = false             # true: Claude searches CalJOBS in your own Chrome and signed-in account, slowly; you click Submit
+per_day = 25                # CalJOBS applications a day, at most (never over 50)
+min_seconds_between_actions = 6   # never under 4
+stop_on_warning = true      # any other warning ends CalJOBS for the day too (a CAPTCHA, sign-in or bot check always does)
+[uc]                        # opt-in (references/uc_browser.md): the University of California careers site needs your sign-in
+browser = false             # true: Claude searches it in your own Chrome and signed-in account, slowly; you click Submit
+per_day = 25                # UC applications a day, at most (never over 50)
+min_seconds_between_actions = 6   # never under 4
+stop_on_warning = true      # any other warning ends the UC site for the day too (a CAPTCHA, sign-in or bot check always does)
 [caps]                      # R7; no source gives a number except Google's: change these to taste
 per_company_30d = 5         # an Amazon recruiter's "up to five roles you fully meet"
 per_family_per_company_30d = 2

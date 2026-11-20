@@ -210,6 +210,39 @@ def test_v12_keys():
         assert jobkey.job_key(url).startswith("url:"), (url, jobkey.job_key(url))
 
 
+def test_site_keys():
+    """The browser sites' keys (caljobs_key, uc_key) are built from what the
+    page shows, never from a link: the right shapes only, always inline-safe,
+    and no link to either site gives a key."""
+    assert jobkey.caljobs_key("305602-4492") == "caljobs:305602-4492"
+    assert jobkey.caljobs_key("  305602-4492 ") == "caljobs:305602-4492" and jobkey.caljobs_key("1234567") == "caljobs:1234567"
+    for bad in ("", None, "abc", "12", "305602-", "-4492", "305602-4492-1", "305602 4492", "305602-4492; rm", "$(x)",
+                "https://www.caljobs.ca.gov/x", "1" * 13):
+        assert jobkey.caljobs_key(bad) == "", bad
+    assert jobkey.uc_key("UC Santa Cruz", "12345") == "uc:santacruz:12345"
+    assert jobkey.uc_key("University of California, Berkeley", "JPF01234") == "uc:berkeley:jpf01234"
+    assert jobkey.uc_key("Davis", " 98765 ") == "uc:davis:98765" and jobkey.uc_key("UCSC", "7") == "uc:ucsc:7"
+    assert jobkey.uc_key("UC San Diego", "A-1.2_3") == "uc:sandiego:a-1.2_3"
+    for campus, job in (("", "1"), ("UC ", "1"), ("Davis", ""), ("Davis", "-1"), ("Davis", "a b"), ("Davis", "1;2"),
+                        ("Davis", "x" * 42), (None, "1"), ("Davis", None)):
+        assert jobkey.uc_key(campus, job) == "", (campus, job)
+    for key in ("caljobs:305602-4492", "uc:santacruz:12345", "uc:ucsc:a-1.2_3"):
+        assert jobkey.inline_ok(key) and jobkey.safe_key(key) == key and jobkey.same_key(key, key), key
+    assert jobkey.site_key("caljobs:305602-4492") == ("caljobs", "305602-4492")
+    assert jobkey.site_key("uc:santacruz:12345") == ("uc", "santacruz", "12345")
+    for key in ("", None, "caljobs:", "caljobs:abc", "uc:santacruz", "uc::1", "uc:santa cruz:1", "linkedin:4012345678",
+                "greenhouse:1234567", "caljobs:305602-4492 x"):
+        assert jobkey.site_key(key) is None, key
+    for built in ("caljobs:305602-4492", jobkey.uc_key("UC Berkeley", "4455")):
+        assert jobkey.site_key(built) and jobkey.site_key(built)[0] in ("caljobs", "uc")
+    # a link to either site gives no key (a CalJOBS link has an encrypted token and no number; none is stored)
+    for url in ("https://www.caljobs.ca.gov/vosnet/jobbanks/jobdetails.aspx?enc=" + "A1b2C3" * 20,
+                "https://caljobs.ca.gov/vosnet/Default.aspx", "https://CALJOBS.ca.gov/x?jobid=305602",
+                "https://careerspub.universityofcalifornia.edu/psp/ucpc/EMPLOYEE/HRMS/c/x?JobOpeningId=12345"):
+        assert jobkey.job_key(url) == "", url
+    assert jobkey.job_key("https://www.ca.gov/jobs/1").startswith("url:"), "other links keep the URL key"
+
+
 def test_canonical_url():
     url = ("https://www.Job-Boards.Greenhouse.io/acme/jobs/123/?utm_source=linkedin&gh_src=abc123"
            "&utm_medium=social&utm_campaign=x#app")
@@ -250,7 +283,7 @@ def test_simhash():
 
 
 def main():
-    for t in (test_v11_keys_unchanged, test_v12_keys, test_canonical_url, test_company_names, test_simhash,
+    for t in (test_v11_keys_unchanged, test_v12_keys, test_site_keys, test_canonical_url, test_company_names, test_simhash,
               test_keys_safe_by_construction, test_reader_keys_safe):
         t()
         print("ok", t.__name__)

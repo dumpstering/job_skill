@@ -438,6 +438,96 @@ def test_canonical_host():
             assert e.reason.startswith(("bad-url", "job-board")), e.reason
 
 
+def test_browser_sites():
+    """CalJOBS and the UC careers site are read only in the user's own
+    browser: every fetch of either is refused as browser-site <site>, attended
+    or not, before any request (robots.txt included), at the socket, in a
+    redirect, and even when a watch-list row names the host. Lookalike
+    spellings are caught like a job board's; their neighbours are not."""
+    assert netfetch.BROWSER_SITE_HOSTS == {"caljobs": ("caljobs.ca.gov",),
+                                          "uc": ("careerspub.universityofcalifornia.edu",)}
+    shy, ideo = chr(0xAD), chr(0x3002)
+    cases = {"https://www.caljobs.ca.gov/vosnet/Default.aspx": "browser-site caljobs",
+             "https://CALJOBS.CA.GOV/robots.txt": "browser-site caljobs",
+             "https://caljobs.ca.gov./x": "browser-site caljobs",
+             "http://www.caljobs.ca.gov:443/x": "browser-site caljobs",
+             "https://www.cal" + shy + "jobs.ca.gov/x": "browser-site caljobs",
+             "https://www.caljobs" + ideo + "ca" + ideo + "gov/x": "browser-site caljobs",
+             "https://www.caljobs.ca.gov" + BS + "@careers.example-bio.com/jobs/1": "browser-site caljobs",
+             "https://careers.example-bio.com" + BS + "@www.caljobs.ca.gov/x": "browser-site caljobs",
+             "https://careerspub.universityofcalifornia.edu/psp/ucpc/EMPLOYEE/HRMS/c/x?JobOpeningId=1": "browser-site uc",
+             "https://CareersPub.UniversityOfCalifornia.edu": "browser-site uc",
+             "https://sso.careerspub.universityofcalifornia.edu/x": "browser-site uc"}
+    for url, want in cases.items():
+        assert netfetch.web_refusal(url) == want, (ascii(url), netfetch.web_refusal(url))
+        assert netfetch.hard_deny(url) == want, ascii(url)
+        for unattended in (True, False):
+            assert netfetch.Policy(unattended=unattended).reason(url) == want, (ascii(url), unattended)
+        try:
+            netfetch.check_public(url)
+            raise AssertionError(f"check_public accepted {ascii(url)}")
+        except netfetch.Denied as e:
+            assert e.reason == want, e.reason
+    for url in ("https://www.ca.gov/", "https://edd.ca.gov/", "https://universityofcalifornia.edu/",
+                "https://careers.universityofcalifornia.edu/x", "https://jobs.berkeley.edu/", "https://hr.ucdavis.edu/",
+                "https://jobs.ucsc.edu/", "https://evilcaljobs.ca.gov.example.com/", "https://caljobs.ca.gov.example.com/"):
+        assert netfetch.browser_site(netfetch.host_of(url)) is None and netfetch.web_refusal(url) is None, url
+    assert netfetch.browser_site("") is None and netfetch.browser_site(None) is None
+    assert netfetch.web_refusal("https://www.linkedin.com/jobs/view/1") == "job-board linkedin.com", "boards keep theirs"
+    # the command line
+    for url, site in (("https://www.caljobs.ca.gov/vosnet/Default.aspx", "caljobs"),
+                      ("https://careerspub.universityofcalifornia.edu/x", "uc")):
+        for extra in ((), ("--attended",), ("--robots", "--offline", str(ROBOTS_FIX))):
+            code, lines, _ = run_cli("check", url, *extra)
+            assert (code, lines) == (7, [f"DENY browser-site {site}"]), (url, extra, code, lines)
+    # no request at all, robots.txt included; the same through a policy that allows any attended host
+    f, _ = offline_fetcher()
+    g, _ = offline_fetcher(policy=netfetch.Policy(unattended=False))
+    for fetcher in (f, g):
+        for url in ("https://www.caljobs.ca.gov/vosnet/Default.aspx", "https://careerspub.universityofcalifornia.edu/x"):
+            try:
+                fetcher.get(url)
+                raise AssertionError(f"fetched {url}")
+            except netfetch.Denied as e:
+                assert e.reason.startswith("browser-site "), e.reason
+        assert fetcher.offline.requests == [], fetcher.offline.requests
+    # a redirect into either, and the socket layer
+    req = netfetch.Request("https://boards-api.greenhouse.io/v1/boards/acme/jobs")
+    for target, why in (("https://www.caljobs.ca.gov/vosnet/loginintro.aspx", "browser-site caljobs"),
+                        ("https://careerspub.universityofcalifornia.edu/x", "browser-site uc")):
+        for handler in (netfetch.PublicRedirects(), netfetch.PolicyRedirects(f._gate)):
+            try:
+                handler.redirect_request(req, None, 302, "Found", {}, target)
+                raise AssertionError(f"redirect to {target} not refused")
+            except netfetch.Denied as e:
+                assert e.reason == why, e.reason
+    resolved = []
+    real = socket.getaddrinfo
+    socket.getaddrinfo = lambda *a, **kw: resolved.append(a) or []
+    try:
+        for name, why in (("www.caljobs.ca.gov", "browser-site caljobs"),
+                          ("careerspub.universityofcalifornia.edu", "browser-site uc")):
+            try:
+                netfetch.connect_public(name, 443, 5)
+                raise AssertionError(f"connect_public accepted {name}")
+            except netfetch.Denied as e:
+                assert e.reason == why, e.reason
+    finally:
+        socket.getaddrinfo = real
+    assert resolved == [], "a browser site's name is never resolved"
+    # a watch-list row that names one never allows it
+    with tempfile.TemporaryDirectory(prefix="netfetch_") as tmp:
+        cfg = Path(tmp) / "config"
+        cfg.mkdir()
+        (cfg / "watchlist.csv").write_text("employer,careers_url\nState,https://www.caljobs.ca.gov/vosnet/x\n"
+                                           "UC,https://careerspub.universityofcalifornia.edu/x\n"
+                                           "Acme Bio,https://careers.acmebio.example/jobs\n", encoding="utf-8")
+        assert netfetch.watchlist_hosts(tmp) == {"careers.acmebio.example"}, netfetch.watchlist_hosts(tmp)
+        w = netfetch.Policy(root=tmp)
+        assert w.reason("https://www.caljobs.ca.gov/vosnet/x") == "browser-site caljobs"
+        assert w.reason("https://careerspub.universityofcalifornia.edu/x") == "browser-site uc"
+
+
 def test_encoded_paths():
     """SEC-06: R3 list paths and robots rules are compared after decoding
     percent-escaped unreserved characters (RFC 9309 2.2.2) and resolving dot
@@ -888,7 +978,7 @@ def test_special_use_names():
 def main():
     for t in (test_cli_policy, test_policy_rules, test_public_address_guard, test_proxy_means_no_fetch,
               test_robots_rules, test_robots_fetching_and_cache, test_politeness, test_size_cap,
-              test_lookalike_hosts, test_canonical_host, test_encoded_paths, test_robots_bounded,
+              test_lookalike_hosts, test_canonical_host, test_browser_sites, test_encoded_paths, test_robots_bounded,
               test_fetch_deadline, test_odd_charset, test_crawl_delay_limits, test_robots_redirect_loop,
               test_one_link_refusal, test_json_lone_surrogate, test_special_use_names):
         t()

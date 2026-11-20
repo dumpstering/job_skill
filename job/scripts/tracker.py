@@ -4,7 +4,7 @@ Usage (every subcommand except `statuses` takes --root <JobSearch folder>):
     python tracker.py init --root R
     python tracker.py check --root R --company C --title T [--url U] [--job-key K] [--posting P]
     python tracker.py add --root R --company C --role ROLE [--location L] [--fit F]
-        [--status S] [--url U] [--folder F] [--source Skill|"By hand"|Runner|LinkedIn]
+        [--status S] [--url U] [--folder F] [--source Skill|"By hand"|Runner|LinkedIn|CalJOBS|UC]
         [--applied YYYY-MM-DD] [--notes N] [--job-key K] [--tier A|B|"By hand"] [--family F]
         [--variant V] [--ats A] [--found-via W] [--posted D] [--req-id R] [--queue-date D]
         [--account none|exists|new] [--referral NAME] [--referral-url U] [--confirmed D]
@@ -75,9 +75,11 @@ It also prints IN QUEUE <date> #<n> when the job is in today's queue.
 
 Source is who filled the application: Skill (the single-job flow, the
 default), Runner (a list item filled in the loop), By hand (the user, /job
-log and `log e1`) or LinkedIn (an Easy Apply form Claude filled in the
+log and `log e1`), LinkedIn (an Easy Apply form Claude filled in the
 user's own browser, [linkedin] browser mode; today_view counts those rows
-toward that mode's per_day). A LinkedIn link in any value of a command line
+toward that mode's per_day), or CalJOBS or UC (a job found in the same way
+on those sites, Found via caljobs:browser or uc:browser; today_view counts
+them toward [caljobs] or [uc] per_day). A LinkedIn link in any value of a command line
 (a URL, a note, a quote) is kept only as the plain
 https://www.linkedin.com/jobs/view/<id>, or taken out when it names no job,
 before anything reads it (events.plain_linkedin_links): the workbook, the
@@ -160,7 +162,8 @@ STATUSES = ["Started", "Not pursued", "Resume ready", "Filled - awaiting submit"
             "Withdrawn", "Closed"]
 FITS = ["Strong Fit", "Good Fit", "Stretch", "Long Shot"]
 # LinkedIn: an Easy Apply form Claude filled in the user's own browser ([linkedin] browser mode).
-SOURCES = ["Skill", "By hand", "Runner", "LinkedIn"]
+# CalJOBS and UC: a job found in the same way on those sites ([caljobs] and [uc] browser modes).
+SOURCES = ["Skill", "By hand", "Runner", "LinkedIn", "CalJOBS", "UC"]
 TIERS = ["A", "B", "By hand"]
 ACCOUNT_STATES = ["none", "exists", "new"]
 KINDS = ["reply", "alert"]
@@ -2122,14 +2125,15 @@ OWN_LINK_FIELDS = re.compile(r"^\s*(referral[\s_-]?url|employer[\s_-]?site)\s*="
 def plain_argv(argv):
     """The command line with every LinkedIn link in a value (the job's URL,
     a note, a quote, a subject) put in its plain form, or taken out when it
-    names no job (events.plain_linkedin_links), before anything reads it:
-    the workbook, the printed lines and the event file never hold another
+    names no job (events.plain_linkedin_links), and every CalJOBS or UC
+    careers link taken out (events.drop_site_links), before anything reads
+    it: the workbook, the printed lines and the event file never hold another
     form. A value that must be the employer's own link is left as given, so
     it is refused."""
     out, prev = [], ""
     for tok in argv:
         own = prev in OWN_LINK_OPTIONS or tok.split("=", 1)[0] in OWN_LINK_OPTIONS or bool(OWN_LINK_FIELDS.match(tok))
-        out.append(tok if own else events.plain_linkedin_links(tok))
+        out.append(tok if own else events.drop_site_links(events.plain_linkedin_links(tok)))
         prev = tok
     return out
 
@@ -2148,7 +2152,8 @@ def add_add_options(p):
     p.add_argument("--status", default="Started", help="default Started; see `statuses`")
     p.add_argument("--url", default="")
     p.add_argument("--folder", default="", help="job folder relative to --root")
-    p.add_argument("--source", default="Skill", help='"Skill" (default), "By hand", "Runner" or "LinkedIn"')
+    p.add_argument("--source", default="Skill",
+                   help='"Skill" (default), "By hand", "Runner", "LinkedIn", "CalJOBS" or "UC"')
     p.add_argument("--applied", help="YYYY-MM-DD; sets Follow-up to +7 days (Tier A and referral rows)")
     p.add_argument("--notes", default="")
     p.add_argument("--job-key", default=None, help="default: derived from --url")

@@ -5,8 +5,8 @@ Usage:
                              [--allow-host H ...] [--robots] [--offline DIR]
 
 check prints ALLOW <host> (exit 0) or DENY <reason> (exit 7). Reasons:
-job-board <domain>, r3-list <host>, non-public <host>, bad-url [<detail>],
-not-https <host>, host-not-allowed <host>, post-not-allowed <host>,
+job-board <domain>, browser-site <caljobs|uc>, r3-list <host>, non-public <host>,
+bad-url [<detail>], not-https <host>, host-not-allowed <host>, post-not-allowed <host>,
 robots <host>, robots-unreachable <host>, crawl-delay <host>. The static rules
 need no network; --robots also reads robots.txt (live, or from --offline
 fixtures).
@@ -14,7 +14,9 @@ fixtures).
 What it enforces (spec 8.2, 3.3, 3.14):
 - One refusal for links (web_refusal, R1): every check that decides whether
   a link may be stored, shown, opened or fetched asks it. It answers None or
-  job-board <domain>, bad-url <why> (no http(s) link, a backslash, space or
+  job-board <domain>, browser-site <caljobs|uc> (caljobs.ca.gov and
+  careerspub.universityofcalifornia.edu: read only in the user's own browser,
+  under every setting), bad-url <why> (no http(s) link, a backslash, space or
   control character, userinfo, a port other than 80/443, a host canon_host
   refuses, an IP literal in any form, a single-label host) or non-public
   <host> (localhost, .local, .internal, .lan, .home.arpa, a private IP, or
@@ -30,7 +32,8 @@ What it enforces (spec 8.2, 3.3, 3.14):
   socket layer re-checks the name it resolves (canonical, not a job board).
 - A hard deny for job boards (any host with a label linkedin, indeed,
   glassdoor, simplyhired, ziprecruiter or remotive, whatever the top-level
-  domain, plus lnkd.in and licdn.com) and the R3 list endpoints, before every
+  domain, plus lnkd.in and licdn.com), the two browser sites (BROWSER_SITE_HOSTS)
+  and the R3 list endpoints, before every
   request and redirect, even when robots.txt cannot be read. Paths are
   compared after decoding percent-escaped unreserved characters (RFC 9309
   2.2.2); unattended, a path still holding %2F or %5C is refused.
@@ -201,6 +204,9 @@ def connect_public(host, port, timeout):
     board = job_board(name)
     if board:
         raise Denied(f"job-board {board}")
+    site = browser_site(name)
+    if site:
+        raise Denied(f"browser-site {site}")
     deadline = getattr(_deadline, "at", None) or time.monotonic() + FETCH_DEADLINE
     base = None if timeout is socket._GLOBAL_DEFAULT_TIMEOUT else timeout
     try:
@@ -365,6 +371,27 @@ def job_board(host):
     return None
 
 
+# The two sites the skill reads only in the user's own browser (references/caljobs_browser.md and
+# uc_browser.md). CalJOBS's robots.txt disallows every automated agent and the UC careers site needs
+# the user's sign-in, so they are never fetched or stored as a link, whatever the setting.
+BROWSER_SITE_HOSTS = {"caljobs": ("caljobs.ca.gov",), "uc": ("careerspub.universityofcalifornia.edu",)}
+
+
+def browser_site(host):
+    """The browser site (caljobs or uc) a host belongs to, else None, judged
+    like job_board: on its canonical form, or on the name a lookalike
+    spelling maps to."""
+    raw = str(host or "")
+    try:
+        h = canon_host(raw)
+    except Denied:
+        h = idna_host(raw) or raw.lower().rstrip(".")
+    for site, domains in BROWSER_SITE_HOSTS.items():
+        if any(on_domain(h, d) for d in domains):
+            return site
+    return None
+
+
 UNRESERVED = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
 PCT = re.compile(r"%([0-9A-Fa-f]{2})")
 
@@ -438,12 +465,13 @@ def _odd_char(url):
     return ""
 
 
-def _board_readings(url):
-    """The job board any reader of url would reach, else None: Python's
-    urlparse host, and the host a browser reads (WHATWG: tabs and newlines
-    dropped, any run of slashes or backslashes after the scheme skipped, the
-    authority ending at the first / \\ ? or #, userinfo up to the last @,
-    percent-escapes decoded), each judged on its canonical or IDNA form."""
+def _board_readings(url, judge=job_board):
+    """The job board (or, with judge=browser_site, the browser site) any
+    reader of url would reach, else None: Python's urlparse host, and the
+    host a browser reads (WHATWG: tabs and newlines dropped, any run of
+    slashes or backslashes after the scheme skipped, the authority ending at
+    the first / \\ ? or #, userinfo up to the last @, percent-escapes
+    decoded), each judged on its canonical or IDNA form."""
     seen = []
     try:
         seen.append(urlparse(url).hostname or "")
@@ -457,7 +485,7 @@ def _board_readings(url):
     seen += [auth, unquote(auth)]
     for raw in seen:
         if raw:
-            board = job_board(raw) or job_board(idna_host(raw))
+            board = judge(raw) or judge(idna_host(raw))
             if board:
                 return board
     return None
@@ -479,12 +507,12 @@ def _ip_literal(host):
 
 def web_refusal(url):
     """None when url may be stored, shown, opened or fetched as a web link,
-    else one reason (R1): 'job-board <domain>', 'bad-url <why>' or
-    'non-public <host>'. Needs no network and never raises.
+    else one reason (R1): 'job-board <domain>', 'browser-site <caljobs|uc>',
+    'bad-url <why>' or 'non-public <host>'. Needs no network and never raises.
 
-    Refused: anything but an http(s) link with '//' and a host; a job board by
-    any reading (Python's or a browser's: a backslash, userinfo or lookalike
-    spelling that leads to one); a backslash, whitespace, control or format
+    Refused: anything but an http(s) link with '//' and a host; a job board or
+    a browser site by any reading (Python's or a browser's: a backslash,
+    userinfo or lookalike spelling that leads to one); a backslash, whitespace, control or format
     character anywhere; userinfo (an '@' in the authority); a port other than
     80 or 443; a host canon_host refuses; an IP-literal host in any form; a
     single-label host; the special-use names localhost, .localhost, .local,
@@ -503,6 +531,9 @@ def web_refusal(url):
     board = _board_readings(url)
     if board:
         return f"job-board {board}"
+    site = _board_readings(url, browser_site)
+    if site:
+        return f"browser-site {site}"
     odd = _odd_char(url)
     if odd:
         return f"bad-url {odd}"
@@ -528,6 +559,9 @@ def web_refusal(url):
     board = job_board(host)
     if board:
         return f"job-board {board}"
+    site = browser_site(host)
+    if site:
+        return f"browser-site {site}"
     if any(host == s or host.endswith("." + s) for s in SPECIAL_USE) or \
             any(host.endswith("." + s) for s in PRIVATE_SUFFIXES):
         return f"non-public {host}"
@@ -567,7 +601,8 @@ def employer_site(*values):
 
 def hard_deny(url):
     """The DENY reason that holds for every fetch, attended or not, else None;
-    never raises: web_refusal's reason (job-board, bad-url, non-public), then
+    never raises: web_refusal's reason (job-board, browser-site, bad-url,
+    non-public), then
     the R3 list endpoints (r3-list <host>)."""
     reason = web_refusal(url)
     if reason:
@@ -618,7 +653,7 @@ def watchlist_hosts(root):
             with open(path, encoding="utf-8-sig", newline="") as f:
                 for row in csv.DictReader(f):
                     h = host_or_blank((row.get("careers_url") or "").strip())
-                    if h and not job_board(h):
+                    if h and not job_board(h) and not browser_site(h):
                         hosts.add(h)
         except (OSError, csv.Error, UnicodeDecodeError):
             continue

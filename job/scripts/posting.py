@@ -30,8 +30,12 @@ folder is --root's, else the one holding --out's _incoming/), then WARN
 With --text-file a LinkedIn link is only ever the job key: posting.md keeps
 it as the plain https://www.linkedin.com/jobs/view/<id>, whatever spelling
 was given, and a LinkedIn link that names no job is left out (JOB KEY (none:
-no link)); nothing is fetched. --posted is the date the page showed for a
-pasted posting (POSTED <date> (pasted)).
+no link)); nothing is fetched. A CalJOBS or UC careers link is never kept
+(its job key is the job's own number, `caljobs:<job #>` or
+`uc:<campus>:<job id>`, passed to tracker.py as job-key), and without
+--text-file it is BROWSER SITE <caljobs|uc>: not fetched; use /job caljobs (or
+/job uc), exit 4. --posted is the date the page showed for a pasted posting
+(POSTED <date> (pasted)).
 
 --gate (with --text-file and --root) adds one last line: the gates a read
 posting meets (gates.py: G3 place, G4 title, G5 age when --posted is given,
@@ -55,7 +59,8 @@ your own tool> and RERUN <the flags to rerun with>, or NEXT when a file you
 supplied failed too; or ROBOTS <host> and NEXT: read it in the browser);
 4 never fetched or opened by any tool, the browser included, and no TRY line:
 a job board (JOB BOARD <domain>: LinkedIn, Indeed, Glassdoor, SimplyHired,
-ZipRecruiter, Remotive, lnkd.in, licdn.com, whatever the spelling) or any
+ZipRecruiter, Remotive, lnkd.in, licdn.com, whatever the spelling), a browser
+site (BROWSER SITE <caljobs|uc>: CalJOBS or the UC careers site) or any
 other web_refusal (REFUSED bad-url ... or REFUSED non-public <host>), met
 before the request, while connecting (a name that resolves to a non-public
 address) or anywhere in a redirect chain; 5 CLOSED (the employer took it
@@ -1265,6 +1270,11 @@ def job_board_refusal(host):
     return 4
 
 
+def browser_site_refusal(site):
+    print(f"BROWSER SITE {site}: not fetched; use /job {site}")
+    return 4
+
+
 def link_refusal(reason):
     """Exit 4 for a link netfetch.web_refusal refuses (bad-url or
     non-public), before any request or while connecting or redirecting:
@@ -1281,6 +1291,12 @@ def is_job_board_url(url):
     return (netfetch.web_refusal(url) or "").startswith("job-board ")
 
 
+def is_browser_site_url(url):
+    """True for a CalJOBS or UC careers link: read only in the user's own
+    browser (/job caljobs, /job uc), never fetched, never stored."""
+    return (netfetch.web_refusal(url) or "").startswith("browser-site ")
+
+
 # A LinkedIn link is only ever kept as the plain /jobs/view/<id> (events.py has the one definition).
 is_linkedin_url = events.is_linkedin_url
 linkedin_plain = events.linkedin_plain
@@ -1288,14 +1304,17 @@ linkedin_plain = events.linkedin_plain
 
 def link_check(url):
     """The exit for a link that is never read, opened or recorded, else None:
-    netfetch.web_refusal decides (R1), so a job board is JOB BOARD and every
-    other refusal (bad-url, non-public) is REFUSED, exit 4 both."""
+    netfetch.web_refusal decides (R1), so a job board is JOB BOARD, a browser
+    site is BROWSER SITE and every other refusal (bad-url, non-public) is
+    REFUSED, exit 4 all three."""
     if not url:
         return None
     reason = netfetch.web_refusal(url) or ""
     kind, _, rest = reason.partition(" ")
     if kind == "job-board":
         return job_board_refusal(rest)
+    if kind == "browser-site":
+        return browser_site_refusal(rest)
     if reason:
         return link_refusal(reason)
     return None
@@ -1315,6 +1334,8 @@ def denied(e, args):
     kind, _, host = e.reason.partition(" ")
     if kind == "job-board":
         return job_board_refusal(host)
+    if kind == "browser-site":
+        return browser_site_refusal(host)
     if kind in ("robots", "r3-list", "crawl-delay"):
         print(f"ROBOTS {host}")
         print(BROWSER_NEXT)
@@ -1337,8 +1358,9 @@ def from_text(text, company, role, location, posted=""):
     p["company"], p["role"], p["location"] = company, role, location
     if posted:
         p["posted"], p["posted_field"] = posted, "pasted"
-    # a LinkedIn link in the pasted text stays only as the plain job link (no token is ever written)
-    body = events.plain_linkedin_links(strip_invisible(text, report).replace("\r\n", "\n"))
+    # a LinkedIn link in the pasted text stays only as the plain job link (no token is ever written);
+    # a CalJOBS or UC careers link is taken out
+    body = events.drop_site_links(events.plain_linkedin_links(strip_invisible(text, report).replace("\r\n", "\n")))
     p["description"] = re.sub(r"\n{3,}", "\n\n", body).strip()
     reqs = sorted(jobkey.req_ids(body) | {m.group(1).upper() for m in PASTED_REQ.finditer(body)})
     if len(reqs) == 1:
@@ -1499,8 +1521,9 @@ def main(argv=None):
     # R1: any other link web_refusal refuses (another scheme, a malformed or refused
     # http(s) link) is exit 4 here, and never a TRY line. With --text-file a
     # job-board link is only recorded (linkedin.md); every other refused link is
-    # never recorded either (the fill loop would open it).
-    if not (args.text_file and is_job_board_url(args.url)):
+    # never recorded either (the fill loop would open it). A browser-site link
+    # (CalJOBS, UC) is refused without --text-file and left out with it.
+    if not (args.text_file and (is_job_board_url(args.url) or is_browser_site_url(args.url))):
         refused = link_check(args.url)
         if refused is not None:
             return refused
@@ -1531,6 +1554,8 @@ def main(argv=None):
     if args.text_file and is_linkedin_url(args.url):
         # a LinkedIn link is only ever the job key: kept in its plain form, or not at all
         args.url = linkedin_plain(args.url)
+    if args.text_file and is_browser_site_url(args.url):
+        args.url = ""  # a CalJOBS or UC link is never kept: its key is the job's number (tracker's job-key)
 
     if args.text_file:
         try:

@@ -108,6 +108,41 @@ def inline_ok(value, path=False):
     return bool(SAFE_KEY.fullmatch(s)) and not s.startswith("-")
 
 
+# The browser sites (netfetch.BROWSER_SITE_HOSTS; /job caljobs, /job uc): a CalJOBS link holds a long
+# encrypted token and no job number, and no link to either site is ever stored, so their keys are built
+# from what the page shows, never from a link: caljobs:<Job #> and uc:<campus>:<job id>.
+CALJOBS_NUMBER = re.compile(r"[0-9]{3,12}(?:-[0-9]{1,8})?")   # 305602-4492
+UC_JOB_ID = re.compile(r"[a-z0-9][a-z0-9._-]{0,40}")
+UC_PREFIX = re.compile(r"^(?:university of california[\s,-]*|uc[\s,-]+)")   # "UC Santa Cruz" -> "santa cruz"
+
+
+def caljobs_key(number):
+    """caljobs:<Job # as the page shows it>, e.g. caljobs:305602-4492; ''
+    when number is not a CalJOBS job number."""
+    n = str(number or "").strip()
+    return f"caljobs:{n}" if CALJOBS_NUMBER.fullmatch(n) else ""
+
+
+def uc_key(campus, job_id):
+    """uc:<campus>:<job id>, the campus as its lowercase name without spaces
+    or a leading UC (UC Santa Cruz -> santacruz); '' when either part does
+    not fit."""
+    c = re.sub(r"[^a-z0-9]", "", UC_PREFIX.sub("", str(campus or "").strip().lower()))
+    j = str(job_id or "").strip().lower()
+    return f"uc:{c}:{j}" if c not in ("", "uc") and UC_JOB_ID.fullmatch(j) else ""
+
+
+def site_key(key):
+    """('caljobs', '<job #>') or ('uc', '<campus>', '<job id>') for a key
+    caljobs_key or uc_key built, else None."""
+    k = str(key or "")
+    m = re.fullmatch(r"caljobs:(" + CALJOBS_NUMBER.pattern + ")", k)
+    if m:
+        return ("caljobs", m.group(1))
+    m = re.fullmatch(r"uc:([a-z0-9]+):(" + UC_JOB_ID.pattern + ")", k)
+    return ("uc", m.group(1), m.group(2)) if m else None
+
+
 def job_key(url, ats=None):
     """A stable key for one posting, the same whichever link to it was pasted,
     always in the R2 form (safe_key of raw_key)."""
@@ -129,6 +164,8 @@ def raw_key(url, ats=None):
         return ""
     host, parts, query = parse_url(url)
 
+    if host == "caljobs.ca.gov" or host.endswith(".caljobs.ca.gov") or host == "careerspub.universityofcalifornia.edu":
+        return ""  # no key from a link to a browser site (caljobs_key, uc_key)
     if "greenhouse.io" in host:
         if "jobs" in parts and parts.index("jobs") + 1 < len(parts):
             return f"greenhouse:{parts[parts.index('jobs') + 1]}"

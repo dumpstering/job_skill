@@ -224,6 +224,10 @@ spreadsheet is your record, not a filing.
   all, then takes you through them one at a time.
 - `/job linkedin` - LinkedIn in your own Chrome, if you turned it on (Day 2
   step 6).
+- `/job caljobs` and `/job uc` - CalJOBS and the University of California
+  careers site in your own Chrome, if you turned them on (setup asks once
+  each when your home is in California). You make the account and sign in
+  yourself; Claude never types a password or a code.
 - `/job log` - tell Claude about a job you applied for on your own.
 - `/job status` - what is in flight and what is ready to follow up.
 - `/job prep` - interview prep from what you sent.

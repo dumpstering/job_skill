@@ -13,6 +13,9 @@ Usage:
     python events.py diy-add --root R --folder <job folder> [--date YYYY-MM-DD]
     python events.py linkedin-stop --root R --reason captcha|sign_in|unusual_activity|limit|restricted|other
         [--date YYYY-MM-DD] [--session S]
+    python events.py site-stop --root R --site caljobs|uc
+        --reason captcha|sign_in|bot_check|unusual_activity|limit|restricted|other
+        [--date YYYY-MM-DD] [--session S]
 
 emit prints EVENT <id>. J is the payload object, or an object holding
 "payload" plus any of job_key, n, date, session. emit writes every type but
@@ -73,10 +76,17 @@ The file is the session's own, not an event: it holds at once, in every mode,
 whatever version the PC's job finder is. A file there that cannot be read
 still counts as a stop. today_view.py linkedin and the card read it.
 
+site-stop does the same for the CalJOBS and UC careers browser modes
+([caljobs] and [uc] in settings.toml, references/caljobs_browser.md and
+uc_browser.md): claude/<date>/<site>_stop.json, once, never cleared, and
+    SITE caljobs STOPPED <date> <reason>: no CalJOBS page is opened again today
+    SITE uc STOPPED <date> <reason>: no UC careers page is opened again today
+today_view.py site and the card read it.
+
 The library (validate, emit, read_file, pending_files, recent, move_done,
 reject, note_failure, overlay, user_items) is what tracker.py apply-events,
-today_view, jobqueue and caps use; linkedin_settings, linkedin_stop and
-paste_items are what today_view reads. Stdlib only (add also reads the queue
+today_view, jobqueue and caps use; linkedin_settings, linkedin_stop,
+site_settings, site_stop and paste_items are what today_view reads. Stdlib only (add also reads the queue
 through jobqueue; an added event's link is checked with netfetch).
 
 Exit codes: 0 ok, 1 bad input (ERROR ...).
@@ -131,6 +141,15 @@ LINKEDIN_PER_DAY_MAX = 50      # a larger per_day is read as this
 LINKEDIN_PACE = (4, 120)       # seconds between actions: never under the default, never over two minutes
 # Why LinkedIn was closed for the day (linkedin-stop --reason).
 LINKEDIN_STOPS = ("captcha", "sign_in", "unusual_activity", "limit", "restricted", "other")
+# [caljobs] and [uc] in config/settings.toml: the two other opt-in browser sites (caljobs_browser.md,
+# uc_browser.md), one table each. Their pages are never fetched by any script (netfetch.BROWSER_SITE_HOSTS).
+BROWSER_SITES = ("caljobs", "uc")
+SITE_PAGES = {"caljobs": "CalJOBS", "uc": "UC careers"}   # "no <it> page is opened again today"
+SITE_DEFAULTS = {"browser": False, "per_day": 25, "min_seconds_between_actions": 6, "stop_on_warning": True}
+SITE_PER_DAY_MAX = 50          # a larger per_day is read as this
+SITE_PACE = (4, 120)           # seconds between actions: never under 4, never over two minutes
+# Why a browser site was closed for the day (site-stop --reason).
+SITE_STOPS = ("captcha", "sign_in", "bot_check", "unusual_activity", "limit", "restricted", "other")
 # Pasted do-yourself items take E51, E52, ...; the runner numbers its own list from E1.
 PASTE_E_FIRST = 51
 PASTE_E_RE = re.compile(r"^E(\d+)_")
@@ -771,7 +790,53 @@ def plain_linkedin_links(text):
     return LINK_IN_TEXT.sub(one, text)
 
 
-# ---------- LinkedIn browser mode: settings and the day's stop ----------
+def is_site_url(url):
+    """True for a link netfetch refuses as a browser site's (CalJOBS, the UC
+    careers site): any spelling or reading of either."""
+    if not isinstance(url, str) or not url:
+        return False
+    import netfetch  # stdlib and jobfs only
+    return (netfetch.web_refusal(url) or "").startswith("browser-site ")
+
+
+def drop_site_links(text):
+    """text with every link to a browser site taken out (a CalJOBS link holds
+    a long encrypted token and no job number, so none is ever stored). Any
+    other link, and text with no link, is returned as it is. A pasted
+    posting's text and every tracker command line go through this."""
+    if not isinstance(text, str) or "://" not in text:
+        return text
+
+    def one(m):
+        url, tail = m.group(0), ""
+        while url and url[-1] in LINK_TAIL:
+            url, tail = url[:-1], url[-1] + tail
+        return tail if is_site_url(url) else m.group(0)
+    return LINK_IN_TEXT.sub(one, text)
+
+
+# ---------- browser mode: settings and the day's stop ----------
+
+def _browser_settings(root, table, defaults, per_day_max, pace):
+    """[<table>] of config/settings.toml as checked values: linkedin_settings
+    and site_settings say what each key means."""
+    out = dict(defaults)
+    try:
+        cfg = jobfs.settings(root)
+    except (jobfs.ConfigError, OSError, ValueError):
+        return out
+    raw = cfg.get(table)
+    raw = raw if isinstance(raw, dict) else {}
+    out["browser"] = getattr(cfg, "source", "") == "file" and raw.get("browser") is True
+    n = raw.get("per_day")
+    if isinstance(n, int) and not isinstance(n, bool) and n >= 0:
+        out["per_day"] = min(n, per_day_max)
+    s = raw.get("min_seconds_between_actions")
+    if isinstance(s, (int, float)) and not isinstance(s, bool) and math.isfinite(s):
+        out["min_seconds_between_actions"] = int(min(max(math.ceil(s), pace[0]), pace[1]))
+    out["stop_on_warning"] = raw.get("stop_on_warning") is not False
+    return out
+
 
 def linkedin_settings(root):
     """[linkedin] of config/settings.toml as checked values (settings.md).
@@ -782,26 +847,52 @@ def linkedin_settings(root):
     maximum, anything else as the default 25). min_seconds_between_actions
     is read as whole seconds, never under 4 nor over 120. stop_on_warning is
     False only for the TOML boolean false."""
-    out = dict(LINKEDIN_DEFAULTS)
-    try:
-        cfg = jobfs.settings(root)
-    except (jobfs.ConfigError, OSError, ValueError):
-        return out
-    raw = cfg.get("linkedin")
-    raw = raw if isinstance(raw, dict) else {}
-    out["browser"] = getattr(cfg, "source", "") == "file" and raw.get("browser") is True
-    n = raw.get("per_day")
-    if isinstance(n, int) and not isinstance(n, bool) and n >= 0:
-        out["per_day"] = min(n, LINKEDIN_PER_DAY_MAX)
-    s = raw.get("min_seconds_between_actions")
-    if isinstance(s, (int, float)) and not isinstance(s, bool) and math.isfinite(s):
-        out["min_seconds_between_actions"] = int(min(max(math.ceil(s), LINKEDIN_PACE[0]), LINKEDIN_PACE[1]))
-    out["stop_on_warning"] = raw.get("stop_on_warning") is not False
-    return out
+    return _browser_settings(root, "linkedin", LINKEDIN_DEFAULTS, LINKEDIN_PER_DAY_MAX, LINKEDIN_PACE)
+
+
+def site_settings(root, site):
+    """[caljobs] or [uc] of config/settings.toml as checked values: the same
+    rules as linkedin_settings, with a default pace of 6 seconds (never under
+    4 nor over 120)."""
+    if site not in BROWSER_SITES:
+        raise EventError(f"site must be one of: {', '.join(BROWSER_SITES)}")
+    return _browser_settings(root, site, SITE_DEFAULTS, SITE_PER_DAY_MAX, SITE_PACE)
 
 
 def _day(root, day):
     return jobfs.iso_date(day) if day else jobfs.today(root).isoformat()
+
+
+def _read_stop(path, reasons):
+    """The day's stop in `path` as {"at", "reason"}, or None while it is not
+    there. The file being there is the stop: one that cannot be read, or that
+    holds something else, still closes the day (reason "other")."""
+    try:
+        data = jobfs.read_json(path, MAX_BYTES)
+    except FileNotFoundError:
+        return None
+    except (OSError, ValueError, RecursionError):
+        return {"at": "", "reason": "other"}
+    if not isinstance(data, dict):
+        return {"at": "", "reason": "other"}
+    reason = data.get("reason")
+    return {"at": str(data.get("at") or "")[:40], "reason": reason if reason in reasons else "other"}
+
+
+def _write_stop(root, path, reasons, reason, day, session):
+    """Create-only: the first stop of the day stands and nothing here clears
+    it. Returns the day."""
+    if reason not in reasons:
+        raise EventError(f"--reason must be one of: {', '.join(reasons)}")
+    session = session if session is not None else os.environ.get("JOB_SESSION", "")
+    if not isinstance(session, str) or len(session) > 300:
+        raise EventError("--session must be text")
+    rec = {"v": 1, "date": day, "at": jobfs.now_iso(root), "reason": reason, "session": session}
+    try:
+        jobfs.create_only(path, json.dumps(rec, ensure_ascii=True, indent=1) + "\n")
+    except FileExistsError:
+        pass
+    return day
 
 
 def linkedin_stop_file(root, day=None):
@@ -812,33 +903,35 @@ def linkedin_stop(root, day=None):
     """The day's stop as {"at", "reason"}, or None while LinkedIn is open.
     The file being there is the stop: one that cannot be read, or that holds
     something else, still closes LinkedIn for that day (reason "other")."""
-    try:
-        data = jobfs.read_json(linkedin_stop_file(root, day), MAX_BYTES)
-    except FileNotFoundError:
-        return None
-    except (OSError, ValueError, RecursionError):
-        return {"at": "", "reason": "other"}
-    if not isinstance(data, dict):
-        return {"at": "", "reason": "other"}
-    reason = data.get("reason")
-    return {"at": str(data.get("at") or "")[:40], "reason": reason if reason in LINKEDIN_STOPS else "other"}
+    return _read_stop(linkedin_stop_file(root, day), LINKEDIN_STOPS)
 
 
 def stop_linkedin(root, reason, day=None, session=None):
     """Close LinkedIn for the day. Create-only: the first stop of the day
     stands and nothing here clears it. Returns (day, the stop as read back)."""
-    if reason not in LINKEDIN_STOPS:
-        raise EventError(f"--reason must be one of: {', '.join(LINKEDIN_STOPS)}")
-    session = session if session is not None else os.environ.get("JOB_SESSION", "")
-    if not isinstance(session, str) or len(session) > 300:
-        raise EventError("--session must be text")
-    day = _day(root, day)
-    rec = {"v": 1, "date": day, "at": jobfs.now_iso(root), "reason": reason, "session": session}
-    try:
-        jobfs.create_only(linkedin_stop_file(root, day), json.dumps(rec, ensure_ascii=True, indent=1) + "\n")
-    except FileExistsError:
-        pass
+    day = _write_stop(root, linkedin_stop_file(root, day), LINKEDIN_STOPS, reason, _day(root, day), session)
     return day, linkedin_stop(root, day)
+
+
+def site_stop_file(root, site, day=None):
+    if site not in BROWSER_SITES:
+        raise EventError(f"site must be one of: {', '.join(BROWSER_SITES)}")
+    return jobfs.Folder(root).claude / _day(root, day) / f"{site}_stop.json"
+
+
+def site_stop(root, site, day=None):
+    """The day's stop of a browser site as {"at", "reason"}, or None while it
+    is open: read as linkedin_stop reads its own (a file that cannot be read
+    still closes the site for that day)."""
+    return _read_stop(site_stop_file(root, site, day), SITE_STOPS)
+
+
+def stop_site(root, site, reason, day=None, session=None):
+    """Close a browser site (caljobs, uc) for the day. Create-only: the first
+    stop of the day stands and nothing here clears it. Returns (day, the stop
+    as read back)."""
+    day = _write_stop(root, site_stop_file(root, site, day), SITE_STOPS, reason, _day(root, day), session)
+    return day, site_stop(root, site, day)
 
 
 # ---------- pasted jobs on the do-yourself list (paste.md) ----------
@@ -1049,6 +1142,14 @@ def cmd_linkedin_stop(a):
     return 0
 
 
+def cmd_site_stop(a):
+    if a.date and not DAY_RE.match(a.date):
+        raise EventError(f"--date must be YYYY-MM-DD, got '{a.date}'")
+    day, stop = stop_site(a.root, a.site, a.reason, a.date, a.session)
+    print(f"SITE {a.site} STOPPED {day} {stop['reason']}: no {SITE_PAGES[a.site]} page is opened again today")
+    return 0
+
+
 def build_parser():
     ap = Parser(prog="events.py", description="Event files for the runner (spec 2.5).", allow_abbrev=False)
     sub = ap.add_subparsers(dest="cmd", required=True, metavar="command")
@@ -1090,6 +1191,14 @@ def build_parser():
     p.add_argument("--date")
     p.add_argument("--session")
     p.set_defaults(func=cmd_linkedin_stop)
+    p = sub.add_parser("site-stop", help="Close CalJOBS or the UC careers site for the day (browser mode); never undone.",
+                       allow_abbrev=False)
+    p.add_argument("--root", required=True)
+    p.add_argument("--site", required=True, choices=BROWSER_SITES)
+    p.add_argument("--reason", required=True, choices=SITE_STOPS)
+    p.add_argument("--date")
+    p.add_argument("--session")
+    p.set_defaults(func=cmd_site_stop)
     return ap
 
 

@@ -261,6 +261,30 @@ caught up by the first `/job`. Free plans have no scheduled tasks; then
    - It needs the Claude in Chrome extension in the Chrome where the user is
      signed in to LinkedIn ([linkedin_browser.md](linkedin_browser.md));
      without it, say so and leave the setting off.
+   - **California: two more questions in this step.** When `[home] states`
+     holds `CA` (sitting 1), ask each once, one at a time, after the LinkedIn
+     answer, whatever it was. CalJOBS: "California's state job bank, CalJOBS,
+     asks automated tools not to crawl it, so I never do. I can work there
+     as you browsing it: slowly, in your own Chrome and your own CalJOBS
+     account, on job pages only, and you click Submit. You need a free
+     account (if you claim unemployment in California you need one anyway).
+     Turn it on? (yes or no)" Then the University of California: "The
+     University of California's careers site (UC Berkeley, UC Davis, UC Santa
+     Cruz and others) needs your own sign-in. I can search and read jobs
+     there slowly, in your own Chrome and your own account, on job pages
+     only, and you click Submit. You need a free account on that site. Turn
+     it on? (yes or no)"
+     - Only a clear yes turns one on: back up `config/settings.toml`, set
+       `[caljobs] browser = true` or `[uc] browser = true` (a file from an
+       earlier version has no such table: add the template's), and say: "<It>
+       is on: at most 25 applications a day there. Type /job caljobs (or /job
+       uc) to start; say 'stop using CalJOBS' (or 'the UC site') any time."
+     - "No", "later", "maybe", a question, or no answer: leave `browser =
+       false`, never guess, and say once: "Left off. You can turn it on any
+       time with /job settings." Neither is asked again unless the user
+       brings it up.
+     - Both need the Claude in Chrome extension ([caljobs_browser.md](caljobs_browser.md),
+       [uc_browser.md](uc_browser.md)); without it, say so and leave them off.
 9. **The export:** when the LinkedIn zip has arrived, the user drops it into
    `network\raw\` ([referrals.md](referrals.md)).
 10. **The usage check** on days 1-2 ([usage.md](usage.md)).
