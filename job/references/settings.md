@@ -30,6 +30,9 @@ keep the last good copy and say so in `runner/out/status.json`.
 | "ask me before stopping on a CalJOBS warning" | `[caljobs] stop_on_warning` / `[uc] stop_on_warning` | true | a CAPTCHA, sign-in or bot check, unusual-activity or limit notice ends the site for the day whatever this says (below) |
 | "use Adzuna" / "use USAJOBS" | `[sources] adzuna` / `usajobs` | false | keys only through the installer's prompt (rerun `install_runner.cmd`: it asks only for a key not entered yet), never in chat |
 | "search Workable" / "use The Muse" | `[sources] workable_search` / `muse` | false | their terms are unknown; say so before turning one on |
+| "use Science Careers" / "use Nature Careers" / "use Hacker News hiring" | `[sources] science_careers` / `nature_careers` / `hn_hiring` | false | no key; leads only (company, title and place, read later); the place must be at home, or remote when remote counts; Hacker News is read once a day |
+| "use Himalayas" / "use Remote OK" / "use Jobicy" | `[sources] himalayas` / `remoteok` / `jobicy` | false | no key; remote jobs only, so they need `[home] remote = "us"`; each posting keeps its source's credit and apply link (the terms ask for it) |
+| "use We Work Remotely" | `[sources] wwr` | false | Off until you have read We Work Remotely's terms of use; say so before turning it on |
 | "stop reading Dayforce boards" | `[sources] dayforce` | true | |
 | "stop referral drafts" / "5 asks a day" | `[referrals] enabled` / `asks_per_day` | true / 3 | 3-5 |
 | "hold jobs I asked about for 2 days" | `[referrals] hold_days` | 0 | 1-2; only the job whose ask was sent waits |

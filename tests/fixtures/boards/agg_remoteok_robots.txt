@@ -1,0 +1,38 @@
+# robots.txt of remoteok.com as read 2026-11-23 (comments cut): named AI crawlers are
+# disallowed in their own groups; everything else falls under User-agent: *.
+
+User-agent: *
+Content-Signal: search=yes,ai-train=no,use=reference
+Allow: /
+
+User-agent: Amazonbot
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: GPTBot
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: Claude-Web
+Disallow: /
+
+User-agent: AwarioSmartBot
+User-agent: AwarioRssBot
+Disallow: /
+
+User-agent: *
+Crawl-delay: 1
+Allow: /
+Sitemap: https://remoteok.com/sitemap.xml
+
+User-agent: AhrefsBot
+Disallow: /
+
+# AJAX endpoints
+Disallow: /*?action=get_jobs
+Disallow: /*?url=
+Disallow: /track-ad

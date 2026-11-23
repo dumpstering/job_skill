@@ -4,7 +4,7 @@ Usage (every subcommand except `statuses` takes --root <JobSearch folder>):
     python tracker.py init --root R
     python tracker.py check --root R --company C --title T [--url U] [--job-key K] [--posting P]
     python tracker.py add --root R --company C --role ROLE [--location L] [--fit F]
-        [--status S] [--url U] [--folder F] [--source Skill|"By hand"|Runner|LinkedIn|CalJOBS|UC]
+        [--status S] [--url U] [--folder F] [--source Skill|"By hand"|Runner|LinkedIn|CalJOBS|UC|<credit>]
         [--applied YYYY-MM-DD] [--notes N] [--job-key K] [--tier A|B|"By hand"] [--family F]
         [--variant V] [--ats A] [--found-via W] [--posted D] [--req-id R] [--queue-date D]
         [--account none|exists|new] [--referral NAME] [--referral-url U] [--confirmed D]
@@ -79,7 +79,10 @@ log and `log e1`), LinkedIn (an Easy Apply form Claude filled in the
 user's own browser, [linkedin] browser mode; today_view counts those rows
 toward that mode's per_day), or CalJOBS or UC (a job found in the same way
 on those sites, Found via caljobs:browser or uc:browser; today_view counts
-them toward [caljobs] or [uc] per_day). A LinkedIn link in any value of a command line
+them toward [caljobs] or [uc] per_day). A list item from an aggregator lane that asks for a
+source credit (posting.SOURCE_CREDITS: Himalayas, Remote OK, Jobicy, We Work Remotely, and the
+Science Careers, Nature Careers and Hacker News leads) takes that credit instead of Runner, so the
+row carries it. A LinkedIn link in any value of a command line
 (a URL, a note, a quote) is kept only as the plain
 https://www.linkedin.com/jobs/view/<id>, or taken out when it names no job,
 before anything reads it (events.plain_linkedin_links): the workbook, the
@@ -163,7 +166,9 @@ STATUSES = ["Started", "Not pursued", "Resume ready", "Filled - awaiting submit"
 FITS = ["Strong Fit", "Good Fit", "Stretch", "Long Shot"]
 # LinkedIn: an Easy Apply form Claude filled in the user's own browser ([linkedin] browser mode).
 # CalJOBS and UC: a job found in the same way on those sites ([caljobs] and [uc] browser modes).
-SOURCES = ["Skill", "By hand", "Runner", "LinkedIn", "CalJOBS", "UC"]
+# The rest are the source credits of the aggregator lanes (posting.SOURCE_CREDITS).
+SOURCES = ["Skill", "By hand", "Runner", "LinkedIn", "CalJOBS", "UC", "Science Careers", "Nature Careers",
+           "Himalayas", "Remote OK", "Jobicy", "Hacker News", "We Work Remotely"]
 TIERS = ["A", "B", "By hand"]
 ACCOUNT_STATES = ["none", "exists", "new"]
 KINDS = ["reply", "alert"]
@@ -185,7 +190,7 @@ SHOW_COLS = ["ID", "Date", "Company", "Role", "Fit", "Status", "Applied", "Follo
 WIDTHS = {
     "Applications": {"ID": 6, "Date": 11, "Company": 22, "Role": 30, "Location": 18, "Fit": 12,
                      "Status": 26, "Applied": 11, "Follow-up": 11, "Last update": 11,
-                     "Next step": 30, "Source": 9, "Job key": 28, "Resume sent": 22,
+                     "Next step": 30, "Source": 16, "Job key": 28, "Resume sent": 22,
                      "Contact": 22, "Notes": 50, "Folder": 28, "URL": 40, "Tier": 7, "Family": 14,
                      "Variant": 14, "ATS": 14, "Found via": 16, "Posted": 11, "Req ID": 14,
                      "Queue date": 11, "Account": 9, "Referral": 20, "Referral URL": 30,
@@ -2153,7 +2158,9 @@ def add_add_options(p):
     p.add_argument("--url", default="")
     p.add_argument("--folder", default="", help="job folder relative to --root")
     p.add_argument("--source", default="Skill",
-                   help='"Skill" (default), "By hand", "Runner", "LinkedIn", "CalJOBS" or "UC"')
+                   help='"Skill" (default), "By hand", "Runner", "LinkedIn", "CalJOBS", "UC" or a lane credit '
+                        '("Himalayas", "Remote OK", "Jobicy", "We Work Remotely", "Science Careers", '
+                        '"Nature Careers", "Hacker News")')
     p.add_argument("--applied", help="YYYY-MM-DD; sets Follow-up to +7 days (Tier A and referral rows)")
     p.add_argument("--notes", default="")
     p.add_argument("--job-key", default=None, help="default: derived from --url")

@@ -262,6 +262,25 @@ v1.1 sources:
   MadsLorentzen/ai-job-search); fact, read-back and keyword checks
   (srbhr/Resume-Matcher); Greenhouse's 2.5 MB parse limit.
 
+## Credits
+
+Postings and leads found by the optional aggregator lanes (all off until the
+user switches one on in `config/settings.toml` `[sources]`) carry their
+source's credit in `posting.md` and the tracker's Source column. Jobs from
+**Himalayas** (himalayas.app) are shown with a Himalayas credit and are
+applied to only through the link its API gives; Himalayas asks that its data
+not be passed on to other job boards. Jobs from **Remote OK** (remoteok.com)
+link back to their Remote OK page, with Remote OK named as the source. Jobs
+from **Jobicy** (jobicy.com) credit Jobicy and apply through the job's own
+Jobicy link. **We Work Remotely** (weworkremotely.com) credit applies the
+same way, and its lane stays off until its terms of use have been read.
+**Science Careers** (jobs.sciencecareers.org), **Nature Careers**
+(www.nature.com/naturecareers) and **Hacker News** ("Ask HN: Who is hiring?",
+read through the Algolia HN search API) give only a company, a title and a
+place; each becomes a lead whose posting is then found on the employer's own
+site. The lanes read each site's robots.txt, make at most one request a
+second to a host, and never read a job board.
+
 ## Design notes
 
 - The PDF uses Helvetica and the .docx Arial, which share metrics, so the

@@ -45,6 +45,8 @@ SETTINGS_DEFAULTS = {
     "alerts": {"read_linkedin": True, "read_indeed_family": False, "read_ziprecruiter": False,
                "senders": []},
     "sources": {"adzuna": False, "usajobs": False, "workable_search": False, "muse": False,
+                "science_careers": False, "nature_careers": False, "himalayas": False, "remoteok": False,
+                "jobicy": False, "hn_hiring": False, "wwr": False,
                 "dayforce": True, "r3_sitemaps": False},
     "referrals": {"enabled": True, "asks_per_day": 3, "hold_days": 0, "nudge_after_days": 5},
     "followups": {"tiers": ["A", "referral"], "days": 7},
@@ -968,6 +970,7 @@ class Folder:
         self.company_ats_json = self.state / "company_ats.json"
         self.probe_cache_csv = self.state / "probe_cache.csv"
         self.robots_cache_json = self.state / "robots_cache.json"
+        self.hn_hiring_json = self.state / "hn_hiring.json"
         self.board_health_csv = self.state / "board_health.csv"
         self.watchlist_auto_csv = self.state / "watchlist_auto.csv"
         self.queue_state_json = self.state / "queue_state.json"

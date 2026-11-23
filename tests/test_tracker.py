@@ -818,7 +818,9 @@ def test_linkedin_rows():
     text = " ".join(str(c.value) for c in cells if c.value is not None)
     assert "Token" not in text and "trackingId" not in text and "refId" not in text and "lnkd.in" not in text, text
     out = run(root, "add", "--company", "X", "--role", "Y", "--source", "Monster", code=1)
-    assert out.strip() == "ERROR source 'Monster' is not one of: Skill, By hand, Runner, LinkedIn, CalJOBS, UC", out
+    assert out.strip() == ("ERROR source 'Monster' is not one of: Skill, By hand, Runner, LinkedIn, CalJOBS, UC, "
+                           "Science Careers, Nature Careers, Himalayas, Remote OK, Jobicy, Hacker News, "
+                           "We Work Remotely"), out
     # a note keeps a LinkedIn job link in its plain form and loses any other LinkedIn link
     run(root, "update", "1", "notes+=seen at " + li + "/jobs/view/4012345678?" + token + ", via https://lnkd.in/abc123.")
     note = sheet_rows(root / "applications.xlsx")[0]["Notes"]

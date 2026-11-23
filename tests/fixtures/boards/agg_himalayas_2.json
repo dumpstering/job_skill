@@ -1,0 +1,3 @@
+{"totalCount": 5, "limit": 20, "offset": 20, "nextCursor": "def456", "jobs": [
+{"title": "Research Scientist, Page Two", "companyName": "Second Page Bio", "minSalary": 110000, "maxSalary": 140000, "salaryPeriod": "annual", "currency": "USD", "locationRestrictions": ["United States"], "description": "<p>Second page.</p>", "pubDate": 1793793600, "applicationLink": "https://himalayas.app/companies/second-page-bio/jobs/research-scientist?utm_source=api"}
+]}

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:media="http://search.yahoo.com/mrss">
+  <channel>
+    <title>We Work Remotely: Management and Finance Jobs</title>
+    <link>https://weworkremotely.com/categories/remote-management-and-finance-jobs.rss</link>
+    <description>We Work Remotely: Management and Finance Jobs</description>
+    <language>en-US</language>
+    <ttl>60</ttl>
+    <item>
+      <title>Finance Co: Quality Specialist, Controls</title>
+      <region>USA Only</region>
+      <country>United States</country>
+      <state></state>
+      <category>Management and Finance</category>
+      <type>Full-Time</type>
+      <description>&lt;p&gt;Controls and quality.&lt;/p&gt;</description>
+      <pubDate>Tue, 03 Nov 2026 12:00:00 +0000</pubDate>
+      <expires_at>Thu, 03 Dec 2026 12:00:00 +0000</expires_at>
+      <guid>https://weworkremotely.com/remote-jobs/finance-co-quality-specialist-controls</guid>
+      <link>https://weworkremotely.com/remote-jobs/finance-co-quality-specialist-controls</link>
+    </item>
+  </channel>
+</rss>

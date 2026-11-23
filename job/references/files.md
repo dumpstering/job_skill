@@ -46,7 +46,7 @@ is Claude (a session or a scheduled task).
 | `queue/<date>/queue.json`, `addendum_<HHMM>.json` | the day's numbered items; frozen once that day has events |
 | `queue/<date>/addendum_user.json` | the jobs from links (`added` events), with the numbers `events.py add` gave them |
 | `queue/<date>/today.md`, `review.html`, `discards.csv`, `diy.md` | optional reading; every discard with its gate; the do-yourself list |
-| `state/` | `seen/<YYYY-MM>.jsonl`, `trails/<YYYY-MM>.jsonl`, `pool.json`, `company_ats.json`, `probe_cache.csv`, `robots_cache.json`, `board_health.csv`, `board_polls.json`, `watchlist_auto.csv`, `queue_state.json`, `weights.json`, `leads_state.json`, `upload_manifest.json`, `tracker_events.jsonl`, `event_retries.json`, `network_raw.json`, `diy_base/`, `last_good/`; `run.lock` in mode S |
+| `state/` | `seen/<YYYY-MM>.jsonl`, `trails/<YYYY-MM>.jsonl`, `pool.json`, `company_ats.json`, `probe_cache.csv`, `robots_cache.json`, `hn_hiring.json`, `board_health.csv`, `board_polls.json`, `watchlist_auto.csv`, `queue_state.json`, `weights.json`, `leads_state.json`, `upload_manifest.json`, `tracker_events.jsonl`, `event_retries.json`, `network_raw.json`, `diy_base/`, `last_good/`; `run.lock` in mode S |
 | `runner/out/status.json`, `tracker.json`, `needs_search.json`, `staged.json`, `liveness.json` | health, the tracker snapshot, companies to search, staged Tier A files, re-read postings |
 | `runner/out/results/<id>.json`, `requests_done/<date>/` | one result per request |
 | `runner/out/events_done/<date>/`, `events_rejected/` (with `.reason.txt`) | applied and refused events |

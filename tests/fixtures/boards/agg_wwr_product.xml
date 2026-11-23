@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:media="http://search.yahoo.com/mrss">
+  <channel>
+    <title>We Work Remotely: Product Jobs</title>
+    <link>https://weworkremotely.com/categories/remote-product-jobs.rss</link>
+    <description>We Work Remotely: Product Jobs</description>
+    <language>en-US</language>
+    <ttl>60</ttl>
+    <item>
+      <title>Remote Bio: Quality Specialist</title>
+      <region>Anywhere in the World</region>
+      <country></country>
+      <state></state>
+      <skills></skills>
+      <category>Product</category>
+      <type>Full-Time</type>
+      <description>&lt;p&gt;&lt;strong&gt;Headquarters:&lt;/strong&gt; Remote, US&lt;/p&gt;&lt;p&gt;Own the quality system for a diagnostics team.&lt;/p&gt;</description>
+      <pubDate>Mon, 02 Nov 2026 18:32:35 +0000</pubDate>
+      <expires_at>Wed, 02 Dec 2026 18:32:35 +0000</expires_at>
+      <guid>https://weworkremotely.com/remote-jobs/remote-bio-quality-specialist</guid>
+      <link>https://weworkremotely.com/remote-jobs/remote-bio-quality-specialist</link>
+    </item>
+    <item>
+      <title>EuroCo: Laboratory Scientist</title>
+      <region>Europe Only</region>
+      <country>Germany</country>
+      <state></state>
+      <category>Product</category>
+      <type>Full-Time</type>
+      <description>&lt;p&gt;Europe only.&lt;/p&gt;</description>
+      <pubDate>Mon, 02 Nov 2026 18:40:00 +0000</pubDate>
+      <expires_at>Wed, 02 Dec 2026 18:40:00 +0000</expires_at>
+      <guid>https://weworkremotely.com/remote-jobs/euroco-laboratory-scientist</guid>
+      <link>https://weworkremotely.com/remote-jobs/euroco-laboratory-scientist</link>
+    </item>
+    <item>
+      <title>Texas Bio: Laboratory Scientist</title>
+      <region>USA Only</region>
+      <country>United States</country>
+      <state>Texas</state>
+      <category>Product</category>
+      <type>Full-Time</type>
+      <description>&lt;p&gt;Texas residents only.&lt;/p&gt;</description>
+      <pubDate>Mon, 02 Nov 2026 19:00:00 +0000</pubDate>
+      <expires_at>Wed, 02 Dec 2026 19:00:00 +0000</expires_at>
+      <guid>https://weworkremotely.com/remote-jobs/texas-bio-laboratory-scientist</guid>
+      <link>https://weworkremotely.com/remote-jobs/texas-bio-laboratory-scientist</link>
+    </item>
+    <item>
+      <title>Sales Co: Account Executive</title>
+      <region>Anywhere in the World</region>
+      <country></country>
+      <state></state>
+      <category>Product</category>
+      <type>Full-Time</type>
+      <description>&lt;p&gt;Not a lab job.&lt;/p&gt;</description>
+      <pubDate>Mon, 02 Nov 2026 19:30:00 +0000</pubDate>
+      <expires_at>Wed, 02 Dec 2026 19:30:00 +0000</expires_at>
+      <guid>https://weworkremotely.com/remote-jobs/sales-co-account-executive</guid>
+      <link>https://weworkremotely.com/remote-jobs/sales-co-account-executive</link>
+    </item>
+  </channel>
+</rss>

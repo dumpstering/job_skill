@@ -91,6 +91,16 @@ def test_policy_rules():
     assert p.reason("https://careers-page.clearcompany.com/api/v1/jobs") == "r3-list careers-page.clearcompany.com"
     assert p.reason("https://www.recruitingbypaycor.com/career/x") == "r3-list www.recruitingbypaycor.com"
     assert p.reason("https://recruiting.ultipro.com/ACME/JobBoard/abc/OpportunityDetail?opportunityId=1") is None
+    # the newer aggregator lanes' hosts (aggregators.py): https GET only, and nothing near them is a job board
+    for url in ("https://jobs.sciencecareers.org/jobsrss/?keywords=scientist&countrycode=US",
+                "https://www.nature.com/naturecareers/jobsrss/?keywords=scientist&countrycode=US",
+                "https://himalayas.app/jobs/api/search?q=scientist&country=US", "https://remoteok.com/api",
+                "https://jobicy.com/api/v2/remote-jobs?count=50&geo=usa&tag=scientist",
+                "https://hn.algolia.com/api/v1/items/1", "https://weworkremotely.com/categories/x.rss"):
+        assert p.reason(url) is None, url
+        assert p.reason(url, "POST") == f"post-not-allowed {netfetch.host_of(url)}", url
+        assert p.reason(url.replace("https:", "http:")) == f"not-https {netfetch.host_of(url)}", url
+    assert p.reason("https://himalayas.app.evil.example/x") == "host-not-allowed himalayas.app.evil.example"
     for bad in ("ftp://example.com/x", "http://user@evil.example/job", "file:///etc/passwd"):
         assert p.reason(bad).startswith("bad-url "), bad
     for private in ("http://127.0.0.1/", "http://localhost/x", "http://printer.local/",

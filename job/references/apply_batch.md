@@ -144,7 +144,10 @@ and the proof path only, in single quotes).
    "family": "<f>", "variant": "<v>", "ats": "<ats>", "found-via":
    "<lane>", "posted": "<date>", "queue-date": "<date>", "account":
    "<none|exists|new>"}` and run `tracker.py add --status "Filled - awaiting
-   submit" --source Runner --args-file claude/args.json`, taking tier,
+   submit" --source Runner --args-file claude/args.json` (an item whose lane
+   has a credit in its `posting.md` `Source:` line, such as `Himalayas`,
+   `Remote OK`, `Jobicy` or `We Work Remotely`, takes that name as `--source`
+   when `runner/out/status.json` `features` lists `lane_sources`), taking tier,
    family, variant, posted and account from the item in
    `queue/<date>/queue.json` (leave `posted` out when it is `undated`) and
    the lane from its `posting.json` (mode L prints `ADDED P-<8hex>

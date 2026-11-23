@@ -160,7 +160,8 @@ DAILY_TASK = "JobRunner-Daily"
 # write an older runner would refuse (today_view.linkedin_lane).
 # linkedin_source: a row with Source "LinkedIn".
 # site_sources: a row with Source "CalJOBS" or "UC" (today_view.site_lane).
-FEATURES = ("linkedin_source", "site_sources")
+# lane_sources: a row with an aggregator lane's credit as its Source (posting.SOURCE_CREDITS).
+FEATURES = ("linkedin_source", "site_sources", "lane_sources")
 RUNNER_STALE_HOURS = 26
 LIVENESS_HOURS = 24
 LIVENESS_NEXT = 3

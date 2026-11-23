@@ -1,0 +1,195 @@
+# Preset: remote US program, product, IT and AI leadership roles at tech, SaaS,
+# AI and cloud companies (watchlist.csv in this folder).
+# Setup copies this file to config/search_profile.toml when the user's field
+# is program or IT management and they want remote work, then fills [home]
+# label and zip from profile.md. Nothing in it is personal.
+#
+# Term syntax (see templates/search_profile.toml): whole words; "stem*";
+# "a+b" needs every part; "a|b" is either. Families are tried in file order,
+# so the specific ones come first and the general program family last.
+#
+# Design notes:
+# - Remote first: [home] remote = "us". A hybrid job counts only in a [home]
+#   place within radius_miles; setup fills them from profile.md, or leaves
+#   them empty for a remote-only search.
+# - Director and Head of titles are in (a reach family), Vice President,
+#   Chief and anything sales, marketing or recruiting are out.
+# - Hardware and silicon program roles need an engineering degree: their
+#   words are avoid_any in the program families (G9).
+# - A posting that requires a PMP is a knockout until profile.md "Licenses
+#   held:" lists pmp; "PMP preferred" only lowers fit.
+# - The IT leadership family is active for a user from IT operations, and
+#   paused for anyone else.
+
+version = 1
+
+[home]
+label = ""                  # setup fills "City, ST" from profile.md
+zip = ""
+radius_miles = 30
+states = []                 # setup fills the home state for hybrid jobs
+places = []                 # hybrid jobs: accepted city names, confirmed once; empty = remote only
+second_ring = []
+remote = "us"
+relocate = false
+
+[gates]
+exclude_title_words = ["Vice President", "VP", "SVP", "EVP", "Chief", "Intern", "Interns", "Internship", "co-op",
+                       "student", "sales", "account executive", "account manager", "business development",
+                       "marketing", "recruiter", "recruiting", "talent acquisition", "customer success",
+                       "software engineer", "data scientist", "machine learning engineer", "research scientist",
+                       "designer", "accountant", "paralegal", "nurse", "physician", "warehouse", "driver",
+                       "technician", "help desk", "helpdesk", "desktop support", "service desk analyst"]
+employment_types = ["full-time", "contract"]
+shift_work = "last"
+pay_floor = 150000          # yearly dollars; a job whose stated pay tops out below it is dropped
+                            # (no stated pay: kept); 0 is off
+undated_policy = "first_seen_after_2_polls"
+
+[[knockout]]
+id = "clearance"
+name = "Active security clearance"
+required_patterns = ['(?i)\b(active|current) (security|secret|top secret|TS/SCI) clearance\b']
+
+[[knockout]]
+id = "pmp"
+name = "PMP certification"
+required_patterns = ['(?i)\bPMP\b[^.;\n]{0,30}\b(required|is a must|mandatory)',
+                     '(?i)\b(must|required to) (hold|have) (an? )?(active )?PMP\b']
+preferred_patterns = ['(?i)\bPMP\b[^.;\n]{0,30}\b(preferred|a plus|desired|nice to have)']
+
+[[knockout]]
+id = "engineering_degree"
+name = "Engineering or computer science degree required"
+required_patterns = ['(?i)\b(BS|B\.S\.|bachelor.s|degree) in (electrical|mechanical|computer) engineering[^.;\n]{0,30}\brequired']
+
+# ---------- title families (specific first) ----------
+
+[[family]]
+id = "ai_program"
+label = "AI program, enablement and transformation"
+status = "active"
+mode = "industry"
+core_titles = ["AI Program Manager", "AI Enablement Lead", "AI Transformation Manager", "AI Adoption Manager",
+               "GenAI Program Manager", "AI Operations Manager", "Automation Program Manager",
+               "Intelligent Automation Manager", "AI Enablement Manager"]
+adjacent_titles = ["Copilot Program Manager", "AI Strategy Manager", "Digital Transformation Manager"]
+title_any = ["ai|genai|gen ai|generative ai|artificial intelligence|llm|copilot|automation|intelligent automation|digital transformation+program|programs|enablement|adoption|transformation|operations|strategy|lead|manager|director|head"]
+title_none = ["engineer", "scientist", "researcher", "sales", "marketing", "account", "trainer", "annotator",
+              "data labeling", "rater", "tutor", "writer"]
+require_any = ["ai", "artificial intelligence", "generative", "genai", "llm*", "machine learning", "copilot",
+               "automation", "agent*", "chatbot*", "workflow*"]
+avoid_any = ["phd required", "publications", "pytorch", "tensorflow", "model training", "cuda", "kernel*",
+             "distributed training"]
+terms = ["AI adoption", "Copilot", "Copilot Studio", "automation", "chatbot", "Power Automate", "Azure OpenAI",
+         "change management", "program management", "stakeholder management", "roadmap", "metrics",
+         "deflection", "governance", "AI governance", "Jira Service Management", "process improvement"]
+seniority_ok = ["senior", "sr", "lead", "manager", "principal", "staff", "director", "head"]
+needs_license = []
+priority = 1
+min_share = 0.25
+
+[[family]]
+id = "it_leadership"
+label = "IT leadership (remote-first companies)"
+status = "active"
+mode = "industry"
+core_titles = ["Director of IT", "IT Director", "Head of IT", "Director, IT Operations", "IT Operations Manager",
+               "Senior IT Manager", "Director of IT Support", "Head of IT Operations", "Head of Corporate IT",
+               "Director, Corporate Engineering", "Director of Enterprise Technology",
+               "Director, Workplace Technology"]
+adjacent_titles = ["IT Manager", "Manager, IT Operations", "Manager, Corporate IT", "Manager, Workplace Technology",
+                   "Manager, End User Services", "IT Service Delivery Manager"]
+title_any = ["director|head|manager|lead+it|information technology|it operations|corporate it|corporate engineering|corporate technology|enterprise technology|workplace technology|end user|end-user|it support|service delivery|employee technology"]
+title_none = ["program", "programs", "project", "product", "security engineer", "network engineer", "audit", "risk", "compliance analyst", "sales", "marketing",
+              "facilities", "clinical", "hospital", "school", "district"]
+require_any = ["it operations", "help desk", "helpdesk", "service desk", "itil", "endpoint*", "intune", "jamf",
+               "okta", "entra", "azure ad", "active directory", "google workspace", "microsoft 365", "m365",
+               "saas", "identity", "onboarding", "asset management", "jira service management", "it support"]
+avoid_any = ["data center", "mainframe", "erp implementation", "sap", "oracle ebs", "plant", "manufacturing"]
+terms = ["IT operations", "service desk", "Jira Service Management", "Intune", "Entra ID", "Microsoft 365",
+         "Copilot", "automation", "onboarding", "offboarding", "asset management", "vendor management",
+         "budget", "SaaS management", "identity and access", "ITIL", "team leadership", "HIPAA", "SOC 2"]
+seniority_ok = ["senior", "sr", "manager", "director", "head", "lead"]
+needs_license = []
+priority = 2
+min_share = 0.15
+
+[[family]]
+id = "tpm"
+label = "Technical program management"
+status = "active"
+mode = "industry"
+core_titles = ["Technical Program Manager", "Senior Technical Program Manager", "Program Manager",
+               "Senior Program Manager", "IT Program Manager", "Technical Project Manager",
+               "Engineering Program Manager", "Business Systems Program Manager"]
+adjacent_titles = ["Delivery Manager", "Program Lead", "Staff Technical Program Manager",
+                   "Principal Program Manager", "Operations Program Manager"]
+title_any = ["technical program manager", "tpm", "program manager", "program lead", "programs manager",
+             "technical project manager", "it project manager", "delivery manager"]
+title_none = ["hardware", "silicon", "asic", "chip", "semiconductor", "manufacturing", "supply chain", "clinical",
+              "construction", "facilities", "sales", "marketing", "partner marketing", "grants", "events"]
+require_any = ["program management", "programs", "cross-functional", "cross functional", "roadmap*",
+               "stakeholder*", "delivery", "agile", "scrum", "jira", "project management", "dependencies",
+               "launch*", "milestone*"]
+avoid_any = ["silicon", "asic", "rtl", "tape out", "tapeout", "pcb", "firmware", "mechanical engineering",
+             "electrical engineering", "manufacturing", "supply chain", "npi", "data center construction",
+             "clinical trial*"]
+terms = ["program management", "cross-functional", "roadmap", "stakeholder management", "risk management",
+         "Jira", "Confluence", "agile", "SaaS", "vendor management", "budget", "OKRs", "metrics",
+         "process improvement", "automation", "change management", "executive communication"]
+seniority_ok = ["senior", "sr", "lead", "staff", "principal", "manager", "ii", "iii"]
+needs_license = []
+priority = 1
+min_share = 0.25
+
+[[family]]
+id = "ai_product"
+label = "AI product management"
+status = "active"
+mode = "industry"
+core_titles = ["AI Product Manager", "Product Manager, AI", "Senior Product Manager, AI",
+               "Product Manager, Internal Tools", "Product Manager, IT", "Product Manager, Automation",
+               "Technical Product Manager"]
+adjacent_titles = ["Product Owner", "Product Manager, Employee Experience", "Product Manager, Enterprise Applications"]
+title_any = ["product manager|product owner|product lead+ai|genai|automation|internal tools|it|employee experience|enterprise|platform|technical|copilot|agent*|workflow*|service desk|support",
+             "ai product manager", "technical product manager"]
+title_none = ["marketing", "sales", "designer", "engineer", "hardware", "growth", "pricing", "payments",
+              "ads", "advertising", "consumer", "gaming"]
+require_any = ["ai", "artificial intelligence", "generative", "llm*", "automation", "internal tools", "agent*",
+               "workflow*", "employee experience", "service management", "information technology"]
+avoid_any = ["pricing", "monetization", "growth experiments", "a/b test*", "ads", "advertising", "payments"]
+terms = ["product roadmap", "user research", "requirements", "AI", "automation", "internal tools",
+         "employee experience", "chatbot", "Copilot", "Jira", "adoption", "metrics", "stakeholder management"]
+seniority_ok = ["senior", "sr", "lead", "manager", "ii", "iii"]
+needs_license = []
+priority = 2
+min_share = 0.15
+
+[[family]]
+id = "program_director"
+label = "Director of programs (reach)"
+status = "active"
+mode = "industry"
+core_titles = ["Director of Technical Program Management", "Director, Program Management",
+               "Head of Program Management", "Director of AI Programs", "Head of AI Enablement",
+               "Director, AI Transformation", "Director of Automation", "Head of Business Systems",
+               "Director, Strategic Programs"]
+adjacent_titles = ["Senior Manager, Technical Program Management", "Senior Manager, Program Management",
+                   "Group Program Manager"]
+title_any = ["director|head|senior manager|group+program*|tpm|technical program*|ai|automation|transformation|enablement|business systems|strategic initiatives|operations"]
+title_none = ["hardware", "silicon", "manufacturing", "supply chain", "clinical", "sales", "marketing",
+              "engineering manager", "software engineering", "construction", "grants", "fundraising"]
+require_any = ["program management", "cross-functional", "roadmap*", "stakeholder*", "ai", "automation",
+               "transformation", "operations", "okr*", "portfolio"]
+avoid_any = ["silicon", "asic", "firmware", "manufacturing", "supply chain", "clinical trial*"]
+terms = ["program management", "portfolio", "OKRs", "executive communication", "AI", "automation",
+         "transformation", "team leadership", "budget", "vendor management", "metrics", "roadmap"]
+seniority_ok = ["director", "head", "senior manager", "group"]
+needs_license = []
+priority = 3
+min_share = 0.10
+
+[widen]
+enabled = true
+steps = ["adjacent_families", "remote_us", "second_ring"]

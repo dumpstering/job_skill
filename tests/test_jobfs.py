@@ -328,6 +328,7 @@ def test_names_and_folder():
     assert f.worksearch_file("CA", "2026-11-01", "2026-11-14", "csv") == r / "worksearch" / "CA_2026-11-01_2026-11-14.csv"
     assert f.robots_cache_json == r / "state" / "robots_cache.json" and f.tracker_json == r / "runner" / "out" / "tracker.json"
     assert f.last_good("settings.toml") == r / "state" / "last_good" / "settings.toml"
+    assert f.hn_hiring_json == r / "state" / "hn_hiring.json"
     with tempfile.TemporaryDirectory(prefix="jobfs_") as tmp:
         g = jobfs.Folder(tmp)
         assert g.inside("applications/x") and not g.inside("../outside") and not g.inside("C:/Windows")

@@ -105,6 +105,7 @@ import gates  # noqa: E402
 import jobfs  # noqa: E402
 import jobkey  # noqa: E402
 import netfetch  # noqa: E402
+import posting  # noqa: E402
 
 BEAT_MINUTES = 20
 NOT_SENT_DAYS = 30
@@ -712,7 +713,8 @@ def render_posting(it, today):
     head = [("URL", it.get("url")), ("Retrieved", it.get("first_seen") or today.isoformat()),
             ("Company", it.get("company")), ("Role", it.get("title")), ("Location", it.get("location")),
             ("Job key", it.get("job_key")), ("Requisition", ", ".join(it.get("req_ids") or [])),
-            ("Posted", it.get("posted") or "undated"), ("Source", "runner")]  # R2: a date or 'undated'
+            ("Posted", it.get("posted") or "undated"),
+            ("Source", posting.SOURCE_CREDITS.get(it.get("lane")) or "runner")]  # R2: a date or 'undated'; the lane's credit
     if it.get("employer_site"):
         head.append(("Employer site", it["employer_site"]))
     lines = [(k + ": " + " ".join(str(v or "").split())).rstrip() for k, v in head]

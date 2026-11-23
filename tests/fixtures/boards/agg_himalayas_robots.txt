@@ -1,0 +1,9 @@
+# robots.txt of himalayas.app as read 2026-11-23 (cut to the rules that touch the search API).
+User-Agent: *
+Allow: /
+Disallow: /apply
+Disallow: /jobs?page=
+Disallow: /jobs*&page=
+Disallow: /jobs/*?page=
+Disallow: /companies?page=
+Content-Signal: search=yes, ai-input=yes, ai-train=yes

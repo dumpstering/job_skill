@@ -1,0 +1,4 @@
+{"apiVersion": "2.2.22", "jobCount": 2, "nextCursor": null, "hasMore": false, "appliedFilters": {"count": 50, "geo": "usa", "tag": "quality"}, "jobs": [
+{"id": 163865, "url": "https://jobicy.com/jobs/163865-laboratory-scientist", "jobTitle": "Laboratory Scientist", "companyName": "Anywhere Labs", "jobGeo": "Anywhere", "jobLevel": "Mid", "jobExcerpt": "Work from anywhere.", "jobDescription": "<p>Work from anywhere.</p>", "pubDate": "2026-11-04T09:00:00+00:00"},
+{"id": 163870, "url": "https://jobicy.com/jobs/163870-quality-specialist", "jobTitle": "Quality Specialist", "companyName": "Qual Co", "jobGeo": "USA", "jobLevel": "Mid", "jobExcerpt": "Quality.", "jobDescription": "<p>Quality systems.</p>", "pubDate": "2026-11-04T10:00:00+00:00", "salaryMin": 0, "salaryMax": 0}
+]}

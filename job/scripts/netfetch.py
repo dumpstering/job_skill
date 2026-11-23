@@ -629,6 +629,8 @@ ALLOW_HOSTS = (
     "jobs.smartrecruiters.com", "careers.smartrecruiters.com",
     "*.icims.com", "recruiting.ultipro.com", "recruiting2.ultipro.com", "*.paycomonline.net",
     "data.usajobs.gov", "www.usajobs.gov", "api.adzuna.com", "jobs.workable.com", "www.themuse.com",
+    "jobs.sciencecareers.org", "www.nature.com", "himalayas.app", "remoteok.com", "jobicy.com",
+    "hn.algolia.com", "weworkremotely.com",
 )
 # Hosts that take a POST (Workday CXS lists; Dayforce geo search).
 POST_HOSTS = ("*.myworkdayjobs.com", "*.myworkdaysite.com", "*.dayforcehcm.com")

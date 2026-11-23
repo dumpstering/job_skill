@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0"
+		xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/"
+		xmlns:atom="http://www.w3.org/2005/Atom" >
+	<channel>
+		<opensearch:totalResults>3</opensearch:totalResults>
+		<title>Job Search RSS</title>
+		<description></description>
+		<link>https://www.nature.com/naturecareers/jobsrss/?keywords=scientist&amp;countrycode=GB</link>
+		<generator>Nature Careers</generator>
+		<item>
+			<title>Northwestern Medicine: Laboratory Scientist</title>
+			<description>
+Northwestern Medicine:
+A clinical research program.
+Chicago, Illinois
+</description>
+			<link>https://www.nature.com/naturecareers/job/800001/laboratory-scientist/?TrackID=12&amp;utm_source=rss</link>
+			<pubDate>Mon, 02 Nov 2026 20:41:00 +0000</pubDate>
+			<guid isPermaLink="true">https://www.nature.com/naturecareers/job/800001/laboratory-scientist/</guid>
+		</item>
+		<item>
+			<title>Isis Genomics Ltd: Laboratory Scientist</title>
+			<description>
+Isis Genomics Ltd:
+A sequencing group near Oxford.
+Oxford, Oxfordshire
+</description>
+			<link>https://www.nature.com/naturecareers/job/800002/laboratory-scientist/</link>
+			<pubDate>Mon, 02 Nov 2026 21:00:00 +0000</pubDate>
+			<guid isPermaLink="true">https://www.nature.com/naturecareers/job/800002/laboratory-scientist/</guid>
+		</item>
+		<item>
+			<title>Sangamon Biosciences: Laboratory Scientist</title>
+			<description>
+Sangamon Biosciences:
+Assay development.
+Springfield, Illinois (US)
+</description>
+			<link>https://www.nature.com/naturecareers/job/800003/laboratory-scientist/</link>
+			<pubDate>Tue, 03 Nov 2026 08:00:00 +0000</pubDate>
+			<guid isPermaLink="true">https://www.nature.com/naturecareers/job/800003/laboratory-scientist/</guid>
+		</item>
+	</channel>
+</rss>

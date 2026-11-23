@@ -22,6 +22,13 @@ adzuna = false              # true once a key is in keys.toml
 usajobs = false             # true once a key is in keys.toml
 workable_search = false     # terms unknown (ats A7 correction)
 muse = false                # aggregators A2-A3 correction
+science_careers = false     # Madgex RSS, leads only; credit Science Careers
+nature_careers = false      # Madgex RSS, leads only; credit Nature Careers
+himalayas = false           # remote postings; credit Himalayas (shown, apply through its link)
+remoteok = false            # remote postings; credit and link back to Remote OK
+jobicy = false              # remote postings; credit Jobicy, one pass a run
+hn_hiring = false           # leads only, from the monthly Ask HN: Who is hiring? thread, read once a day
+wwr = false                 # We Work Remotely RSS; off until you have read its terms of use
 dayforce = true             # watch-listed Dayforce employers only (ats A13 correction)
 r3_sitemaps = false         # Paycom sitemap / Zoho RSS (robots-allowed, ats verifier omission); owner decision
 [referrals]

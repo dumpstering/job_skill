@@ -1616,6 +1616,11 @@ def main(argv=None):
 US_STATES = set("AL AK AZ AR CA CO CT DE FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ "
                 "NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY DC PR".split())
 US_NAMES = {"us", "usa", "u.s.", "united states", "united states of america"}
+# The source credit an aggregator lane's terms ask for, by lane name: posting.md's Source line and the
+# tracker's Source column carry it (aggregators.py; references/sources.md).
+SOURCE_CREDITS = {"science_careers": "Science Careers", "nature_careers": "Nature Careers", "himalayas": "Himalayas",
+                  "remoteok": "Remote OK", "jobicy": "Jobicy", "hn_hiring": "Hacker News",
+                  "wwr": "We Work Remotely"}
 SOURCE_ATS = {"greenhouse-api": "greenhouse", "lever-api": "lever", "ashby-api": "ashby", "workday-api": "workday",
               "smartrecruiters-api": "smartrecruiters", "bamboohr-api": "bamboohr", "adp-api": "adp",
               "oracle-api": "oracle", "usajobs-api": "usajobs"}
