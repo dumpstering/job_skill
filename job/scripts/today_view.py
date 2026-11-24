@@ -7,7 +7,7 @@ Usage:
     python today_view.py diy      --root R [--date YYYY-MM-DD] [--all]
     python today_view.py drafts   --root R [--date YYYY-MM-DD] [--n N]
     python today_view.py linkedin --root R [--date YYYY-MM-DD]
-    python today_view.py site --site caljobs|uc --root R [--date YYYY-MM-DD]
+    python today_view.py site --site caljobs|uc|workintexas --root R [--date YYYY-MM-DD]
 
 The day's items are queue/<date>/queue.json, its addenda, and the jobs from
 links (/job <link>, /job add <link>) whose added event the runner has not
@@ -163,16 +163,18 @@ handed over today with no s yet; both count toward per_day. The stop is
 claude/<date>/linkedin_stop.json (events.py linkedin-stop). The card carries
 the same state as one plain line while the mode is on or was stopped today.
 
-site prints the same one line for the CalJOBS or the UC careers browser mode
-([caljobs] or [uc] in settings.toml, events.site_settings), with the same
+site prints the same one line for the CalJOBS, the UC careers or the WorkInTexas
+browser mode ([caljobs], [uc] or [workintexas] in settings.toml,
+events.site_settings), with the same
 states and words, SITE <site> in place of LINKEDIN:
     SITE caljobs GO left=<n> of <per_day> sent=<n> waiting=<n> pace=<s>s stop_on_warning=<true|false>
     SITE caljobs DONE <date>: <n> of <per_day> today (sent=<n> waiting=<n>); no more CalJOBS applications today
     SITE caljobs STOPPED <date> <reason>: no CalJOBS page is opened again today
-    SITE caljobs WAIT runner: ...   (mode L and the PC's job finder would refuse a CalJOBS or UC row)
+    SITE caljobs WAIT runner: ...   (mode L and the PC's job finder would refuse a CalJOBS, UC or WorkInTexas row)
     SITE caljobs WAIT tracker: ...  (the tracker cannot be read, so today's count is unknown)
     SITE caljobs off: ...           ([caljobs] browser is not true)
-sent counts tracker rows with Found via caljobs:browser (uc:browser for uc)
+sent counts tracker rows with Found via caljobs:browser (uc:browser for uc, workintexas:browser
+for workintexas)
 applied today, waiting those handed over today with no s yet; both count
 toward per_day. The stop is claude/<date>/<site>_stop.json (events.py
 site-stop). The card carries one plain line for each site that is on or was
@@ -249,7 +251,8 @@ LINKEDIN_WHY = {"captcha": "it showed a CAPTCHA", "sign_in": "it asked for a sig
                 "restricted": "it said the account is restricted", "other": "it showed a notice"}
 LINKEDIN_LOOK = ("unusual_activity", "restricted")   # the user looks at the account before it is used again
 LINKEDIN_FEATURE = "linkedin_source"                 # status.json features (jobrunner.FEATURES)
-# The CalJOBS and UC careers browser modes ([caljobs] and [uc] browser = true): the same words for a stop reason.
+# The CalJOBS, UC careers and WorkInTexas browser modes ([caljobs], [uc] and [workintexas] browser = true):
+# the same words for a stop reason.
 SITE_WHY = {"captcha": "it showed a CAPTCHA", "sign_in": "it asked for a sign-in check",
             "bot_check": "it showed a bot check", "unusual_activity": "it showed an unusual-activity notice",
             "limit": "it said the day's limit there was reached",
@@ -1151,7 +1154,7 @@ def linkedin_card_line(lane):
 
 
 def site_rows(store, day, site):
-    """(sent, waiting) of a browser site's mode today (CalJOBS, UC careers):
+    """(sent, waiting) of a browser site's mode today (CalJOBS, UC careers, WorkInTexas):
     tracker rows with Found via <site>:browser applied today, and those
     handed over today (Filled - awaiting submit) that still wait for the
     user's Submit."""
@@ -1168,8 +1171,8 @@ def site_rows(store, day, site):
 
 
 def site_lane(root, day, site, settings=None, store=None, status=None):
-    """The CalJOBS or UC careers browser mode's state for the day
-    (caljobs_browser.md, uc_browser.md), as linkedin_lane gives LinkedIn's:
+    """The CalJOBS, UC careers or WorkInTexas browser mode's state for the day
+    (caljobs_browser.md, uc_browser.md, workintexas_browser.md), as linkedin_lane gives LinkedIn's:
     {state, line, sent, waiting, left, per_day, reason}, with the same
     states (go, done, stopped, wait, off) and the same order: a stop first,
     then the setting, the job finder's features (site_sources) and the
@@ -2084,7 +2087,7 @@ def build_parser():
                       ("progress", "Counts so far and the closing line."), ("diy", "The do-yourself list."),
                       ("drafts", "The card's free-text drafts in full."),
                       ("linkedin", "The LinkedIn browser mode's state for the day: act on LINKEDIN GO alone."),
-                      ("site", "The CalJOBS or UC careers browser mode's state for the day: act on SITE <site> GO "
+                      ("site", "The CalJOBS, UC careers or WorkInTexas browser mode's state for the day: act on SITE <site> GO "
                                "alone.")):
         p = sub.add_parser(name, help=hlp, allow_abbrev=False)
         p.add_argument("--root", required=True)

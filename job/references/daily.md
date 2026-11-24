@@ -40,9 +40,10 @@ Commands below are shortened (SKILL.md "Scripts"); each takes
    you corrected today; ...`; apply_batch.md step 1), one LinkedIn line
    while `[linkedin] browser` is on or LinkedIn was closed today (what was
    sent there, how many more today, or that it is closed: "/job linkedin",
-   below), and one such line each for CalJOBS and the UC careers site while
-   `[caljobs] browser` or `[uc] browser` is on or that site was closed today
-   ("/job caljobs", "/job uc", below), on the day's first
+   below), and one such line each for CalJOBS, the UC careers site and WorkInTexas while
+   `[caljobs] browser`, `[uc] browser` or `[workintexas] browser` is on or that
+   site was closed today ("/job caljobs", "/job uc", "/job workintexas",
+   below), on the day's first
    card a line when no job-alert email has come in for 3 days (`... Type
    /job alerts ...`: setup.md "Alerts"), and it ends
    `Starting #<n> now.`, the same item `next` gives. With no job finder
@@ -183,9 +184,9 @@ The posting joins today's list at once, with the next number, and is filled
 in its turn like the runner's items.
 1. SKILL.md step 3 up to the job folder: `posting.py` into `_incoming/`,
    `tracker.py check` and `caps.py check`, then the job folder. A LinkedIn
-   or Indeed link follows ats/linkedin.md; a CalJOBS or UC careers link is
-   refused by `posting.py` (`BROWSER SITE <site>`), so its job comes through
-   `/job caljobs` or `/job uc`, or as pasted text. `IN QUEUE <date> #<n>`:
+   or Indeed link follows ats/linkedin.md; a CalJOBS, UC careers or WorkInTexas
+   link is refused by `posting.py` (`BROWSER SITE <site>`), so its job comes
+   through `/job caljobs`, `/job uc` or `/job workintexas`, or as pasted text. `IN QUEUE <date> #<n>`:
    say "It is already #<n> today." and stop.
 2. Its resume and answers, as the runner makes them (zero tokens), with the
    family whose titles match (SKILL.md step 4): `variants.py tier-b --item
@@ -213,8 +214,8 @@ in its turn like the runner's items.
   runner reads it within about 20 minutes (the next tick hands it to the
   daily, never running it itself), gates what it finds and appends an
   addendum (`runner/out/results/<id>.json`; `DENY job-board ...` is a job
-  board link, ats/linkedin.md; `DENY browser-site <site>` is a CalJOBS or UC
-  careers link, read only by `/job caljobs` or `/job uc`; any `DENY` link is never opened by any tool,
+  board link, ats/linkedin.md; `DENY browser-site <site>` is a CalJOBS, UC
+  careers or WorkInTexas link, read only by `/job caljobs`, `/job uc` or `/job workintexas`; any `DENY` link is never opened by any tool,
   the browser included; `gates.py explain --job-key <key>` names the gate
   that stopped one).
 
@@ -234,16 +235,18 @@ linkedin=<n> other=<n>` and its closing line adds them.
   unless the user types it.
 - When the card carries the LinkedIn line and the list is done, offer
   `/job linkedin` beside "more". Never start it unasked.
-- **`/job caljobs`** ([caljobs_browser.md](caljobs_browser.md)) and **`/job
-  uc`** ([uc_browser.md](uc_browser.md)), only with `[caljobs] browser =
-  true` or `[uc] browser = true`: run `today_view.py site --site caljobs` (or
-  `--site uc`) first and act on that site only after `SITE caljobs GO` (or
-  `SITE uc GO`). Any other line (`off`, `STOPPED`, `DONE`, `WAIT`): say it in
+- **`/job caljobs`** ([caljobs_browser.md](caljobs_browser.md)), **`/job
+  uc`** ([uc_browser.md](uc_browser.md)) and **`/job workintexas`** (or `/job
+  wit`; [workintexas_browser.md](workintexas_browser.md)), only with
+  `[caljobs] browser = true`, `[uc] browser = true` or `[workintexas] browser
+  = true`: run `today_view.py site --site caljobs` (or `--site uc`, `--site
+  workintexas`) first and act on that site only after `SITE caljobs GO` (or
+  `SITE uc GO`, `SITE workintexas GO`). Any other line (`off`, `STOPPED`, `DONE`, `WAIT`): say it in
   one plain sentence and offer `/job paste`. Never in job-morning or
   job-inbox, and never on a short day unless the user types it.
-- When the card carries a CalJOBS or UC careers line and the list is done,
-  offer that site after LinkedIn's offer: `/job caljobs`, `/job uc`. Never
-  start either unasked. Their applications are in `progress`'s `OFFLIST
+- When the card carries a CalJOBS, UC careers or WorkInTexas line and the list
+  is done, offer that site after LinkedIn's offer: `/job caljobs`, `/job uc`,
+  `/job workintexas`. Never start one unasked. Their applications are in `progress`'s `OFFLIST
   other=<n>` count and its closing line.
 
 ## /job status

@@ -4,7 +4,7 @@ Usage (every subcommand except `statuses` takes --root <JobSearch folder>):
     python tracker.py init --root R
     python tracker.py check --root R --company C --title T [--url U] [--job-key K] [--posting P]
     python tracker.py add --root R --company C --role ROLE [--location L] [--fit F]
-        [--status S] [--url U] [--folder F] [--source Skill|"By hand"|Runner|LinkedIn|CalJOBS|UC|<credit>]
+        [--status S] [--url U] [--folder F] [--source Skill|"By hand"|Runner|LinkedIn|CalJOBS|UC|WorkInTexas|<credit>]
         [--applied YYYY-MM-DD] [--notes N] [--job-key K] [--tier A|B|"By hand"] [--family F]
         [--variant V] [--ats A] [--found-via W] [--posted D] [--req-id R] [--queue-date D]
         [--account none|exists|new] [--referral NAME] [--referral-url U] [--confirmed D]
@@ -77,9 +77,10 @@ Source is who filled the application: Skill (the single-job flow, the
 default), Runner (a list item filled in the loop), By hand (the user, /job
 log and `log e1`), LinkedIn (an Easy Apply form Claude filled in the
 user's own browser, [linkedin] browser mode; today_view counts those rows
-toward that mode's per_day), or CalJOBS or UC (a job found in the same way
-on those sites, Found via caljobs:browser or uc:browser; today_view counts
-them toward [caljobs] or [uc] per_day). A list item from an aggregator lane that asks for a
+toward that mode's per_day), or CalJOBS, UC or WorkInTexas (a job found in the
+same way on those sites, Found via caljobs:browser, uc:browser or
+workintexas:browser; today_view counts them toward [caljobs], [uc] or
+[workintexas] per_day). A list item from an aggregator lane that asks for a
 source credit (posting.SOURCE_CREDITS: Himalayas, Remote OK, Jobicy, We Work Remotely, and the
 Science Careers, Nature Careers and Hacker News leads) takes that credit instead of Runner, so the
 row carries it. A LinkedIn link in any value of a command line
@@ -165,10 +166,11 @@ STATUSES = ["Started", "Not pursued", "Resume ready", "Filled - awaiting submit"
             "Withdrawn", "Closed"]
 FITS = ["Strong Fit", "Good Fit", "Stretch", "Long Shot"]
 # LinkedIn: an Easy Apply form Claude filled in the user's own browser ([linkedin] browser mode).
-# CalJOBS and UC: a job found in the same way on those sites ([caljobs] and [uc] browser modes).
+# CalJOBS, UC and WorkInTexas: a job found in the same way on those sites ([caljobs], [uc] and
+# [workintexas] browser modes).
 # The rest are the source credits of the aggregator lanes (posting.SOURCE_CREDITS).
-SOURCES = ["Skill", "By hand", "Runner", "LinkedIn", "CalJOBS", "UC", "Science Careers", "Nature Careers",
-           "Himalayas", "Remote OK", "Jobicy", "Hacker News", "We Work Remotely"]
+SOURCES = ["Skill", "By hand", "Runner", "LinkedIn", "CalJOBS", "UC", "WorkInTexas", "Science Careers",
+           "Nature Careers", "Himalayas", "Remote OK", "Jobicy", "Hacker News", "We Work Remotely"]
 TIERS = ["A", "B", "By hand"]
 ACCOUNT_STATES = ["none", "exists", "new"]
 KINDS = ["reply", "alert"]
@@ -2130,8 +2132,8 @@ OWN_LINK_FIELDS = re.compile(r"^\s*(referral[\s_-]?url|employer[\s_-]?site)\s*="
 def plain_argv(argv):
     """The command line with every LinkedIn link in a value (the job's URL,
     a note, a quote, a subject) put in its plain form, or taken out when it
-    names no job (events.plain_linkedin_links), and every CalJOBS or UC
-    careers link taken out (events.drop_site_links), before anything reads
+    names no job (events.plain_linkedin_links), and every CalJOBS, UC
+    careers or WorkInTexas link taken out (events.drop_site_links), before anything reads
     it: the workbook, the printed lines and the event file never hold another
     form. A value that must be the employer's own link is left as given, so
     it is refused."""
@@ -2158,7 +2160,7 @@ def add_add_options(p):
     p.add_argument("--url", default="")
     p.add_argument("--folder", default="", help="job folder relative to --root")
     p.add_argument("--source", default="Skill",
-                   help='"Skill" (default), "By hand", "Runner", "LinkedIn", "CalJOBS", "UC" or a lane credit '
+                   help='"Skill" (default), "By hand", "Runner", "LinkedIn", "CalJOBS", "UC", "WorkInTexas" or a lane credit '
                         '("Himalayas", "Remote OK", "Jobicy", "We Work Remotely", "Science Careers", '
                         '"Nature Careers", "Hacker News")')
     p.add_argument("--applied", help="YYYY-MM-DD; sets Follow-up to +7 days (Tier A and referral rows)")

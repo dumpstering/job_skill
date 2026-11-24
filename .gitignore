@@ -37,3 +37,6 @@ tests/fixtures/**/*.docx
 tests/fixtures/**/*.xlsx
 tests/fixtures/week/worksearch/
 tests/fixtures/week/reports/week_*.md
+
+# Claude Code agent worktrees
+.claude/

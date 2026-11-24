@@ -1,0 +1,32 @@
+# Rules for tools/seed_boards.py --preset remote_tech
+# Source: the "StoreSignal ATS job boards directory" (CC BY 4.0), github.com/storesignalhq/ats-job-boards
+
+ats = ["greenhouse", "lever", "ashby", "workable"]
+# The directory lists about 15,000 boards; a board with few jobs rarely has two matching remote roles,
+# and every list call costs a second, so small boards are not read.
+min_open_jobs = 10
+ref = "storesignal-2026-11"
+priority = 3
+segment = "tech"
+min_relevant = 2         # US-remote postings with a wanted title
+cap = 400                # the 400 boards with the most matching postings
+
+# No name filter beyond staffing firms and agencies, and a few names that are plainly not tech
+# (drug makers, health systems, schools), which the title words alone would let in ("Director").
+name_exclude = [
+  "staffing", "recruit", "talent", "headhunt", "executive search", "placement", "workforce", "agency",
+  "agencies", "outsourc", "\\bhr\\b", "careers? (?:hub|board)",
+  "therapeutic", "pharma", "biosciences", "biotech", "medicines", "oncolog", "hospital", "university",
+  "college", "school district", "church",
+]
+
+[relevant]
+kind = "remote_us"       # location says Remote with a US word or state, or Remote with no country
+note = "US-remote postings with a program, product, IT, AI or leadership title"
+# Case-insensitive whole words or phrases in the title.
+title_any = [
+  "program manager", "technical program", "product manager", "operations", "information technology",
+  "director", "head of", "enablement", "automation", "chief of staff",
+]
+# Whole words in capitals only ("IT", "AI", "TPM"): lower-case "it" and "ai" are not the abbreviations.
+title_caps = ["IT", "AI", "TPM"]

@@ -506,13 +506,14 @@ def test_pasted_linkedin_link():
 
 
 def test_pasted_site_link():
-    """A CalJOBS or UC careers link is read only by /job caljobs and /job uc:
+    """A CalJOBS, UC careers or WorkInTexas link is read only by /job caljobs, /job uc and /job workintexas:
     without --text-file posting.py exits 4 with one BROWSER SITE line and
     fetches, resolves and writes nothing (not with --json-file or --html-file
     either); with --text-file the link is never kept (posting.md has no URL
     and no job key from it, and a link inside the text is taken out)."""
     caljobs = "https://www.caljobs.ca.gov/vosnet/jobbanks/jobdetails.aspx?enc=" + "A1b2C3" * 20
     uc = "https://careerspub.universityofcalifornia.edu/psp/ucpc/EMPLOYEE/HRMS/c/HRS_HRAM_FL.HRS_CG_SEARCH_FL.GBL?x=1"
+    wit = "https://www.workintexas.com/vosnet/jobbanks/jobdetails.aspx?enc=" + "A1b2C3" * 20
     asked = []
     real = posting.socket.getaddrinfo
     posting.socket.getaddrinfo = lambda host, *a, **k: asked.append(host) or real("localhost", 1)
@@ -520,13 +521,15 @@ def test_pasted_site_link():
         with tempfile.TemporaryDirectory(prefix="posting_site_") as tmp:
             out = Path(tmp) / "posting.md"
             pasted = Path(tmp) / "pasted.txt"
-            pasted.write_text("About the job\nRun QC assays. See " + caljobs + " and " + uc
+            pasted.write_text("About the job\nRun QC assays. See " + caljobs + " and " + uc + " and " + wit
                               + ".\nApply at https://careers.example-bio.com/jobs/7.\n", encoding="utf-8")
             extra = Path(tmp) / "x.json"
             extra.write_text("{}", encoding="utf-8")
             for link, site in ((caljobs, "caljobs"), ("https://CALJOBS.ca.gov/vosnet/Default.aspx", "caljobs"),
                                ("http://www.caljobs.ca.gov:443/x", "caljobs"), (uc, "uc"),
-                               ("https://careerspub.universityofcalifornia.edu", "uc")):
+                               ("https://careerspub.universityofcalifornia.edu", "uc"), (wit, "workintexas"),
+                               ("https://WORKINTEXAS.com/vosnet/Default.aspx", "workintexas"),
+                               ("http://www.workintexas.com:443/x", "workintexas")):
                 for more in ((), ("--json-file", str(extra), "--source", "greenhouse"), ("--html-file", str(extra))):
                     buf = io.StringIO()
                     with redirect_stdout(buf):
@@ -545,14 +548,16 @@ def test_pasted_site_link():
                 head = text.split("## Description")[0].splitlines()
                 assert head[0] == "URL:" and "Job key:" in head, head
                 assert "caljobs" not in text and "universityofcalifornia" not in text and "enc=" not in text, text
-                assert "See  and ." in text, text  # both links in the text are taken out
+                assert "workintexas" not in text, text
+                assert "See  and  and ." in text, text  # every link in the text is taken out
                 assert "https://careers.example-bio.com/jobs/7." in text, "any other link stays as written"
-                assert not any("caljobs" in ln or "universityofcalifornia" in ln for ln in lines), lines
+                assert not any("caljobs" in ln or "universityofcalifornia" in ln or "workintexas" in ln
+                               for ln in lines), lines
                 out.unlink()
             assert not asked, asked
     finally:
         posting.socket.getaddrinfo = real
-    assert posting.is_browser_site_url(caljobs) and posting.is_browser_site_url(uc)
+    assert posting.is_browser_site_url(caljobs) and posting.is_browser_site_url(uc) and posting.is_browser_site_url(wit)
     assert not posting.is_browser_site_url("https://careers.example-bio.com/jobs/1")
     assert not posting.is_browser_site_url("https://www.linkedin.com/jobs/view/1"), "a board is its own refusal"
     assert not posting.is_browser_site_url("") and not posting.is_browser_site_url("https://www.ca.gov/")

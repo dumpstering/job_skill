@@ -127,13 +127,17 @@ Create `config/` and write, backing up anything already there:
 2. **The search profile, from a preset when one fits.** Presets live in
    `templates/presets/`; `lifesci_bayarea` holds life-science title
    families, license knockouts and San Francisco Bay Area places, plus a
-   watch list of about 290 employer boards and a list of life-science job boards.
+   watch list of about 350 employer boards and a list of life-science job boards.
    - When the user's field and region match a preset, say so in one line and
      offer it. On yes: copy
      [../templates/presets/lifesci_bayarea/families.toml](../templates/presets/lifesci_bayarea/families.toml)
      to `config/search_profile.toml`, set `[home] label` ("City, ST") and
      `zip` from profile.md, and copy the preset's `watchlist.csv` and
      `boards.csv` into `config/`.
+   - `remote_tech` is remote US roles at tech, SaaS and AI companies (program,
+     product, IT and AI leadership). Offer it when the field is one of those
+     and the user works remotely in the US; the steps are the same, with
+     `[home] remote = "us"`.
    - Otherwise copy [../templates/search_profile.toml](../templates/search_profile.toml),
      fill `[home]` from profile.md, ask once for the cities within commuting
      distance (`places`), set `[home] states` to those cities' US state
@@ -285,6 +289,26 @@ caught up by the first `/job`. Free plans have no scheduled tasks; then
        brings it up.
      - Both need the Claude in Chrome extension ([caljobs_browser.md](caljobs_browser.md),
        [uc_browser.md](uc_browser.md)); without it, say so and leave them off.
+   - **Texas: one more question in this step.** When `[home] states` holds
+     `TX` (sitting 1), ask once, after the LinkedIn answer (and after the
+     California ones when `CA` is there too), whatever it was. WorkInTexas:
+     "Texas's state job bank, WorkInTexas, asks automated tools not to crawl
+     it, so I never do. I can work there as you browsing it: slowly, in your
+     own Chrome and your own WorkInTexas account, on job pages only, and you
+     click Submit. You need a free account (if you claim unemployment in Texas
+     you need one anyway). Turn it on? (yes or no)"
+     - Only a clear yes turns it on: back up `config/settings.toml`, set
+       `[workintexas] browser = true` (a file from an earlier version has no
+       such table: add the template's), and say: "WorkInTexas is on: at most
+       25 applications a day there. Type /job workintexas (or /job wit) to
+       start; say 'stop using WorkInTexas' any time."
+     - "No", "later", "maybe", a question, or no answer: leave `browser =
+       false`, never guess, and say once: "Left off. You can turn it on any
+       time with /job settings." It is not asked again unless the user brings
+       it up.
+     - It needs the Claude in Chrome extension
+       ([workintexas_browser.md](workintexas_browser.md)); without it, say so
+       and leave it off.
 9. **The export:** when the LinkedIn zip has arrived, the user drops it into
    `network\raw\` ([referrals.md](referrals.md)).
 10. **The usage check** on days 1-2 ([usage.md](usage.md)).

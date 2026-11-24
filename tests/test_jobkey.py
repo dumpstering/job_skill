@@ -211,14 +211,20 @@ def test_v12_keys():
 
 
 def test_site_keys():
-    """The browser sites' keys (caljobs_key, uc_key) are built from what the
+    """The browser sites' keys (caljobs_key, uc_key, workintexas_key) are built from what the
     page shows, never from a link: the right shapes only, always inline-safe,
-    and no link to either site gives a key."""
+    and no link to any of them gives a key."""
     assert jobkey.caljobs_key("305602-4492") == "caljobs:305602-4492"
     assert jobkey.caljobs_key("  305602-4492 ") == "caljobs:305602-4492" and jobkey.caljobs_key("1234567") == "caljobs:1234567"
     for bad in ("", None, "abc", "12", "305602-", "-4492", "305602-4492-1", "305602 4492", "305602-4492; rm", "$(x)",
                 "https://www.caljobs.ca.gov/x", "1" * 13):
         assert jobkey.caljobs_key(bad) == "", bad
+    assert jobkey.workintexas_key("305602-4492") == "workintexas:305602-4492"
+    assert jobkey.workintexas_key("  305602-4492 ") == "workintexas:305602-4492"
+    assert jobkey.workintexas_key("1234567") == "workintexas:1234567"
+    for bad in ("", None, "abc", "12", "305602-", "-4492", "305602-4492-1", "305602 4492", "305602-4492; rm", "$(x)",
+                "https://www.workintexas.com/x", "1" * 13):
+        assert jobkey.workintexas_key(bad) == "", bad
     assert jobkey.uc_key("UC Santa Cruz", "12345") == "uc:santacruz:12345"
     assert jobkey.uc_key("University of California, Berkeley", "JPF01234") == "uc:berkeley:jpf01234"
     assert jobkey.uc_key("Davis", " 98765 ") == "uc:davis:98765" and jobkey.uc_key("UCSC", "7") == "uc:ucsc:7"
@@ -226,19 +232,23 @@ def test_site_keys():
     for campus, job in (("", "1"), ("UC ", "1"), ("Davis", ""), ("Davis", "-1"), ("Davis", "a b"), ("Davis", "1;2"),
                         ("Davis", "x" * 42), (None, "1"), ("Davis", None)):
         assert jobkey.uc_key(campus, job) == "", (campus, job)
-    for key in ("caljobs:305602-4492", "uc:santacruz:12345", "uc:ucsc:a-1.2_3"):
+    for key in ("caljobs:305602-4492", "uc:santacruz:12345", "uc:ucsc:a-1.2_3", "workintexas:305602-4492"):
         assert jobkey.inline_ok(key) and jobkey.safe_key(key) == key and jobkey.same_key(key, key), key
     assert jobkey.site_key("caljobs:305602-4492") == ("caljobs", "305602-4492")
     assert jobkey.site_key("uc:santacruz:12345") == ("uc", "santacruz", "12345")
+    assert jobkey.site_key("workintexas:305602-4492") == ("workintexas", "305602-4492")
     for key in ("", None, "caljobs:", "caljobs:abc", "uc:santacruz", "uc::1", "uc:santa cruz:1", "linkedin:4012345678",
-                "greenhouse:1234567", "caljobs:305602-4492 x"):
+                "greenhouse:1234567", "caljobs:305602-4492 x", "workintexas:", "workintexas:abc",
+                "workintexas:305602-4492 x"):
         assert jobkey.site_key(key) is None, key
-    for built in ("caljobs:305602-4492", jobkey.uc_key("UC Berkeley", "4455")):
-        assert jobkey.site_key(built) and jobkey.site_key(built)[0] in ("caljobs", "uc")
-    # a link to either site gives no key (a CalJOBS link has an encrypted token and no number; none is stored)
+    for built in ("caljobs:305602-4492", jobkey.uc_key("UC Berkeley", "4455"), jobkey.workintexas_key("305602-4492")):
+        assert jobkey.site_key(built) and jobkey.site_key(built)[0] in ("caljobs", "uc", "workintexas")
+    # a link to any of them gives no key (a CalJOBS link has an encrypted token and no number; none is stored)
     for url in ("https://www.caljobs.ca.gov/vosnet/jobbanks/jobdetails.aspx?enc=" + "A1b2C3" * 20,
                 "https://caljobs.ca.gov/vosnet/Default.aspx", "https://CALJOBS.ca.gov/x?jobid=305602",
-                "https://careerspub.universityofcalifornia.edu/psp/ucpc/EMPLOYEE/HRMS/c/x?JobOpeningId=12345"):
+                "https://careerspub.universityofcalifornia.edu/psp/ucpc/EMPLOYEE/HRMS/c/x?JobOpeningId=12345",
+                "https://www.workintexas.com/vosnet/jobbanks/jobdetails.aspx?enc=" + "A1b2C3" * 20,
+                "https://workintexas.com/vosnet/Default.aspx", "https://WORKINTEXAS.com/x?jobid=305602"):
         assert jobkey.job_key(url) == "", url
     assert jobkey.job_key("https://www.ca.gov/jobs/1").startswith("url:"), "other links keep the URL key"
 

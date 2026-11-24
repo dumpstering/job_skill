@@ -23,9 +23,10 @@ at the check lines, clicks Submit, and types `s`.
   do-yourself list (below), with no link. LinkedIn is worked on only in
   `/job linkedin`, with `[linkedin] browser = true`, by its own rules
   ([linkedin_browser.md](linkedin_browser.md)); Indeed never, by any tool.
-  CalJOBS and the UC careers site are likewise only `/job caljobs` and `/job uc`,
-  with `[caljobs] browser = true` or `[uc] browser = true`
-  ([caljobs_browser.md](caljobs_browser.md), [uc_browser.md](uc_browser.md)).
+  CalJOBS, the UC careers site and WorkInTexas are likewise only `/job caljobs`,
+  `/job uc` and `/job workintexas`, with `[caljobs] browser = true`, `[uc] browser = true`
+  or `[workintexas] browser = true` ([caljobs_browser.md](caljobs_browser.md),
+  [uc_browser.md](uc_browser.md), [workintexas_browser.md](workintexas_browser.md)).
 - SSN, date of birth, bank and tax details, ID numbers, signatures,
   attestations and consent boxes are always the user's part, never asked
   for in chat.

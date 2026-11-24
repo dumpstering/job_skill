@@ -1367,15 +1367,16 @@ def site_setup(root, site, body="browser = true\n", features=True):
 
 
 def test_site_lane():
-    """The CalJOBS and UC careers browser modes ([caljobs] and [uc], off by
-    default): with one off the card and progress are unchanged; with it on,
+    """The CalJOBS, UC careers and WorkInTexas browser modes ([caljobs], [uc] and
+    [workintexas], off by default): with one off the card and progress are unchanged; with it on,
     `site --site <site>` prints SITE <site> GO with what is left of per_day,
     tracker rows with Found via <site>:browser count toward the day (the
     card's line), per_day ends it (DONE), a runner that would refuse its row
     or an unreadable tracker holds it (WAIT), and a stop closes it for the
     day, for that site only."""
-    for site, page in (("caljobs", "CalJOBS"), ("uc", "UC careers")):
-        other_site = "uc" if site == "caljobs" else "caljobs"
+    credit = {"caljobs": "CalJOBS", "uc": "UC", "workintexas": "WorkInTexas"}
+    for site, page in (("caljobs", "CalJOBS"), ("uc", "UC careers"), ("workintexas", "WorkInTexas")):
+        other_site = "caljobs" if site != "caljobs" else "uc"
         root = make_root("site_" + site, morning=QUIET_MORNING, workday=False)
         plain = card(root)
         off = f"SITE {site} off: [{site}] browser is not true in config/settings.toml, so no {page} page is opened"
@@ -1404,7 +1405,7 @@ def test_site_lane():
 
         def row(i, status, applied=None, day=DAY, via=f"{site}:browser"):
             return {"ID": 700 + i, "Date": day, "Company": f"Site Co {i}", "Role": "Scientist", "Status": status,
-                    "Applied": applied, "Source": "CalJOBS" if site == "caljobs" else "UC", "Found via": via,
+                    "Applied": applied, "Source": credit[site], "Found via": via,
                     "Job key": f"{site}:30560{i}-449{i}", "Folder": f"applications/{day} Site Co {i} - Scientist"}
         add_rows(root, [row(1, "Applied", DAY), row(2, "Applied", DAY), row(3, "Filled - awaiting submit"),
                         row(4, "Applied", "2026-11-11", day="2026-11-11"),         # yesterday's: not today's count
@@ -1458,8 +1459,8 @@ def test_site_lane():
             run_args(r2, "site", "--site", site)
     bad = subprocess.run([sys.executable, str(SCRIPTS / "today_view.py"), "site", "--root", str(root), "--site", "indeed"],
                          capture_output=True, text=True, encoding="utf-8")
-    assert bad.returncode != 0, "only caljobs and uc"
-    print("ok the CalJOBS and UC careers browser modes: off by default, GO with the day's count, DONE, WAIT, and "
+    assert bad.returncode != 0, "only caljobs, uc and workintexas"
+    print("ok the CalJOBS, UC careers and WorkInTexas browser modes: off by default, GO with the day's count, DONE, WAIT, and "
           "the stop record, each its own")
 
 

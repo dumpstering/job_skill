@@ -1,0 +1,48 @@
+# Rules for tools/seed_boards.py --preset lifesci_bayarea
+# Source: the "StoreSignal ATS job boards directory" (CC BY 4.0), github.com/storesignalhq/ats-job-boards
+
+# ATSs with a reader that polls today (greenhouse, lever, ashby, workable). Recruitee waits for a runner
+# selftest; SmartRecruiters is lead-only; neither is seeded.
+ats = ["greenhouse", "lever", "ashby", "workable"]
+min_open_jobs = 1
+ref = "storesignal-2026-11"
+priority = 3
+segment = "biotech"
+
+# Company-name words of a life-science employer (regexes, case-insensitive). A hit proves nothing alone:
+# the board must also list a posting in a Bay Area place of families.toml.
+name_include = [
+  "bio", "therap", "pharma", "genom", "geneti", "\\bcells?\\b", "\\bgenes?\\b", "vaccin", "medicin",
+  "diagnos", "\\blabs?\\b", "laborator", "science", "health", "medical", "molecul", "protein", "immun",
+  "oncolog", "\\brna\\b", "\\bdna\\b", "synthetic", "ferment", "crispr", "genetix", "\\bdx\\b",
+  "sequenc", "clinical", "biom", "pathogen", "antibod", "peptide", "enzym", "microb", "proteom",
+  "neuro", "cancer", "\\bonc\\b", "\\w+tx\\b",
+]
+# Obvious non-employers, and companies that are not bench or lab work.
+name_exclude = [
+  "staffing", "recruit", "talent", "headhunt", "executive search", "placement", "workforce", "agency",
+  "consult", "outsourc", "\\bhr\\b", "careers? (?:hub|board)",
+  # care providers and fitness: the name has "health" or "therapy" but the jobs are not lab or science work
+  "physical ?therap", "mental", "behavior", "dental", "counsel", "hospice", "home ?care", "senior", "nursing",
+  "wellness", "fitness", "psychi", "autism", "pediatric", "orthodon", "veterinar", "\\bpt\\b",
+]
+
+# A name with one of these words is a life-science employer by itself: it is kept on any posting in a
+# Bay Area place, even when no title matches a family yet. Any other name needs a family title.
+strong_name = [
+  "bio", "therapeutic", "pharma", "genom", "geneti", "vaccin", "medicines", "molecul", "protein", "immun",
+  "\\brna\\b", "\\bdna\\b", "diagnos", "crispr", "genetix", "\\w+tx\\b", "peptide", "antibod", "enzym",
+]
+
+[[segment_rule]]
+match = "diagnos|genom|geneti|\\bdx\\b|sequenc|proteom"
+segment = "diagnostics"
+
+[[segment_rule]]
+match = "pharma|therap|\\w+tx\\b"
+segment = "pharma"
+
+[relevant]
+kind = "places"          # located in a [home] place of the preset's families.toml (gates.home_place_verdict)
+note = "in Bay Area places with a title in the preset's families"
+note_strong = "in Bay Area places (no title in the preset's families yet)"

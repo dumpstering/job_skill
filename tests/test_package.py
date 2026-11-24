@@ -38,7 +38,7 @@ DESCRIPTION = ("Daily job search: finds fresh postings, writes truthful tailored
                "you to submit, and tracks replies. Use for /job, a job link, or job emails.")
 # Spec 1.7, plus the two scheduled modes.
 ENTRY_POINTS = ["/job", "/job short", "/job <link>", "/job add <link>", "/job paste", "/job linkedin",
-                "/job caljobs", "/job uc", "/job inbox",
+                "/job caljobs", "/job uc", "/job workintexas", "/job inbox",
                 "/job log", "/job status",
                 "/job prep", "/job week", "/job worksearch", "/job usage", "/job settings", "/job variants",
                 "/job watch <company or careers URL>", "/job network", "/job setup", "morning", "inbox-watch"]
@@ -415,8 +415,10 @@ def test_linkedin_rule():
           "any step, the risk sentence at setup and in the guides")
 
 
-SITE_DOCS = {"caljobs": "references/caljobs_browser.md", "uc": "references/uc_browser.md"}
-SITE_HOSTS = re.compile(r"caljobs\.ca\.gov|careerspub\.universityofcalifornia\.edu", re.I)
+SITE_DOCS = {"caljobs": "references/caljobs_browser.md", "uc": "references/uc_browser.md",
+             "workintexas": "references/workintexas_browser.md"}
+SITE_PAGES = {"caljobs": "CalJOBS", "uc": "UC careers", "workintexas": "WorkInTexas"}
+SITE_HOSTS = re.compile(r"caljobs\.ca\.gov|careerspub\.universityofcalifornia\.edu|workintexas\.com", re.I)
 
 
 def flat(text):
@@ -425,14 +427,14 @@ def flat(text):
 
 
 def test_browser_site_rule():
-    """The CalJOBS and UC careers browser modes: both off in the shipped
+    """The CalJOBS, UC careers and WorkInTexas browser modes: all off in the shipped
     settings (the script's defaults are the template's), each reference states
     its gate and every limit before its first step, the stop reasons the
     scripts take are the ones named, key shapes are the jobkey ones, the
     sign-in prompt is the user's own step, setup asks once each (only when
-    home is in California), SKILL.md routes both commands and the rule that no
-    script or fetch ever opens either site, and no other doc names either
-    host except to refuse it."""
+    home is in California, or Texas for WorkInTexas), SKILL.md routes all
+    commands and the rule that no script or fetch ever opens any of the
+    sites, and no other doc names any host except to refuse it."""
     import tomllib
     import events
     import jobfs
@@ -446,7 +448,7 @@ def test_browser_site_rule():
     assert set(events.BROWSER_SITES) == set(SITE_DOCS) == set(netfetch_hosts()), "one table, one doc, one host list each"
 
     for site, name in SITE_DOCS.items():
-        page = "CalJOBS" if site == "caljobs" else "UC careers"
+        page = SITE_PAGES[site]
         doc = flat((SKILL / name).read_text(encoding="utf-8"))
         head, loop = doc.split("## The loop", 1)
         need = {
@@ -487,12 +489,13 @@ def test_browser_site_rule():
             "no link as the key": "no `\"_\"`",
             "duplicates": "`tracker.py check --posting",
             "caps": "`caps.py check --family <family>",
-            "the row": f"--source {'CalJOBS' if site == 'caljobs' else 'UC'} --found-via {site}:browser",
+            "the row": f"--source {'CalJOBS' if site == 'caljobs' else 'UC' if site == 'uc' else 'WorkInTexas'} "
+                       f"--found-via {site}:browser",
             "no link on the row": "no `url`",
             "sensitive answers": "Sensitive answers exactly as apply_batch.md \"Sensitive confirmations\"",
             "handed over, then Submit is the user's": "status=\"Filled - awaiting submit\"` and save `filled.md`",
             "Submit is the user's click": "click Submit, then type s.",
-            "a stop mid-job touches nothing more": f"touch nothing more on {'CalJOBS' if site == 'caljobs' else 'the site'}",
+            "a stop mid-job touches nothing more": f"touch nothing more on {'the site' if site == 'uc' else page}",
             "the sign-in prompt": "sign in in that tab yourself, then reply done.",
             "never types a password": "You never type a name, a password or a code.",
             "a later sign-in page is a stop": "is a `sign_in` stop",
@@ -508,6 +511,15 @@ def test_browser_site_rule():
     assert "**The employer's own site, in a new tab.**" in caljobs and "daily.md \"/job add <link>\"" in caljobs
     assert "worksearch.md" in caljobs and "Posted: <mm/dd/yyyy>" in caljobs and "30 days" in caljobs
     assert "https://www.caljobs.ca.gov/vosnet/Default.aspx" in caljobs and "Sorted by: Relevance" in caljobs
+    wit = flat((SKILL / SITE_DOCS["workintexas"]).read_text(encoding="utf-8"))
+    assert ("Make a free WorkInTexas account with its Register or Sign In link (if you claim unemployment in Texas "
+            "you need one anyway), sign in in that tab yourself, then reply done.") in wit
+    assert "`workintexas:<job#>`" in wit and "robots.txt" in wit and "Disallow: /" in wit and "UNVERIFIED" in wit
+    assert "Geographic Solutions" in wit and "Posted: <mm/dd/yyyy>" in wit and "30 days" in wit
+    assert "**The employer's own site, in a new tab.**" in wit and "daily.md \"/job add <link>\"" in wit
+    assert "https://www.workintexas.com/vosnet/Default.aspx" in wit and "read the page as text" in wit.lower()
+    assert "worksearch.md" in wit and "worksearch_states.toml" in wit and "`TX`" in wit
+    assert "`[home] states` holds `TX`" in wit and "`/job wit`" in wit
     uc = flat((SKILL / SITE_DOCS["uc"]).read_text(encoding="utf-8"))
     assert ("Make a free account on the UC careers site with its Create Account or Register link, sign in in that "
             "tab yourself, then reply done.") in uc
@@ -516,30 +528,41 @@ def test_browser_site_rule():
     # the key shapes the docs name are the ones jobkey builds
     assert jobkey.caljobs_key("305602-4492") == "caljobs:305602-4492"
     assert jobkey.uc_key("UC Santa Cruz", "12345") == "uc:santacruz:12345"
+    assert jobkey.workintexas_key("305602-4492") == "workintexas:305602-4492"
 
     setup = flat((SKILL / "references" / "setup.md").read_text(encoding="utf-8"))
     assert "When `[home] states` holds `CA` (sitting 1), ask each once" in setup, "setup.md: only in California"
     assert "`[caljobs] browser = true` or `[uc] browser = true`" in setup
+    assert "When `[home] states` holds `TX` (sitting 1), ask once" in setup and "`[workintexas] browser = true`" in setup
+    assert "Turn it on? (yes or no)" in setup.split("**Texas: one more question in this step.**", 1)[1]
+    assert "/job workintexas (or /job wit)" in setup and "WorkInTexas, asks automated tools not to crawl it" in setup
     assert "asks automated tools not to crawl it, so I never do" in setup and "Turn it on? (yes or no)" in setup
     assert "Only a clear yes turns one on" in setup and "leave `browser = false`, never guess" in setup
     settings = flat((SKILL / "references" / "settings.md").read_text(encoding="utf-8"))
-    for key in ("`[caljobs] browser`", "`[uc] browser`", "`[caljobs] per_day`", "`[uc] per_day`",
-                "`[caljobs] min_seconds_between_actions`", "`[uc] stop_on_warning`"):
+    for key in ("`[caljobs] browser`", "`[uc] browser`", "`[workintexas] browser`", "`[caljobs] per_day`",
+                "`[uc] per_day`", "`[workintexas] per_day`", "`[caljobs] min_seconds_between_actions`",
+                "`[uc] stop_on_warning`", "`[workintexas] min_seconds_between_actions`",
+                "`[workintexas] stop_on_warning`"):
         assert key in settings, f"settings.md: {key}"
     assert "**The CalJOBS notice**" in settings and "asks automated tools not to crawl it, so I never do" in settings
-    assert "**The UC careers notice**" in settings and "Only a clear yes turns either one on" in settings
+    assert "**The UC careers notice**" in settings and "Only a clear yes turns any one on" in settings
+    assert "**The WorkInTexas notice**" in settings and "WorkInTexas, the Texas Workforce Commission's job bank" in settings
     skill = flat((SKILL / "SKILL.md").read_text(encoding="utf-8"))
     rules = skill.split("## Rules that hold everywhere", 1)[1].split(" ## ", 1)[0]
     for what, text in {"no script or fetch": "No script or fetch ever opens caljobs.ca.gov",
                        "the UC host": "careerspub.universityofcalifornia.edu",
+                       "the Texas host": "workintexas.com",
                        "under every setting": "refuse them under every setting (`BROWSER SITE`, exit 4)",
-                       "off by default": "both default to false",
+                       "off by default": "all default to false",
                        "the gate": "only after `today_view.py site --site <site>` prints `SITE <site> GO`",
                        "the user signs in": "The user makes the account and signs in",
-                       "no link kept": "no link from either site is ever kept"}.items():
+                       "no link kept": "no link from any of them is ever kept",
+                       "the Texas key": "`workintexas:<job #>`"}.items():
         assert text in rules, f"SKILL.md rules: {what}"
     daily = flat((SKILL / "references" / "daily.md").read_text(encoding="utf-8"))
     assert "offer that site after LinkedIn's offer" in daily and "`SITE caljobs GO`" in daily, "daily.md"
+    assert "`SITE workintexas GO`" in daily and "`/job wit`" in daily, "daily.md: WorkInTexas"
+    assert "`/job workintexas` (or `/job wit`)" in skill, "SKILL.md routes /job wit"
     problems = []
     for name, text in docs():
         if name in SITE_DOCS.values():
@@ -548,8 +571,9 @@ def test_browser_site_rule():
             if SITE_HOSTS.search(para) and not REFUSAL.search(para):
                 problems.append(f"{name}: {para.strip()[:90]!r}")
     assert not problems, "\n".join(problems)
-    print("ok the CalJOBS and UC careers rule: off by default, each reference states its gate and limits, "
-          "the user makes the account, setup asks only in California, no other doc names either host but to refuse it")
+    print("ok the CalJOBS, UC careers and WorkInTexas rule: off by default, each reference states its gate and limits, "
+          "the user makes the account, setup asks only in California (Texas for WorkInTexas), no other doc names "
+          "any host but to refuse it")
 
 
 def netfetch_hosts():

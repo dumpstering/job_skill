@@ -13,7 +13,7 @@ Usage:
     python events.py diy-add --root R --folder <job folder> [--date YYYY-MM-DD]
     python events.py linkedin-stop --root R --reason captcha|sign_in|unusual_activity|limit|restricted|other
         [--date YYYY-MM-DD] [--session S]
-    python events.py site-stop --root R --site caljobs|uc
+    python events.py site-stop --root R --site caljobs|uc|workintexas
         --reason captcha|sign_in|bot_check|unusual_activity|limit|restricted|other
         [--date YYYY-MM-DD] [--session S]
 
@@ -76,11 +76,13 @@ The file is the session's own, not an event: it holds at once, in every mode,
 whatever version the PC's job finder is. A file there that cannot be read
 still counts as a stop. today_view.py linkedin and the card read it.
 
-site-stop does the same for the CalJOBS and UC careers browser modes
-([caljobs] and [uc] in settings.toml, references/caljobs_browser.md and
-uc_browser.md): claude/<date>/<site>_stop.json, once, never cleared, and
+site-stop does the same for the CalJOBS, UC careers and WorkInTexas browser
+modes ([caljobs], [uc] and [workintexas] in settings.toml,
+references/caljobs_browser.md, uc_browser.md and workintexas_browser.md):
+claude/<date>/<site>_stop.json, once, never cleared, and
     SITE caljobs STOPPED <date> <reason>: no CalJOBS page is opened again today
     SITE uc STOPPED <date> <reason>: no UC careers page is opened again today
+    SITE workintexas STOPPED <date> <reason>: no WorkInTexas page is opened again today
 today_view.py site and the card read it.
 
 The library (validate, emit, read_file, pending_files, recent, move_done,
@@ -141,10 +143,11 @@ LINKEDIN_PER_DAY_MAX = 50      # a larger per_day is read as this
 LINKEDIN_PACE = (4, 120)       # seconds between actions: never under the default, never over two minutes
 # Why LinkedIn was closed for the day (linkedin-stop --reason).
 LINKEDIN_STOPS = ("captcha", "sign_in", "unusual_activity", "limit", "restricted", "other")
-# [caljobs] and [uc] in config/settings.toml: the two other opt-in browser sites (caljobs_browser.md,
-# uc_browser.md), one table each. Their pages are never fetched by any script (netfetch.BROWSER_SITE_HOSTS).
-BROWSER_SITES = ("caljobs", "uc")
-SITE_PAGES = {"caljobs": "CalJOBS", "uc": "UC careers"}   # "no <it> page is opened again today"
+# [caljobs], [uc] and [workintexas] in config/settings.toml: the three other opt-in browser sites
+# (caljobs_browser.md, uc_browser.md, workintexas_browser.md), one table each. Their pages are never
+# fetched by any script (netfetch.BROWSER_SITE_HOSTS).
+BROWSER_SITES = ("caljobs", "uc", "workintexas")
+SITE_PAGES = {"caljobs": "CalJOBS", "uc": "UC careers", "workintexas": "WorkInTexas"}   # "no <it> page is opened again today"
 SITE_DEFAULTS = {"browser": False, "per_day": 25, "min_seconds_between_actions": 6, "stop_on_warning": True}
 SITE_PER_DAY_MAX = 50          # a larger per_day is read as this
 SITE_PACE = (4, 120)           # seconds between actions: never under 4, never over two minutes
@@ -792,7 +795,7 @@ def plain_linkedin_links(text):
 
 def is_site_url(url):
     """True for a link netfetch refuses as a browser site's (CalJOBS, the UC
-    careers site): any spelling or reading of either."""
+    careers site, WorkInTexas): any spelling or reading of any."""
     if not isinstance(url, str) or not url:
         return False
     import netfetch  # stdlib and jobfs only
@@ -851,7 +854,7 @@ def linkedin_settings(root):
 
 
 def site_settings(root, site):
-    """[caljobs] or [uc] of config/settings.toml as checked values: the same
+    """[caljobs], [uc] or [workintexas] of config/settings.toml as checked values: the same
     rules as linkedin_settings, with a default pace of 6 seconds (never under
     4 nor over 120)."""
     if site not in BROWSER_SITES:
@@ -927,7 +930,7 @@ def site_stop(root, site, day=None):
 
 
 def stop_site(root, site, reason, day=None, session=None):
-    """Close a browser site (caljobs, uc) for the day. Create-only: the first
+    """Close a browser site (caljobs, uc, workintexas) for the day. Create-only: the first
     stop of the day stands and nothing here clears it. Returns (day, the stop
     as read back)."""
     day = _write_stop(root, site_stop_file(root, site, day), SITE_STOPS, reason, _day(root, day), session)
@@ -1191,7 +1194,7 @@ def build_parser():
     p.add_argument("--date")
     p.add_argument("--session")
     p.set_defaults(func=cmd_linkedin_stop)
-    p = sub.add_parser("site-stop", help="Close CalJOBS or the UC careers site for the day (browser mode); never undone.",
+    p = sub.add_parser("site-stop", help="Close CalJOBS, the UC careers site or WorkInTexas for the day (browser mode); never undone.",
                        allow_abbrev=False)
     p.add_argument("--root", required=True)
     p.add_argument("--site", required=True, choices=BROWSER_SITES)

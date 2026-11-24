@@ -47,20 +47,23 @@ come only from the posting.
     ends it for the day.
   - Indeed and the other boards are never opened by any tool, under any
     setting.
-- **CalJOBS and the UC careers site.** No script or fetch ever opens
-  caljobs.ca.gov (its robots.txt asks automated tools to stay out) or
-  careerspub.universityofcalifornia.edu: `posting.py`, `netfetch.py` and the
-  runner refuse them under every setting (`BROWSER SITE`, exit 4). With
-  `[caljobs] browser = true` or `[uc] browser = true` (the user's own yes at
-  setup, asked once when `[home] states` holds `CA`; both default to false)
+- **CalJOBS, the UC careers site and WorkInTexas.** No script or fetch ever opens
+  caljobs.ca.gov or workintexas.com (their robots.txt asks automated tools to
+  stay out) or careerspub.universityofcalifornia.edu: `posting.py`,
+  `netfetch.py` and the runner refuse them under every setting (`BROWSER
+  SITE`, exit 4). With `[caljobs] browser = true`, `[uc] browser = true` or
+  `[workintexas] browser = true` (the user's own yes at setup, asked once when
+  `[home] states` holds `CA` or, for WorkInTexas, `TX`; all default to false)
   the browser tool, in the user's own signed-in Chrome, may search that site
   and prepare applications up to Submit, only as
-  [references/caljobs_browser.md](references/caljobs_browser.md) or
-  [references/uc_browser.md](references/uc_browser.md) says and only after
-  `today_view.py site --site <site>` prints `SITE <site> GO`: slowly, at most
-  `per_day` a day, nothing about a person, and a check or notice ends it for
-  the day. The user makes the account and signs in; no link from either site
-  is ever kept (a job's key is `caljobs:<job #>` or `uc:<campus>:<job id>`).
+  [references/caljobs_browser.md](references/caljobs_browser.md),
+  [references/uc_browser.md](references/uc_browser.md) or
+  [references/workintexas_browser.md](references/workintexas_browser.md) says
+  and only after `today_view.py site --site <site>` prints `SITE <site> GO`:
+  slowly, at most `per_day` a day, nothing about a person, and a check or
+  notice ends it for the day. The user makes the account and signs in; no link
+  from any of them is ever kept (a job's key is `caljobs:<job #>`,
+  `uc:<campus>:<job id>` or `workintexas:<job #>`).
 - **robots.txt and lead-only hosts.** The runner obeys robots.txt and never
   calls the list endpoints of SmartRecruiters, iCIMS, UKG, Paycom, Paycor or
   ClearCompany. Their single postings come one at a time from a web search
@@ -98,6 +101,7 @@ Each entry point has one reference. Read it and follow it.
 | `/job linkedin` | [references/linkedin_browser.md](references/linkedin_browser.md) | LinkedIn in the user's own Chrome, only with `[linkedin] browser = true` |
 | `/job caljobs` | [references/caljobs_browser.md](references/caljobs_browser.md) | CalJOBS in the user's own Chrome, only with `[caljobs] browser = true` |
 | `/job uc` | [references/uc_browser.md](references/uc_browser.md) | The UC careers site in the user's own Chrome, only with `[uc] browser = true` |
+| `/job workintexas` (or `/job wit`) | [references/workintexas_browser.md](references/workintexas_browser.md) | WorkInTexas in the user's own Chrome, only with `[workintexas] browser = true` |
 | `/job inbox` | [references/inbox.md](references/inbox.md) | Replies in Gmail, tracker updates, urgent items first |
 | `/job log` | [references/apply.md](references/apply.md) | A job applied for by hand, or `log e1 e3` from the do-yourself list |
 | `/job status` | [references/daily.md](references/daily.md) | What is in flight, follow-ups ready, today's progress |
@@ -137,7 +141,7 @@ writer ([references/files.md](references/files.md) has the full table):
 | `master_resume.md`, `profile.md`, `achievement_library.md`, `answers.md`, `publications.md`, `techniques.md` (backup first) | `queue/<date>/` (queue.json, addenda, today.md, review.html, discards.csv, diy.md) |
 | `config/` (settings, search profile, watch list) and `variants/` | `state/`, `upload/`, `runner/out/`, `reports/funnel.csv`, `logs/` |
 | `runner/in/` files, create-only, through `events.py`, `leads.py` and `jobrunner.py request` | `applications.xlsx` in mode L (through `tracker.py apply-events`) |
-| `claude/session.json`, `claude/<date>/morning.json`, `claude/day_<date>/<step>.done`, `claude/paste/`, `claude/linkedin/`, `claude/caljobs/`, `claude/uc/` (posting text) | in a job folder: posting.md, posting.json, fill_plan.json, terms.json, resume_B.*, cover_B.*, tune_log.json, `.runner_files` |
+| `claude/session.json`, `claude/<date>/morning.json`, `claude/day_<date>/<step>.done`, `claude/paste/`, `claude/linkedin/`, `claude/caljobs/`, `claude/uc/`, `claude/workintexas/` (posting text) | in a job folder: posting.md, posting.json, fill_plan.json, terms.json, resume_B.*, cover_B.*, tune_log.json, `.runner_files` |
 | in a job folder: `.claimed`, resume.json and resume files (Tier A, with `final.json` from a `--strict` build that passed), notes.md, audit.md, filled.md, questions.json, cover_letter.*, `submitted/` | `applications/_diy/`, `applications/_not_sent/` |
 
 - Before changing `profile.md`, `achievement_library.md`, `answers.md` or a
@@ -191,9 +195,9 @@ first, printing one plain refusal line in its place (`SKIP #NN unsafe value
 command line.
 
 You run:
-- `today_view.py` - `card`, `next` (both `--short` on an easy day), `progress`, `diy` (`--all` past the first five), `drafts`: the day as printed lines; `linkedin`: whether LinkedIn may be worked on now (`LINKEDIN GO`, or why not); `site --site caljobs|uc`: the same for CalJOBS or the UC careers site (`SITE <site> GO`, or why not).
+- `today_view.py` - `card`, `next` (both `--short` on an easy day), `progress`, `diy` (`--all` past the first five), `drafts`: the day as printed lines; `linkedin`: whether LinkedIn may be worked on now (`LINKEDIN GO`, or why not); `site --site caljobs|uc|workintexas`: the same for CalJOBS, the UC careers site or WorkInTexas (`SITE <site> GO`, or why not).
 - `tracker.py` - every read and write of `applications.xlsx`, through the transport (below).
-- `events.py` - `emit` queue events (started, handed_over, applied, skipped, later, parked, unparked, blocked, answer_used, usage); `add` (a job from a link into today's list); `diy-add` (a pasted or Easy Apply job onto the do-yourself list, its resume into `upload\`); `linkedin-stop` (LinkedIn closed for the day); `site-stop --site caljobs|uc` (that site closed for the day); `overlay`.
+- `events.py` - `emit` queue events (started, handed_over, applied, skipped, later, parked, unparked, blocked, answer_used, usage); `add` (a job from a link into today's list); `diy-add` (a pasted or Easy Apply job onto the do-yourself list, its resume into `upload\`); `linkedin-stop` (LinkedIn closed for the day); `site-stop --site caljobs|uc|workintexas` (that site closed for the day); `overlay`.
 - `caps.py check` - whether one more application to that company is allowed (`CAP ok`, `CAP DEFER ...`).
 - `posting.py` - a posting into `posting.md`; `--gate` judges pasted text by the runner's gates (`GATES ok`, `GATES DROP ...`).
 - `build_resume.py` - a resume or letter JSON into .docx, .pdf and .txt, with the checks (`--strict`).
@@ -255,8 +259,9 @@ say "done"; in mode L the events wait, nothing to do.
    - Read it into `<folder>/applications/_incoming/posting.md`:
      - A LinkedIn or Indeed link: follow [references/ats/linkedin.md](references/ats/linkedin.md)
        instead (`posting.py` refuses it with `JOB BOARD`, exit 4).
-     - A CalJOBS or UC careers link: `posting.py` refuses it with `BROWSER
-       SITE <site>: not fetched; use /job caljobs` (or `/job uc`), exit 4;
+     - A CalJOBS, UC careers or WorkInTexas link: `posting.py` refuses it with
+       `BROWSER SITE <site>: not fetched; use /job caljobs` (or `/job uc`,
+       `/job workintexas`), exit 4;
        with the posting text, `--text-file` and no link.
      - **Exit 4** (`JOB BOARD ...`, or `REFUSED ...`: a link that is not a
        plain public web address, a job board by any spelling, or one whose

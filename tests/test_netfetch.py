@@ -449,13 +449,14 @@ def test_canonical_host():
 
 
 def test_browser_sites():
-    """CalJOBS and the UC careers site are read only in the user's own
-    browser: every fetch of either is refused as browser-site <site>, attended
+    """CalJOBS, the UC careers site and WorkInTexas are read only in the user's own
+    browser: every fetch of any is refused as browser-site <site>, attended
     or not, before any request (robots.txt included), at the socket, in a
     redirect, and even when a watch-list row names the host. Lookalike
     spellings are caught like a job board's; their neighbours are not."""
     assert netfetch.BROWSER_SITE_HOSTS == {"caljobs": ("caljobs.ca.gov",),
-                                          "uc": ("careerspub.universityofcalifornia.edu",)}
+                                          "uc": ("careerspub.universityofcalifornia.edu",),
+                                          "workintexas": ("workintexas.com",)}
     shy, ideo = chr(0xAD), chr(0x3002)
     cases = {"https://www.caljobs.ca.gov/vosnet/Default.aspx": "browser-site caljobs",
              "https://CALJOBS.CA.GOV/robots.txt": "browser-site caljobs",
@@ -467,7 +468,16 @@ def test_browser_sites():
              "https://careers.example-bio.com" + BS + "@www.caljobs.ca.gov/x": "browser-site caljobs",
              "https://careerspub.universityofcalifornia.edu/psp/ucpc/EMPLOYEE/HRMS/c/x?JobOpeningId=1": "browser-site uc",
              "https://CareersPub.UniversityOfCalifornia.edu": "browser-site uc",
-             "https://sso.careerspub.universityofcalifornia.edu/x": "browser-site uc"}
+             "https://sso.careerspub.universityofcalifornia.edu/x": "browser-site uc",
+             "https://www.workintexas.com/vosnet/Default.aspx": "browser-site workintexas",
+             "https://WORKINTEXAS.COM/robots.txt": "browser-site workintexas",
+             "https://workintexas.com./x": "browser-site workintexas",
+             "http://www.workintexas.com:443/x": "browser-site workintexas",
+             "https://www.work" + shy + "intexas.com/x": "browser-site workintexas",
+             "https://www.workintexas" + ideo + "com/x": "browser-site workintexas",
+             "https://www.workintexas.com" + BS + "@careers.example-bio.com/jobs/1": "browser-site workintexas",
+             "https://careers.example-bio.com" + BS + "@www.workintexas.com/x": "browser-site workintexas",
+             "https://jobs.workintexas.com/x": "browser-site workintexas"}
     for url, want in cases.items():
         assert netfetch.web_refusal(url) == want, (ascii(url), netfetch.web_refusal(url))
         assert netfetch.hard_deny(url) == want, ascii(url)
@@ -480,13 +490,15 @@ def test_browser_sites():
             assert e.reason == want, e.reason
     for url in ("https://www.ca.gov/", "https://edd.ca.gov/", "https://universityofcalifornia.edu/",
                 "https://careers.universityofcalifornia.edu/x", "https://jobs.berkeley.edu/", "https://hr.ucdavis.edu/",
-                "https://jobs.ucsc.edu/", "https://evilcaljobs.ca.gov.example.com/", "https://caljobs.ca.gov.example.com/"):
+                "https://jobs.ucsc.edu/", "https://evilcaljobs.ca.gov.example.com/", "https://caljobs.ca.gov.example.com/",
+                "https://www.twc.texas.gov/", "https://evilworkintexas.com/", "https://workintexas.com.example.com/"):
         assert netfetch.browser_site(netfetch.host_of(url)) is None and netfetch.web_refusal(url) is None, url
     assert netfetch.browser_site("") is None and netfetch.browser_site(None) is None
     assert netfetch.web_refusal("https://www.linkedin.com/jobs/view/1") == "job-board linkedin.com", "boards keep theirs"
     # the command line
     for url, site in (("https://www.caljobs.ca.gov/vosnet/Default.aspx", "caljobs"),
-                      ("https://careerspub.universityofcalifornia.edu/x", "uc")):
+                      ("https://careerspub.universityofcalifornia.edu/x", "uc"),
+                      ("https://www.workintexas.com/vosnet/Default.aspx", "workintexas")):
         for extra in ((), ("--attended",), ("--robots", "--offline", str(ROBOTS_FIX))):
             code, lines, _ = run_cli("check", url, *extra)
             assert (code, lines) == (7, [f"DENY browser-site {site}"]), (url, extra, code, lines)
@@ -494,7 +506,8 @@ def test_browser_sites():
     f, _ = offline_fetcher()
     g, _ = offline_fetcher(policy=netfetch.Policy(unattended=False))
     for fetcher in (f, g):
-        for url in ("https://www.caljobs.ca.gov/vosnet/Default.aspx", "https://careerspub.universityofcalifornia.edu/x"):
+        for url in ("https://www.caljobs.ca.gov/vosnet/Default.aspx", "https://careerspub.universityofcalifornia.edu/x",
+                    "https://www.workintexas.com/vosnet/Default.aspx"):
             try:
                 fetcher.get(url)
                 raise AssertionError(f"fetched {url}")
@@ -504,7 +517,8 @@ def test_browser_sites():
     # a redirect into either, and the socket layer
     req = netfetch.Request("https://boards-api.greenhouse.io/v1/boards/acme/jobs")
     for target, why in (("https://www.caljobs.ca.gov/vosnet/loginintro.aspx", "browser-site caljobs"),
-                        ("https://careerspub.universityofcalifornia.edu/x", "browser-site uc")):
+                        ("https://careerspub.universityofcalifornia.edu/x", "browser-site uc"),
+                        ("https://www.workintexas.com/vosnet/loginintro.aspx", "browser-site workintexas")):
         for handler in (netfetch.PublicRedirects(), netfetch.PolicyRedirects(f._gate)):
             try:
                 handler.redirect_request(req, None, 302, "Found", {}, target)
@@ -516,7 +530,8 @@ def test_browser_sites():
     socket.getaddrinfo = lambda *a, **kw: resolved.append(a) or []
     try:
         for name, why in (("www.caljobs.ca.gov", "browser-site caljobs"),
-                          ("careerspub.universityofcalifornia.edu", "browser-site uc")):
+                          ("careerspub.universityofcalifornia.edu", "browser-site uc"),
+                          ("www.workintexas.com", "browser-site workintexas")):
             try:
                 netfetch.connect_public(name, 443, 5)
                 raise AssertionError(f"connect_public accepted {name}")
@@ -531,11 +546,13 @@ def test_browser_sites():
         cfg.mkdir()
         (cfg / "watchlist.csv").write_text("employer,careers_url\nState,https://www.caljobs.ca.gov/vosnet/x\n"
                                            "UC,https://careerspub.universityofcalifornia.edu/x\n"
+                                           "Texas,https://www.workintexas.com/vosnet/x\n"
                                            "Acme Bio,https://careers.acmebio.example/jobs\n", encoding="utf-8")
         assert netfetch.watchlist_hosts(tmp) == {"careers.acmebio.example"}, netfetch.watchlist_hosts(tmp)
         w = netfetch.Policy(root=tmp)
         assert w.reason("https://www.caljobs.ca.gov/vosnet/x") == "browser-site caljobs"
         assert w.reason("https://careerspub.universityofcalifornia.edu/x") == "browser-site uc"
+        assert w.reason("https://www.workintexas.com/vosnet/x") == "browser-site workintexas"
 
 
 def test_encoded_paths():

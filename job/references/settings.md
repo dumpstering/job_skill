@@ -24,10 +24,10 @@ keep the last good copy and say so in `runner/out/status.json`.
 | "15 LinkedIn applications a day" | `[linkedin] per_day` | 25 | never over 50 |
 | "go slower on LinkedIn" | `[linkedin] min_seconds_between_actions` | 4 | seconds between two actions there; never under 4 |
 | "ask me before stopping on a LinkedIn warning" | `[linkedin] stop_on_warning` | true | a CAPTCHA, sign-in check, unusual-activity or limit notice ends LinkedIn for the day whatever this says (below) |
-| "search CalJOBS for me" / "use the UC careers site" / "stop using CalJOBS" | `[caljobs] browser` / `[uc] browser` | false | on: first quote that site's notice below, and only a clear yes counts; off: at once, no question |
-| "15 CalJOBS applications a day" | `[caljobs] per_day` / `[uc] per_day` | 25 | never over 50 |
-| "go slower on CalJOBS" | `[caljobs] min_seconds_between_actions` / `[uc] min_seconds_between_actions` | 6 | seconds between two actions there; never under 4 |
-| "ask me before stopping on a CalJOBS warning" | `[caljobs] stop_on_warning` / `[uc] stop_on_warning` | true | a CAPTCHA, sign-in or bot check, unusual-activity or limit notice ends the site for the day whatever this says (below) |
+| "search CalJOBS for me" / "use the UC careers site" / "use WorkInTexas" / "stop using CalJOBS" | `[caljobs] browser` / `[uc] browser` / `[workintexas] browser` | false | on: first quote that site's notice below, and only a clear yes counts; off: at once, no question |
+| "15 CalJOBS applications a day" | `[caljobs] per_day` / `[uc] per_day` / `[workintexas] per_day` | 25 | never over 50 |
+| "go slower on CalJOBS" | `[caljobs] min_seconds_between_actions` / `[uc] min_seconds_between_actions` / `[workintexas] min_seconds_between_actions` | 6 | seconds between two actions there; never under 4 |
+| "ask me before stopping on a CalJOBS warning" | `[caljobs] stop_on_warning` / `[uc] stop_on_warning` / `[workintexas] stop_on_warning` | true | a CAPTCHA, sign-in or bot check, unusual-activity or limit notice ends the site for the day whatever this says (below) |
 | "use Adzuna" / "use USAJOBS" | `[sources] adzuna` / `usajobs` | false | keys only through the installer's prompt (rerun `install_runner.cmd`: it asks only for a key not entered yet), never in chat |
 | "search Workable" / "use The Muse" | `[sources] workable_search` / `muse` | false | their terms are unknown; say so before turning one on |
 | "use Science Careers" / "use Nature Careers" / "use Hacker News hiring" | `[sources] science_careers` / `nature_careers` / `hn_hiring` | false | no key; leads only (company, title and place, read later); the place must be at home, or remote when remote counts; Hacker News is read once a day |
@@ -107,17 +107,25 @@ this on I search and read jobs there slowly, in your own Chrome and your own
 account, on job pages only, and you click Submit. You need a free account on
 that site. Turn it on?"
 
-Only a clear yes turns either one on; anything else leaves it off. In plain
-words, for each of `[caljobs]` and `[uc]`:
+**The WorkInTexas notice** (quote it before turning `[workintexas] browser` on;
+offered once at setup when `[home] states` holds `TX`):
+"WorkInTexas, the Texas Workforce Commission's job bank, asks automated tools
+not to crawl it, so I never do. This mode is you browsing it: I work there
+slowly, in your own Chrome and your own WorkInTexas account, on job pages
+only, and you click Submit. You need a free WorkInTexas account (if you claim
+unemployment in Texas you need one anyway). Turn it on?"
+
+Only a clear yes turns any one on; anything else leaves it off. In plain
+words, for each of `[caljobs]`, `[uc]` and `[workintexas]`:
 - `browser = false` (the default): nothing ever opens that site. Only the
   boolean `true` in a file that parses turns it on: a word in quotes or a
   file with a typo leaves it off.
-- `browser = true`: `/job caljobs` or `/job uc` works in the user's own
-  signed-in Chrome ([caljobs_browser.md](caljobs_browser.md),
-  [uc_browser.md](uc_browser.md)): it searches the approved families' titles
+- `browser = true`: `/job caljobs`, `/job uc` or `/job workintexas` works in
+  the user's own signed-in Chrome ([caljobs_browser.md](caljobs_browser.md),
+  [uc_browser.md](uc_browser.md), [workintexas_browser.md](workintexas_browser.md)): it searches the approved families' titles
   around home, reads each posting, passes over what the gates, the duplicate
   check and the caps drop, and prepares the application up to Submit.
-  Scripts and the job finder never touch either site, under any setting.
+  Scripts and the job finder never touch any of the three, under any setting.
 - `per_day`: how many applications a day on that site, sent and waiting for
   Submit together. A number over 50 is read as 50.
 - `min_seconds_between_actions`: the wait after every click, search or typed
@@ -136,8 +144,9 @@ affected ([discovery.md](discovery.md)).
 Adds an employer's board to `config/watchlist.csv` (columns in
 [sources.md](sources.md)). Never a job board: a linkedin.com, lnkd.in, licdn.com,
 indeed.*, glassdoor.*, simplyhired.*, ziprecruiter.* or remotive.com link is refused,
-and so is a caljobs.ca.gov or careerspub.universityofcalifornia.edu link (they
-are read only in the user's own browser: `/job caljobs`, `/job uc`).
+and so is a caljobs.ca.gov, careerspub.universityofcalifornia.edu or workintexas.com
+link (they are read only in the user's own browser: `/job caljobs`, `/job uc`,
+`/job workintexas`).
 
 1. **Find the careers page.** With a URL, use it. With a company name, look
    first in `state/watchlist_auto.csv` (the runner adds every employer it

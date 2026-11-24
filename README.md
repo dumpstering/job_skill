@@ -26,7 +26,7 @@ zero-token work. Version 1.3.
 ## Where the daily volume comes from
 
 - **The watch list** (`config/watchlist.csv`; the life-science preset has
-  about 290 Bay Area employer boards) gives a backlog in the first week and
+  about 350 Bay Area employer boards) gives a backlog in the first week and
   then a few applications a day: on the live runs of 2026-11-06 and
   2026-11-10 about 5 eligible postings a day passed the per-company caps,
   about 3.7 of them jobs the user would want.
@@ -54,18 +54,22 @@ zero-token work. Version 1.3.
     day, at least 4 seconds between actions, and a CAPTCHA, sign-in check
     or notice ends it for the day. Whether the browser tool can work on
     linkedin.com at all is UNVERIFIED; `/job paste` is the fallback.
-  - **`/job caljobs`** and **`/job uc`** (opt-in, off by default, each
-    offered once at setup when home is in California): the same kind of
+  - **`/job caljobs`**, **`/job uc`** and **`/job workintexas`** (opt-in, off by
+    default, each offered once at setup when home is in California, or Texas
+    for WorkInTexas): the same kind of
     browser mode for CalJOBS, California's state job bank, and the University
     of California careers site (`careerspub.universityofcalifornia.edu`, a
-    PeopleSoft site). CalJOBS's robots.txt asks automated tools to stay out,
-    so no script or fetch ever opens either site; this is the user browsing
+    PeopleSoft site), and for WorkInTexas, the Texas Workforce Commission's
+    job bank (the same platform as CalJOBS). The robots.txt of CalJOBS and
+    WorkInTexas asks automated tools to stay out,
+    so no script or fetch ever opens any of them; this is the user browsing
     slowly in their own Chrome and their own signed-in account, who makes the
-    account and clicks Submit. `[caljobs] browser` and `[uc] browser` stay
-    false until a clear yes; at most 25 a day each, at least 6 seconds
+    account and clicks Submit. `[caljobs] browser`, `[uc] browser` and
+    `[workintexas] browser` stay false until a clear yes; at most 25 a day each, at least 6 seconds
     between actions by default, and a check, CAPTCHA or sign-in page ends the
     site for the day. The pages' controls are UNVERIFIED beyond the CalJOBS
-    ones read on 2026-11-20 (as a guest); no link from either site is kept,
+    ones read on 2026-11-20 (as a guest), and WorkInTexas's are assumed to match
+    them; no link from any of them is kept,
     only the job's own number.
   The do-it-yourself list and looser per-company caps ("more to one
   company" in `/job settings`; with no caps the 2026-11-10 pool gave about
@@ -107,8 +111,8 @@ runner tick every 15 min: tracker.py apply-events -> applications.xlsx -> runner
 - **Network policy** (`netfetch.py`): public addresses only, connecting to
   the checked address; https and a host allowlist for unattended runs;
   robots.txt for every unattended fetch; a hard deny of LinkedIn, Indeed,
-  Glassdoor, SimplyHired and ZipRecruiter, of CalJOBS and the UC careers
-  site (browser sites), and of the list endpoints of
+  Glassdoor, SimplyHired and ZipRecruiter, of CalJOBS, the UC careers
+  site and WorkInTexas (browser sites), and of the list endpoints of
   SmartRecruiters, iCIMS, UKG, Paycom, Paycor and ClearCompany. No setting
   changes that: the opt-in LinkedIn mode is the browser tool in the user's
   own Chrome only, and no script, fetch or runner step ever opens LinkedIn.
@@ -127,11 +131,13 @@ runner tick every 15 min: tracker.py apply-events -> applications.xlsx -> runner
 | `job/references/ats/` | Per-site notes: Greenhouse, Lever, Ashby, Workday, Workable, BambooHR, JazzHR, SmartRecruiters, iCIMS, Oracle, USAJOBS, Dayforce, LinkedIn and job boards |
 | `job/templates/` | Starting profile, library, answers, publications, techniques, settings, search profile, header-only watch list and boards, work-search state presets |
 | `job/templates/presets/lifesci_bayarea/` | An opt-in preset: life-science title families, license knockouts, San Francisco Bay Area places, employer boards and job boards |
+| `job/templates/presets/remote_tech/` | An opt-in preset: remote US roles at tech, SaaS and AI companies (program, product, IT and AI leadership) |
 | `job/scripts/` | jobfs, netfetch, posting, jobkey, argfile (foundation); tracker, events, caps (tracker and transport); boards, aggregators (readers); leads, resolve, gates, jobqueue (discovery and queue); build_resume, checks, library, variants, answers (preparation); network, worksearch, report (after applying); jobrunner, today_view (runner and card) |
 | `plugin/agents/` | job-tailor (one Tier A job) and job-auditor (read-only, fresh context) |
 | `runner/` | install_runner.cmd (template), install_runner.ps1, uninstall_runner.ps1, requirements.lock (hash-pinned), README.md |
 | `tests/` | One script per module, fixtures, `run_all.py`, `walkthrough_v12.md` |
 | `build_zip.py` | Checks and packages into `dist/v<version>/` |
+| `tools/` | Maintainer scripts, not packaged: `seed_boards.py` grows a preset's watch list from the StoreSignal ATS job boards directory ([tools/README.md](tools/README.md)) |
 | `SETUP_GUIDE.md` | The install and use guide for the person receiving it |
 
 ## Commands
@@ -234,6 +240,10 @@ correction used where one was given):
   recruitingbypaycor.com and careers-page.clearcompany.com.
 - The MIT-licensed jobseek boards directory (colophon-group/jobseek) as an
   optional seed.
+- The [StoreSignal ATS job boards directory](https://github.com/storesignalhq/ats-job-boards)
+  (CC BY 4.0, credit "StoreSignal ATS job boards directory"), read by
+  `tools/seed_boards.py` to grow the preset watch lists; its rows carry `ref`
+  `storesignal-2026-11`. The file itself is not in this repository.
 - Aggregators: USAJOBS developer guides (headers, limits, terms), Adzuna
   terms (personal job search), The Muse and Workable search (terms unknown).
 - Volume and caps: Google Careers (3 in 30 days, 90 days per job),

@@ -32,9 +32,12 @@ never write them anywhere.
    <date>`). It writes `worksearch\CA_<from>_<to>.csv`, `.xlsx` and `.md`:
    - every application with an Applied date, by-hand logs included, every
      referral ask the user sent, and every Activities row (job fair, workshop,
-     RESEA); an application sent through `/job caljobs` is one of them too
-     (Source CalJOBS, no link, the job number in its Notes), and in California
-     it is a work-search entry as it stands: nothing more is logged by hand;
+     RESEA); an application sent through `/job caljobs` or `/job workintexas` is
+     one of them too (Source CalJOBS or WorkInTexas, no link, the job number in
+     its Notes), and in California or Texas it is a work-search entry as it
+     stands: nothing more is logged by hand (in Texas it counts toward the
+     weekly minimum of the `TX` preset in `worksearch_states.toml`, 3 unless
+     the county sets 1 to 5; the claimant's TWC letter wins);
    - the columns of spec 6.6, one row per contact, grouped by claim week;
    - employer address, phone and main website from the Employers sheet;
      `posting_url` and `employer_main_website` are separate columns (North

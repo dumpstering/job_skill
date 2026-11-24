@@ -819,7 +819,7 @@ def test_linkedin_rows():
     assert "Token" not in text and "trackingId" not in text and "refId" not in text and "lnkd.in" not in text, text
     out = run(root, "add", "--company", "X", "--role", "Y", "--source", "Monster", code=1)
     assert out.strip() == ("ERROR source 'Monster' is not one of: Skill, By hand, Runner, LinkedIn, CalJOBS, UC, "
-                           "Science Careers, Nature Careers, Himalayas, Remote OK, Jobicy, Hacker News, "
+                           "WorkInTexas, Science Careers, Nature Careers, Himalayas, Remote OK, Jobicy, Hacker News, "
                            "We Work Remotely"), out
     # a note keeps a LinkedIn job link in its plain form and loses any other LinkedIn link
     run(root, "update", "1", "notes+=seen at " + li + "/jobs/view/4012345678?" + token + ", via https://lnkd.in/abc123.")
@@ -850,10 +850,10 @@ def test_linkedin_rows():
 
 
 def test_site_rows():
-    """Source CalJOBS and UC (a job found in the user's own browser on
-    CalJOBS or the UC careers site, [caljobs] and [uc] browser modes) are
-    tracker sources, in both transports, keyed by the job's own number:
-    caljobs:<job #> and uc:<campus>:<job id>. No link to either site is ever
+    """Source CalJOBS, UC and WorkInTexas (a job found in the user's own browser on
+    CalJOBS, the UC careers site or WorkInTexas, [caljobs], [uc] and [workintexas] browser
+    modes) are tracker sources, in both transports, keyed by the job's own number:
+    caljobs:<job #>, uc:<campus>:<job id> and workintexas:<job #>. No link to any of them is ever
     stored: a --url is refused, one inside a note or a quote is taken out."""
     root = new_root()
     caljobs = "https://www.caljobs.ca.gov/vosnet/jobbanks/jobdetails.aspx?enc=" + "A1b2C3" * 20
@@ -866,34 +866,51 @@ def test_site_rows():
               "--status", "Filled - awaiting submit", "--source", "UC", "--found-via", "uc:browser", "--ats", "uc",
               "--tier", "B", "--job-key", "uc:santacruz:12345")
     assert out.strip() == "ADDED 2", out
+    out = run(root, "add", "--company", "Texas Lab", "--role", "QC Scientist", "--status", "Answers ready - fill by hand",
+              "--source", "workintexas", "--found-via", "workintexas:browser", "--ats", "workintexas", "--tier", "B",
+              "--job-key", "workintexas:305602-4492", "--notes", "WorkInTexas job # 305602-4492")
+    assert out.strip() == "ADDED 3", out
     rows = sheet_rows(root / "applications.xlsx")
     assert [(r["Source"], r["Found via"], r["Job key"], r["URL"]) for r in rows] == [
-        ("CalJOBS", "caljobs:browser", "caljobs:305602-4492", None), ("UC", "uc:browser", "uc:santacruz:12345", None)], rows
+        ("CalJOBS", "caljobs:browser", "caljobs:305602-4492", None), ("UC", "uc:browser", "uc:santacruz:12345", None),
+        ("WorkInTexas", "workintexas:browser", "workintexas:305602-4492", None)], rows
     # the same job again is the same row, and a sent one is never a second row
     assert run(root, "add", "--company", "State Lab", "--role", "QC Scientist", "--source", "CalJOBS",
                "--job-key", "caljobs:305602-4492").strip() == "ADDED 1 (existing row)"
     out = run(root, "check", "--company", "State Lab", "--title", "QC Scientist", "--job-key", "caljobs:305602-4492")
     assert "SAME POSTING" in out and "ID 1 |" in out and "(job key caljobs:305602-4492)" in out, out
+    out = run(root, "check", "--company", "Texas Lab", "--title", "QC Scientist", "--job-key", "workintexas:305602-4492")
+    assert "SAME POSTING" in out and "ID 3 |" in out and "(job key workintexas:305602-4492)" in out, out
+    assert run(root, "add", "--company", "Texas Lab", "--role", "QC Scientist", "--source", "WorkInTexas",
+               "--job-key", "workintexas:305602-4492").strip() == "ADDED 3 (existing row)"
     out = run(root, "update", "2", "source=CalJOBS", "found-via=caljobs:browser", "status=Applied", "applied=2026-11-20")
     row = sheet_rows(root / "applications.xlsx")[1]
     assert (row["Source"], row["Found via"], row["Status"]) == ("CalJOBS", "caljobs:browser", "Applied"), (out, row)
-    # no link to either site is stored
-    for link in (caljobs, uc, "https://CALJOBS.ca.gov/x"):
+    out = run(root, "update", "3", "source=WorkInTexas", "found-via=workintexas:browser", "status=Applied", "applied=2026-11-23")
+    row = sheet_rows(root / "applications.xlsx")[2]
+    assert (row["Source"], row["Found via"], row["Status"]) == ("WorkInTexas", "workintexas:browser", "Applied"), (out, row)
+    # no link to any of them is stored
+    wit = "https://www.workintexas.com/vosnet/jobbanks/jobdetails.aspx?enc=" + "A1b2C3" * 20
+    for link in (caljobs, uc, "https://CALJOBS.ca.gov/x", wit, "https://WORKINTEXAS.com/x"):
         out = run(root, "add", "--company", "X", "--role", "Y", "--url", link, "--source", "CalJOBS")
         assert out.strip().startswith("ADDED "), out
     rows = sheet_rows(root / "applications.xlsx")
-    assert [r["URL"] for r in rows[2:]] == [None, None, None], rows
+    assert [r["URL"] for r in rows[3:]] == [None, None, None, None, None], rows
     for argv in (["add", "--company", "X", "--role", "Y", "--employer-site", caljobs],
-                 ["update", "1", "employer_site=" + uc], ["add", "--company", "X", "--role", "Y", "--referral-url", uc]):
+                 ["update", "1", "employer_site=" + uc], ["add", "--company", "X", "--role", "Y", "--referral-url", uc],
+                 ["add", "--company", "X", "--role", "Y", "--employer-site", wit]):
         out = run(root, *argv, code=1)
         assert out.startswith("ERROR --") and "refused (browser-site " in out, (argv, out)
-    run(root, "update", "1", "notes+=seen at " + caljobs + ", then " + uc + ". Employer: https://careers.example-bio.com/jobs/7.")
+    run(root, "update", "1", "notes+=seen at " + caljobs + ", then " + uc + ", then " + wit
+        + ". Employer: https://careers.example-bio.com/jobs/7.")
     note = sheet_rows(root / "applications.xlsx")[0]["Notes"]
-    assert "seen at , then . Employer: https://careers.example-bio.com/jobs/7." in note, note
+    assert "seen at , then , then . Employer: https://careers.example-bio.com/jobs/7." in note, note
     assert "enc=" not in note and "careerspub" not in note and "caljobs.ca.gov" not in note, note
+    assert "workintexas.com" not in note, note
     ws = openpyxl.load_workbook(root / "applications.xlsx")["Applications"]
     text = " ".join(str(c.value) for row in ws.iter_rows(min_row=2) for c in row if c.value is not None)
     assert "enc=" not in text and "careerspub" not in text and "caljobs.ca.gov" not in text, text
+    assert "workintexas.com" not in text, text
     # mode L: the same row through an event, applied by this runner's tracker.py
     root = new_root()
     (root / "config").mkdir()
@@ -907,6 +924,16 @@ def test_site_rows():
     assert run(root, "apply-events").strip() == "APPLIED 1 PENDING 0 REJECTED 0"
     row = sheet_rows(root / "applications.xlsx")[0]
     assert (row["Source"], row["Found via"], row["Job key"]) == ("CalJOBS", "caljobs:browser", "caljobs:305602-4492"), row
+    out = run(root, "add", "--company", "Texas Lab", "--role", "QC Scientist", "--status", "Filled - awaiting submit",
+              "--source", "WorkInTexas", "--found-via", "workintexas:browser", "--job-key", "workintexas:305602-4492",
+              "--notes", "see " + wit)
+    assert out.strip().startswith("ADDED P-") and out.strip().endswith("(pending)"), out
+    ev = "".join(p.read_text(encoding="utf-8") for p in (root / "runner" / "in" / "events").glob("*_tracker.json"))
+    assert "workintexas.com" not in ev and "enc=" not in ev and "workintexas:305602-4492" in ev, "no link in the events"
+    assert run(root, "apply-events").strip() == "APPLIED 1 PENDING 0 REJECTED 0"
+    row = sheet_rows(root / "applications.xlsx")[1]
+    assert (row["Source"], row["Found via"], row["Job key"]) == ("WorkInTexas", "workintexas:browser",
+                                                                "workintexas:305602-4492"), row
 
 
 def test_auto_transport():

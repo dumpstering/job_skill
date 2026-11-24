@@ -5,7 +5,7 @@ Usage:
                              [--allow-host H ...] [--robots] [--offline DIR]
 
 check prints ALLOW <host> (exit 0) or DENY <reason> (exit 7). Reasons:
-job-board <domain>, browser-site <caljobs|uc>, r3-list <host>, non-public <host>,
+job-board <domain>, browser-site <caljobs|uc|workintexas>, r3-list <host>, non-public <host>,
 bad-url [<detail>], not-https <host>, host-not-allowed <host>, post-not-allowed <host>,
 robots <host>, robots-unreachable <host>, crawl-delay <host>. The static rules
 need no network; --robots also reads robots.txt (live, or from --offline
@@ -14,9 +14,9 @@ fixtures).
 What it enforces (spec 8.2, 3.3, 3.14):
 - One refusal for links (web_refusal, R1): every check that decides whether
   a link may be stored, shown, opened or fetched asks it. It answers None or
-  job-board <domain>, browser-site <caljobs|uc> (caljobs.ca.gov and
-  careerspub.universityofcalifornia.edu: read only in the user's own browser,
-  under every setting), bad-url <why> (no http(s) link, a backslash, space or
+  job-board <domain>, browser-site <caljobs|uc|workintexas> (caljobs.ca.gov,
+  careerspub.universityofcalifornia.edu and workintexas.com: read only in the
+  user's own browser, under every setting), bad-url <why> (no http(s) link, a backslash, space or
   control character, userinfo, a port other than 80/443, a host canon_host
   refuses, an IP literal in any form, a single-label host) or non-public
   <host> (localhost, .local, .internal, .lan, .home.arpa, a private IP, or
@@ -32,7 +32,7 @@ What it enforces (spec 8.2, 3.3, 3.14):
   socket layer re-checks the name it resolves (canonical, not a job board).
 - A hard deny for job boards (any host with a label linkedin, indeed,
   glassdoor, simplyhired, ziprecruiter or remotive, whatever the top-level
-  domain, plus lnkd.in and licdn.com), the two browser sites (BROWSER_SITE_HOSTS)
+  domain, plus lnkd.in and licdn.com), the three browser sites (BROWSER_SITE_HOSTS)
   and the R3 list endpoints, before every
   request and redirect, even when robots.txt cannot be read. Paths are
   compared after decoding percent-escaped unreserved characters (RFC 9309
@@ -371,14 +371,16 @@ def job_board(host):
     return None
 
 
-# The two sites the skill reads only in the user's own browser (references/caljobs_browser.md and
-# uc_browser.md). CalJOBS's robots.txt disallows every automated agent and the UC careers site needs
-# the user's sign-in, so they are never fetched or stored as a link, whatever the setting.
-BROWSER_SITE_HOSTS = {"caljobs": ("caljobs.ca.gov",), "uc": ("careerspub.universityofcalifornia.edu",)}
+# The three sites the skill reads only in the user's own browser (references/caljobs_browser.md,
+# uc_browser.md and workintexas_browser.md). The robots.txt of CalJOBS and WorkInTexas disallows every
+# automated agent and the UC careers site needs the user's sign-in, so they are never fetched or stored
+# as a link, whatever the setting.
+BROWSER_SITE_HOSTS = {"caljobs": ("caljobs.ca.gov",), "uc": ("careerspub.universityofcalifornia.edu",),
+                      "workintexas": ("workintexas.com",)}
 
 
 def browser_site(host):
-    """The browser site (caljobs or uc) a host belongs to, else None, judged
+    """The browser site (caljobs, uc or workintexas) a host belongs to, else None, judged
     like job_board: on its canonical form, or on the name a lookalike
     spelling maps to."""
     raw = str(host or "")
@@ -507,7 +509,7 @@ def _ip_literal(host):
 
 def web_refusal(url):
     """None when url may be stored, shown, opened or fetched as a web link,
-    else one reason (R1): 'job-board <domain>', 'browser-site <caljobs|uc>',
+    else one reason (R1): 'job-board <domain>', 'browser-site <caljobs|uc|workintexas>',
     'bad-url <why>' or 'non-public <host>'. Needs no network and never raises.
 
     Refused: anything but an http(s) link with '//' and a host; a job board or
